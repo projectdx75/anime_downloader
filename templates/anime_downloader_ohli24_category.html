@@ -1,0 +1,923 @@
+{% extends "base.html" %} {% block content %}
+<!--<div id="preloader"></div>-->
+<div id="preloader" class="loader">
+    <div class="loader-inner">
+        <div class="loader-line-wrap">
+            <div class="loader-line"></div>
+        </div>
+        <div class="loader-line-wrap">
+            <div class="loader-line"></div>
+        </div>
+        <div class="loader-line-wrap">
+            <div class="loader-line"></div>
+        </div>
+        <div class="loader-line-wrap">
+            <div class="loader-line"></div>
+        </div>
+        <div class="loader-line-wrap">
+            <div class="loader-line"></div>
+        </div>
+    </div>
+</div>
+<div id="yommi_wrapper">
+    <div class="input-group mb-2">
+        <input
+                id="input_search"
+                type="search"
+                class="form-control rounded"
+                placeholder="Search"
+                aria-label="Search"
+                aria-describedby="search-addon"
+        />
+        <button id="btn_search" type="button" class="btn btn-primary">
+            search
+        </button>
+    </div>
+
+    <div>
+        <div
+                id="anime_category"
+                class="btn-group"
+                role="group"
+                aria-label="Basic example"
+        >
+            <button id="ing" type="button" class="btn btn-success">방영중</button>
+            <button id="theater" type="button" class="btn btn-primary">극장판</button>
+            <button id="complete_anilist" type="button" class="btn btn-dark">
+                완결
+            </button>
+        </div>
+        <form id="airing_list_form">
+            <div id="airing_list"></div>
+        </form>
+        <form id="screen_movie_list_form">
+            <div id="screen_movie_list" class="container"></div>
+        </form>
+        <div class="text-center">
+            <div id="spinner" class="spinner-border" role="status">
+                <span class="sr-only">Loading...</span>
+            </div>
+        </div>
+        <form id="program_auto_form">
+            <div id="episode_list"></div>
+        </form>
+    </div>
+</div>
+<!--전체-->
+
+<script
+        type="text/javascript"
+        src="https://cdn.jsdelivr.net/npm/lozad/dist/lozad.min.js"
+></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.lazyload/1.9.1/jquery.lazyload.min.js"
+        integrity="sha512-jNDtFf7qgU0eH/+Z42FG4fw3w7DM/9zbgNPe3wfJlCylVDTT3IgKW5r92Vy9IHa6U50vyMz5gRByIu4YIXFtaQ=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script type="text/javascript">
+    const package_name = "{{arg['package_name'] }}";
+    const sub = "{{arg['sub'] }}";
+    const anilife_url = "{{arg['anilife_url']}}";
+    let current_data = null;
+    let page = 1;
+    let next_page = Number
+    let current_cate = ''
+    let current_query = ''
+
+    const loader = document.getElementById("preloader");
+
+    const dismissLoadingScreen = function () {
+        loader.style.display = "none";
+    };
+
+    const wait3seconds = function () {
+        // REFERENCE:  https://www.w3schools.com/jsref/met_win_settimeout.asp
+        const result = setTimeout(dismissLoadingScreen, 2000);
+    };
+
+    window.addEventListener("load", wait3seconds);
+    // window.addEventListener("load", dismissLoadingScreen);
+
+
+    const observer = lozad('.lozad', {
+        rootMargin: '10px 0px', // syntax similar to that of CSS Margin
+        threshold: 0.1, // ratio of element convergence
+        enableAutoReload: true // it will reload the new image when validating attributes changes
+    });
+    observer.observe();
+
+
+    const get_anime_list = (type, page) => {
+        console.log(`type: ${type}, page: ${page}`)
+        let url = ''
+        let data = {"page": page, "type": type}
+
+        switch (type) {
+            case 'ing':
+                url = '/' + package_name + '/ajax/' + sub + '/anime_list'
+                current_cate = 'ing'
+                break;
+            case 'movie':
+                url = '/' + package_name + '/ajax/' + sub + '/screen_movie_list'
+                current_cate = 'movie'
+                break;
+            case 'theater':
+                url = '/' + package_name + '/ajax/' + sub + '/anime_list'
+                current_cate = 'theater'
+                break;
+            case 'fin':
+                url = '/' + package_name + '/ajax/' + sub + '/complete_list'
+                current_cate = 'fin'
+                break
+            default:
+                break;
+        }
+
+        $.ajax({
+            url: url,
+            type: "POST",
+            data: data,
+            cache: false,
+            dataType: "json",
+            success: (ret) => {
+                current_screen_movie_data = ret
+                console.log('ret::>', ret)
+
+                if (current_screen_movie_data !== '') {
+                    if (type === "ing") {
+                        make_airing_list(ret.data, page)
+                        observer.observe();
+                    } else if (type === "fin") {
+                        make_screen_movie_list(ret.data, page)
+                        observer.observe();
+                    } else if (type === "theater") {
+                        make_screen_movie_list(ret.data, page)
+                        observer.observe();
+                    } else {
+                        make_screen_movie_list(ret.data, page)
+                    }
+                    div_visible = true
+                    console.log(div_visible)
+                }
+                next_page = page + 1
+            }
+        })
+    }
+
+    function make_airing_list(data, page) {
+        let str = ''
+        let tmp = ''
+
+        str += '<div>';
+        str += '<button type="button" class="btn btn-info">Page <span class="badge bg-warning">' + page + '</span></button>';
+        str += '</div>';
+        // str += '<div class="card-columns">'
+        str += '<div id="inner_screen_movie" class="row infinite-scroll">';
+        for (let i in data.anime_list) {
+
+            tmp = '<div class="col-6 col-sm-4 col-md-3">';
+            tmp += '<div class="card">';
+            // tmp += '<img class="lozad" data-src="' + data.anime_list[i].image_link + '" />';
+            tmp += '<img class="lazyload" src="../static/img_loader_x200.svg" data-original="' + data.anime_list[i].image_link + '" style="cursor: pointer" onclick="location.href=\'./request?code=' + data.anime_list[i].code + '\'"/>';
+            tmp += '<div class="card-body">'
+            // {#tmp += '<button id="code_button" data-code="' + data.episode[i].code + '" type="button" class="btn btn-primary code-button bootstrap-tooltip" data-toggle="button" data-tooltip="true" aria-pressed="true" autocomplete="off" data-placement="top">' +#}
+            //  {#    '<span data-tooltip-text="'+data.episode[i].title+'">' + data.episode[i].code + '</span></button></div>';#}
+            tmp += '<h5 class="card-title">' + data.anime_list[i].title + '</h5>';
+            tmp += '<p class="card-text">' + data.anime_list[i].code + '<button id="add_whitelist" name="add_whitelist" class="btn btn-sm btn-favorite mb-1" data-code="' +
+                data.anime_list[i].code +
+                '"><i class="bi bi-heart-fill"></i></button></p>';
+            tmp += '<a href="./request?code=' + data.anime_list[i].code + '" class="btn btn-primary cut-text">' + data.anime_list[i].title + '</a>';
+            // tmp +=
+            // '<button id="add_whitelist" name="add_whitelist" class="btn btn-sm btn-favorite mb-1" data-code="' +
+            // data.anime_list[i].code +
+            // '"><i class="bi bi-heart-fill"></i></button>';
+            tmp += '</div><!-- .card -->';
+            tmp += '</div>';
+            tmp += '</div>';
+            str += tmp
+
+        }
+        str += '</div>';
+        // str += '</div><!-- .card-columns -->';
+        str += m_hr_black();
+
+        if (page > 1) {
+
+            const temp = document.createElement('div')
+            temp.innerHTML = str;
+            while (temp.firstChild) {
+                document.getElementById("screen_movie_list").appendChild(temp.firstChild);
+            }
+            page++
+
+        } else {
+
+            document.getElementById("screen_movie_list").innerHTML = str;
+
+        }
+
+        $("img.lazyload").lazyload({
+            threshold: 10,
+            effect: "fadeIn",
+        });
+
+    }
+
+    function make_search_result_list(data, page) {
+        let str = ''
+        let tmp = ''
+
+        console.log(data.anime_list, page)
+
+        str += '<div>';
+        str += '<button type="button" class="btn btn-info">Page <span class="badge bg-warning">' + page + '</span></button>';
+        str += '</div>';
+        // str += '<div class="card-columns">'
+        str += '<div id="inner_screen_movie" class="row infinite-scroll">';
+        for (let i in data.anime_list) {
+            if (data.anime_list[i].wr_id !== '') {
+                const re = /bo_table=([^&]+)/
+                const bo_table = data.anime_list[i].link.match(re)
+                console.log(bo_table)
+                if (bo_table != null) {
+                    request_url = './request?code=' + data.anime_list[i].code + '&amp;wr_id=' + data.anime_list[i].wr_id + '&amp;bo_table=' + bo_table[1]
+                } else {
+                    request_url = './request?code=' + data.anime_list[i].code
+                }
+            } else {
+                request_url = './request?code=' + data.anime_list[i].code
+            }
+
+            tmp = '<div class="col-6 col-sm-4 col-md-3">';
+            tmp += '<div class="card">';
+            tmp += '<img class="card-img-top" src="' + data.anime_list[i].image_link + '" />';
+            tmp += '<div class="card-body">'
+            // {#tmp += '<button id="code_button" data-code="' + data.episode[i].code + '" type="button" class="btn btn-primary code-button bootstrap-tooltip" data-toggle="button" data-tooltip="true" aria-pressed="true" autocomplete="off" data-placement="top">' +#}
+            //  {#    '<span data-tooltip-text="'+data.episode[i].title+'">' + data.episode[i].code + '</span></button></div>';#}
+            tmp += '<h5 class="card-title">' + data.anime_list[i].title + '</h5>';
+            tmp += '<p class="card-text">' + data.anime_list[i].code + '</p>';
+            tmp += '<a href="' + request_url + '" class="btn btn-primary cut-text">' + data.anime_list[i].title + '</a>';
+            tmp += '</div>';
+            tmp += '</div>';
+            tmp += '</div>';
+            str += tmp
+
+        }
+        str += '</div>';
+        str += '</div><!-- .card-columns -->';
+        str += m_hr_black();
+
+        if (page > 1) {
+
+            const temp = document.createElement('div')
+            temp.innerHTML = str;
+            while (temp.firstChild) {
+                document.getElementById("screen_movie_list").appendChild(temp.firstChild);
+            }
+            page++
+
+        } else {
+            document.getElementById("screen_movie_list").innerHTML = str;
+        }
+
+    }
+
+    function make_screen_movie_list(data, page) {
+        let str = ''
+        let tmp = ''
+
+        console.log(data.anime_list, page)
+
+        str += '<div>';
+        str += '<button type="button" class="btn btn-info">Page <span class="badge bg-warning">' + page + '</span></button>';
+        str += '</div>';
+        // str += '<div class="card-columns">'
+        str += '<div id="inner_screen_movie" class="row infinite-scroll">';
+        for (let i in data.anime_list) {
+
+            tmp = '<div class="col-sm-4">';
+            tmp += '<div class="card">';
+            tmp += '<img class="card-img-top" src="' + data.anime_list[i].image_link + '" />';
+            tmp += '<div class="card-body">'
+            tmp += '<h5 class="card-title">' + data.anime_list[i].title + '</h5>';
+            tmp += '<p class="card-text">' + data.anime_list[i].code + '</p>';
+            tmp += '<a href="./request?code=' + data.anime_list[i].code + '" class="btn btn-primary cut-text">' + data.anime_list[i].title + '</a>';
+            tmp += '</div>';
+            tmp += '</div>';
+            tmp += '</div>';
+            str += tmp
+
+        }
+        str += '</div>';
+        // str += '</div><!-- .card-columns -->';
+        str += m_hr_black();
+
+        if (page > 1) {
+
+            const temp = document.createElement('div')
+            temp.innerHTML = str;
+            while (temp.firstChild) {
+                document.getElementById("screen_movie_list").appendChild(temp.firstChild);
+            }
+            page++
+
+        } else {
+            document.getElementById("screen_movie_list").innerHTML = str;
+        }
+
+        $("img.lazyload").lazyload({
+            threshold: 10,
+            effect: "fadeIn",
+        });
+
+    }
+
+
+    $(document).ready(function () {
+
+        // if ( "{{arg['anilife_current_code']}}" !== "" ) {
+        //     document.getElementById("code").value = "{{arg['anilife_current_code']}}";
+        //     // 값이 공백이 아니면 분석 버튼 계속 누름
+        //     document.getElementById("analysis_btn").click();
+        // }
+        $("#input_search").keydown(function (key) {
+            if (key.keyCode === 13) {
+                // alert("엔터키를 눌렀습니다.");
+                $("#btn_search").trigger("click");
+            }
+        })
+
+        get_anime_list("ing", 1)
+
+
+        const observer = lozad('.lozad', {
+            rootMargin: '10px 0px', // syntax similar to that of CSS Margin
+            threshold: 0.1, // ratio of element convergence
+            enableAutoReload: true // it will reload the new image when validating attributes changes
+        });
+        observer.observe();
+
+    });
+
+    $("body").on("click", "#btn_search", function (e) {
+        e.preventDefault();
+        let query = $("#input_search").val();
+        console.log(query);
+        current_cate = "search"
+        current_query = query
+
+        if ($("#input_search").val() === "") {
+            console.log("search keyword nothing");
+            return false;
+        }
+
+        $.ajax({
+            url: "/" + package_name + "/ajax/" + sub + "/search",
+            type: "POST",
+            cache: false,
+            data: {query: query, type: current_cate, page: page},
+            // dataType: "json",
+            contentType: "application/x-www-form-urlencoded; charset=UTF-8",
+            success: function (ret) {
+                if (ret.ret) {
+                    console.log('ret:::', ret)
+                    make_search_result_list(ret.data, 1);
+                    next_page = page + 1
+                } else {
+                    $.notify("<strong>분석 실패</strong><br>" + ret.log, {
+                        type: "warning",
+                    });
+                }
+            },
+        });
+    });
+
+    $('#anime_category #ing').on("click", function () {
+        // {#console.log(this.id)#}
+        let spinner = document.getElementById('spinner');
+        spinner.style.visibility = 'visible';
+        get_anime_list("ing", 1)
+    })
+
+    $('#anime_category #complete_anilist').on("click", function () {
+        // {#console.log(this.id)#}
+        let spinner = document.getElementById('spinner');
+        spinner.style.visibility = 'visible';
+        get_anime_list("fin", 1)
+    })
+
+    $('#anime_category #theater').on("click", function () {
+        // {#console.log(this.id)#}
+        let spinner = document.getElementById('spinner');
+        spinner.style.visibility = 'visible';
+        get_anime_list("theater", 1)
+    })
+
+    // 분석 버튼 클릭시 호출
+    $("body").on('click', '#analysis_btn', function (e) {
+        e.preventDefault();
+        const code = document.getElementById("code").value
+        console.log(code)
+        $.ajax({
+            url: '/' + package_name + '/ajax/' + sub + '/analysis',
+            type: "POST",
+            cache: false,
+            data: {code: code},
+            dataType: "json",
+            success: function (ret) {
+                if (ret.ret === 'success' && ret.data != null) {
+                    // console.log(ret.code)
+                    console.log(ret.data)
+                    make_program(ret.data)
+                } else {
+                    $.notify('<strong>분석 실패</strong><br>' + ret.log, {type: 'warning'});
+                }
+            }
+        });
+    });
+
+
+    $("body").on('click', '#go_anilife_btn', function (e) {
+        e.preventDefault();
+        window.open("{{arg['anilife_url']}}", "_blank");
+    });
+
+    $("body").on("click", "#add_whitelist", function (e) {
+        e.preventDefault();
+        let data_code = $(this).attr("data-code");
+        console.log(data_code);
+        $.ajax({
+            url: "/" + package_name + "/ajax/" + sub + "/add_whitelist",
+            type: "POST",
+            cache: false,
+            data: JSON.stringify({data_code: data_code}),
+            contentType: "application/json;charset=UTF-8",
+            dataType: "json",
+            success: function (ret) {
+                if (ret.ret) {
+                    $.notify("<strong>추가하였습니다.</strong><br>", {
+                        type: "success",
+                    });
+                    // make_program(ret);
+                } else {
+                    $.notify("<strong>추가 실패</strong><br>" + ret.log, {
+                        type: "warning",
+                    });
+                }
+            },
+        });
+    });
+
+    $("body").on('click', '#all_check_on_btn', function (e) {
+        e.preventDefault();
+        $('input[id^="checkbox_"]').bootstrapToggle('on')
+    });
+
+    $("body").on('click', '#all_check_off_btn', function (e) {
+        e.preventDefault();
+        $('input[id^="checkbox_"]').bootstrapToggle('off')
+    });
+
+    $("body").on('click', '#add_queue_btn', function (e) {
+        e.preventDefault();
+        data = current_data.episode[$(this).data('idx')];
+        console.log('data:::>', data)
+        $.ajax({
+            url: '/' + package_name + '/ajax/' + sub + '/add_queue',
+            type: "POST",
+            cache: false,
+            data: {data: JSON.stringify(data)},
+            dataType: "json",
+            success: function (data) {
+                if (data.ret == 'enqueue_db_append' || data.ret == 'enqueue_db_exist') {
+                    $.notify('<strong>다운로드 작업을 추가 하였습니다.</strong>', {type: 'success'});
+                } else if (data.ret == 'queue_exist') {
+                    $.notify('<strong>이미 큐에 있습니다. 삭제 후 추가하세요.</strong>', {type: 'warning'});
+                } else if (data.ret == 'db_completed') {
+                    $.notify('<strong>DB에 완료 기록이 있습니다.</strong>', {type: 'warning'});
+                } else {
+                    $.notify('<strong>추가 실패</strong><br>' + ret.log, {type: 'warning'});
+                }
+            }
+        });
+    });
+    // const observer = lozad();
+    //  	const el = document.querySelector('img');
+    // const observer = lozad(el); // passing a `NodeList` (e.g. `document.querySelectorAll()`) is also valid
+    // observer.observe();
+    const loadNextAnimes = (cate, page) => {
+        spinner.style.display = "block";
+        let data = {type: cate, page: String(page)};
+        let url = ''
+        switch (cate) {
+            case 'ing':
+                url = '/' + package_name + '/ajax/' + sub + '/anime_list'
+                current_cate = 'ing'
+                break;
+            case 'movie':
+                url = '/' + package_name + '/ajax/' + sub + '/screen_movie_list'
+                current_cate = 'movie'
+                break;
+            case 'theater':
+                url = '/' + package_name + '/ajax/' + sub + '/anime_list'
+                current_cate = 'theater'
+                break;
+            case 'fin':
+                url = '/' + package_name + '/ajax/' + sub + '/complete_list'
+                current_cate = 'fin'
+                break
+            case 'search':
+                url = "/" + package_name + "/ajax/" + sub + "/search"
+                current_cate = 'search'
+                data.query = current_query
+                break;
+            default:
+                break;
+        }
+
+        fetch(url, {
+            method: "POST",
+            cache: "no-cache",
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: new URLSearchParams(data),
+        })
+            .then((res) => res.json())
+            .then((response) => {
+                // console.log("Success:", JSON.stringify(response));
+                // {#imagesContainer.appendChild()#}
+                console.log("return page:::> ", String(response.page));
+                // {#page = response.page#}
+                if (current_cate === 'search') {
+                    make_search_result_list(response.data, response.page);
+
+                } else {
+                    make_screen_movie_list(response.data, response.page);
+                }
+                page++;
+                next_page++;
+            })
+            .catch((error) => console.error("Error:", error));
+    };
+
+
+    const onScroll = (e) => {
+        console.dir(e.target.scrollingElement.scrollHeight);
+        const {scrollTop, scrollHeight, clientHeight} = e.target.scrollingElement;
+        if (Math.round(scrollHeight - scrollTop) <= clientHeight) {
+            document.getElementById("spinner").style.display = "block";
+            console.log("loading");
+            console.log("now page::> ", page);
+            console.log("next_page::> ", String(next_page));
+            loadNextAnimes(current_cate, next_page);
+        }
+    };
+
+    const debounce = (func, delay) => {
+        let timeoutId = null;
+        return (...args) => {
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(func.bind(null, ...args), delay);
+        };
+    };
+
+    document.addEventListener("scroll", debounce(onScroll, 300));
+</script>
+<style>
+    button.code-button {
+        min-width: 82px !important;
+    }
+
+    .tooltip {
+        position: relative;
+        display: block;
+    }
+
+
+    [data-tooltip-text]:hover {
+        position: relative;
+    }
+
+    [data-tooltip-text]:after {
+        -webkit-transition: bottom 0.3s ease-in-out, opacity 0.3s ease-in-out;
+        -moz-transition: bottom 0.3s ease-in-out, opacity 0.3s ease-in-out;
+        transition: bottom 0.3s ease-in-out, opacity 0.3s ease-in-out;
+
+        background-color: rgba(0, 0, 0, 0.8);
+
+        -webkit-box-shadow: 0px 0px 3px 1px rgba(50, 50, 50, 0.4);
+        -moz-box-shadow: 0px 0px 3px 1px rgba(50, 50, 50, 0.4);
+        box-shadow: 0px 0px 3px 1px rgba(50, 50, 50, 0.4);
+
+        -webkit-border-radius: 5px;
+        -moz-border-radius: 5px;
+        border-radius: 5px;
+
+        color: #ffffff;
+        font-size: 12px;
+        margin-bottom: 10px;
+        padding: 7px 12px;
+        position: absolute;
+        width: auto;
+        min-width: 50px;
+        max-width: 300px;
+        word-wrap: break-word;
+
+        z-index: 9999;
+
+        opacity: 0;
+        left: -9999px;
+        top: 90%;
+
+        content: attr(data-tooltip-text);
+    }
+
+    [data-tooltip-text]:hover:after {
+        top: 230%;
+        left: 0;
+        opacity: 1;
+    }
+
+    [data-tooltip-text]:hover {
+        position: relative;
+    }
+
+    [data-tooltip-text]:after {
+        -webkit-transition: bottom 0.3s ease-in-out, opacity 0.3s ease-in-out;
+        -moz-transition: bottom 0.3s ease-in-out, opacity 0.3s ease-in-out;
+        transition: bottom 0.3s ease-in-out, opacity 0.3s ease-in-out;
+
+        background-color: rgba(0, 0, 0, 0.8);
+
+        -webkit-box-shadow: 0px 0px 3px 1px rgba(50, 50, 50, 0.4);
+        -moz-box-shadow: 0px 0px 3px 1px rgba(50, 50, 50, 0.4);
+        box-shadow: 0px 0px 3px 1px rgba(50, 50, 50, 0.4);
+
+        -webkit-border-radius: 5px;
+        -moz-border-radius: 5px;
+        border-radius: 5px;
+
+        color: #ffffff;
+        font-size: 12px;
+        margin-bottom: 10px;
+        padding: 7px 12px;
+        position: absolute;
+        width: auto;
+        min-width: 50px;
+        max-width: 300px;
+        word-wrap: break-word;
+
+        z-index: 9999;
+
+        opacity: 0;
+        left: -9999px;
+        top: -210% !important;
+
+        content: attr(data-tooltip-text);
+    }
+
+    [data-tooltip-text]:hover:after {
+        top: 130%;
+        left: 0;
+        opacity: 1;
+    }
+
+    #airing_list {
+        display: none;
+    }
+
+    .cut-text {
+        text-overflow: ellipsis;
+        overflow: hidden;
+        white-space: nowrap;
+        width: 100%;
+    }
+
+    #screen_movie_list {
+        margin-top: 10px;
+    }
+
+    .card-body {
+        padding: 0 !important;
+    }
+
+    .card-title {
+        padding: 1rem !important;
+    }
+
+    button#add_whitelist {
+        float: right;
+    }
+
+    button.btn-favorite {
+        background-color: #e0ff42;
+    }
+
+    /*.card-columns {*/
+    /*    @include media-breakpoint-only(lg) {*/
+    /*        column-count: 4;*/
+    /*    }*/
+    /*    @include media-breakpoint-only(xl) {*/
+    /*        column-count: 5;*/
+    /*    }*/
+    /*}*/
+    @media (min-width: 576px) {
+        .container {
+            max-width: 100%;
+        }
+
+        .card-columns {
+            column-count: 2;
+            column-gap: 1.25rem;
+        }
+
+        .card-columns .card {
+            display: inline-block;
+        }
+    }
+
+
+    @media (min-width: 768px) {
+        .card-columns {
+            column-count: 3;
+        }
+    }
+
+    /* Large devices (desktops, 992px and up) */
+    @media (min-width: 992px) {
+        .card-columns {
+            column-count: 3;
+        }
+    }
+
+    /* Extra large devices (large desktops, 1200px and up) */
+    @media (min-width: 1200px) {
+        .card-columns {
+            column-count: 5;
+        }
+
+        #yommi_wrapper {
+            max-width: 80%;
+            margin: 0 auto;
+        }
+    }
+
+    .card {
+        margin-bottom: 0.75rem;
+    }
+
+    .card-columns .card {
+        margin-bottom: 0.75rem;
+    }
+
+    .card-columns .card img {
+        width: 100%;
+    }
+
+    button#add_whitelist {
+        /*top: -70px;*/
+        position: relative;
+    }
+
+    body {
+        font-family: NanumSquareNeo, system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Noto Sans, Liberation Sans, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji;
+    }
+
+    body {
+        background-image: linear-gradient(90deg, #233f48, #6c6fa2, #768dae);
+    }
+
+    #preloader {
+        /*background-color: green;*/
+        /*color: white;*/
+        /*height: 100vh;*/
+        /*width: 100%;*/
+        /*position: fixed;*/
+        /*z-index: 100;*/
+        background: rgba(0, 0, 0, 0.2);
+        background: radial-gradient(#222, #000);
+        bottom: 0;
+        left: 0;
+        overflow: hidden;
+        position: fixed;
+        right: 0;
+        top: 0;
+        z-index: 99999;
+        opacity: 0.5;
+    }
+
+    /*.loader {*/
+    /*    background: rgb(0, 0, 0, 0.8);*/
+    /*    background: radial-gradient(#222, #000);*/
+    /*    bottom: 0;*/
+    /*    left: 0;*/
+    /*    overflow: hidden;*/
+    /*    position: fixed;*/
+    /*    right: 0;*/
+    /*    top: 0;*/
+    /*    z-index: 99999;*/
+    /*}*/
+
+    .loader-inner {
+        bottom: 0;
+        height: 60px;
+        left: 0;
+        margin: auto;
+        position: absolute;
+        right: 0;
+        top: 0;
+        width: 100px;
+    }
+
+    .loader-line-wrap {
+        animation: spin 2000ms cubic-bezier(.175, .885, .32, 1.275) infinite;
+        box-sizing: border-box;
+        height: 50px;
+        left: 0;
+        overflow: hidden;
+        position: absolute;
+        top: 0;
+        transform-origin: 50% 100%;
+        width: 100px;
+    }
+
+    .loader-line {
+        border: 4px solid transparent;
+        border-radius: 100%;
+        box-sizing: border-box;
+        height: 100px;
+        left: 0;
+        margin: 0 auto;
+        position: absolute;
+        right: 0;
+        top: 0;
+        width: 100px;
+    }
+
+    .loader-line-wrap:nth-child(1) {
+        animation-delay: -50ms;
+    }
+
+    .loader-line-wrap:nth-child(2) {
+        animation-delay: -100ms;
+    }
+
+    .loader-line-wrap:nth-child(3) {
+        animation-delay: -150ms;
+    }
+
+    .loader-line-wrap:nth-child(4) {
+        animation-delay: -200ms;
+    }
+
+    .loader-line-wrap:nth-child(5) {
+        animation-delay: -250ms;
+    }
+
+    .loader-line-wrap:nth-child(1) .loader-line {
+        border-color: hsl(0, 80%, 60%);
+        height: 90px;
+        width: 90px;
+        top: 7px;
+    }
+
+    .loader-line-wrap:nth-child(2) .loader-line {
+        border-color: hsl(60, 80%, 60%);
+        height: 76px;
+        width: 76px;
+        top: 14px;
+    }
+
+    .loader-line-wrap:nth-child(3) .loader-line {
+        border-color: hsl(120, 80%, 60%);
+        height: 62px;
+        width: 62px;
+        top: 21px;
+    }
+
+    .loader-line-wrap:nth-child(4) .loader-line {
+        border-color: hsl(180, 80%, 60%);
+        height: 48px;
+        width: 48px;
+        top: 28px;
+    }
+
+    .loader-line-wrap:nth-child(5) .loader-line {
+        border-color: hsl(240, 80%, 60%);
+        height: 34px;
+        width: 34px;
+        top: 35px;
+    }
+
+    @keyframes spin {
+        0%, 15% {
+            transform: rotate(0);
+        }
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+
+
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.1/font/bootstrap-icons.css">
+{% endblock %}

@@ -1,0 +1,569 @@
+{% extends "base.html" %} {% block content %}
+
+
+<div>
+    <div id="preloader" class="loader">
+        <div class="loader-inner">
+            <div class="loader-line-wrap">
+                <div class="loader-line"></div>
+            </div>
+            <div class="loader-line-wrap">
+                <div class="loader-line"></div>
+            </div>
+            <div class="loader-line-wrap">
+                <div class="loader-line"></div>
+            </div>
+            <div class="loader-line-wrap">
+                <div class="loader-line"></div>
+            </div>
+            <div class="loader-line-wrap">
+                <div class="loader-line"></div>
+            </div>
+        </div>
+    </div>
+    <form id="program_list">
+        {{ macros.setting_input_text_and_buttons('code', '작품 Code',
+        [['analysis_btn', '분석'], ['go_anilife_btn', 'Go 애니라이프']], desc='예)
+        "https://anilife.live/g/l?id=f6e83ec6-bd25-4d6c-9428-c10522687604" 이나 "f6e83ec6-bd25-4d6c-9428-c10522687604"')
+        }}
+    </form>
+    <form id="program_auto_form">
+        <div id="episode_list"></div>
+    </form>
+</div>
+<!--전체-->
+
+<script type="text/javascript">
+    const package_name = "{{arg['package_name'] }}";
+    const sub = "{{arg['sub'] }}";
+    const anilife_url = "{{arg['anilife_url']}}";
+    let current_data = null;
+
+    const params = new Proxy(new URLSearchParams(window.location.search), {
+        get: (searchParams, prop) => searchParams.get(prop),
+    })
+
+
+    function findGetParameter(parameterName) {
+        let result = null,
+            tmp = [];
+        const items = location.search.substr(1).split("&");
+        for (let index = 0; index < items.length; index++) {
+            tmp = items[index].split("=");
+            if (tmp[0] === parameterName) result = decodeURIComponent(tmp[1]);
+        }
+        return result;
+    }
+
+    const loader = document.getElementById("preloader");
+
+    const dismissLoadingScreen = async function () {
+        console.log("Before the delay")
+        // await delay(2.5);
+        loader.style.display = "none";
+    };
+
+    const wait_seconds = function () {
+        // REFERENCE:  https://www.w3schools.com/jsref/met_win_settimeout.asp
+        let result = setTimeout(dismissLoadingScreen, 2500);
+        console.log(result)
+    };
+    const init = function () {
+
+    }
+
+    function delay(n) {
+        return new Promise(function (resolve) {
+            setTimeout(resolve, n * 1000);
+        });
+    }
+
+    async function myAsyncFunction() {
+        //Do what you want here
+        console.log("Before the delay")
+
+        await delay(2.5);
+
+        console.log("After the delay")
+        //Do what you want here too
+
+    }
+
+    // myAsyncFunction();
+    // window.addEventListener("DOMContentLoaded", dismissLoadingScreen);
+
+    // window.addEventListener("DOMContentLoaded", wait_seconds);
+
+    function analyze(wr_id, bo_table) {
+        // e.preventDefault();
+        // e.stopPropagation()
+        // e.preventDefault();
+        const code = document.getElementById("code").value
+        console.log(code)
+        $.ajax({
+            url: '/' + package_name + '/ajax/' + sub + '/analysis',
+            type: "POST",
+            cache: false,
+            data: {code: code, wr_id: wr_id, bo_table: bo_table},
+            dataType: "json",
+            success: function (ret) {
+                if (ret.ret === 'success' && ret.data != null) {
+                    // {#console.log(ret.code)#}
+                    console.log(ret.data)
+                    make_program(ret.data)
+                    $("#loader").css("display", 'none')
+                } else {
+                    $.notify('<strong>분석 실패</strong><br>' + ret.log, {type: 'warning'});
+                }
+            }
+        });
+    }
+
+    function make_program(data) {
+        current_data = data;
+        // console.log("current_data::", current_data)
+        str = '';
+        tmp = '<div class="form-inline">'
+        tmp += m_button('check_download_btn', '선택 다운로드 추가', []);
+        tmp += m_button('all_check_on_btn', '전체 선택', []);
+        tmp += m_button('all_check_off_btn', '전체 해제', []);
+        /*
+        tmp += '&nbsp;&nbsp;&nbsp;&nbsp;<input id="new_title" name="new_title" class="form-control form-control-sm" value="'+data.title+'">'
+        tmp += '</div>'
+        tmp += m_button('apply_new_title_btn', '저장폴더명, 파일명 제목 변경', []);
+        tmp += m_button('search_tvdb_btn', 'TVDB', []);
+        tmp = m_button_group(tmp)
+        */
+        str += tmp
+        // program
+        str += m_hr_black();
+        str += m_row_start(0);
+        tmp = ''
+        if (data.image != null)
+            tmp = '<img src="' + data.image + '" class="img-fluid">';
+        str += m_col(3, tmp)
+        tmp = ''
+        tmp += m_row_start(2) + m_col(3, '제목', 'right') + m_col(9, data.title) + m_row_end();
+        // tmp += m_row_start(2) + m_col(3, '제작사', 'right') + m_col(9, data.des._pub) + m_row_end();
+        // tmp += m_row_start(2) + m_col(3, '감독', 'right') + m_col(9, data.des._dir) + m_row_end();
+        //
+        // tmp += m_row_start(2) + m_col(3, '원작', 'right') + m_col(9, data.des._otit) + m_row_end();
+        // tmp += m_row_start(2) + m_col(3, '장르', 'right') + m_col(9, data.des._tag) + m_row_end();
+        // tmp += m_row_start(2) + m_col(3, '분류', 'right') + m_col(9, data.des._classifi) + m_row_end();
+        // tmp += m_row_start(2) + m_col(3, '공식 방영일', 'right') + m_col(9, data.date+'('+data.day+')') + m_row_end();
+        // tmp += m_row_start(2) + m_col(3, '에피소드', 'right') + m_col(9, data.des._total_chapter ? data.des._total_chapter : '') + m_row_end();
+        // tmp += m_row_start(2) + m_col(3, '등급', 'right') + m_col(9, data.des._grade) + m_row_end();
+        // tmp += m_row_start(2) + m_col(3, '최근 방영일', 'right') + m_col(9, data.des._recent_date ? data.des._recent_date : '') + m_row_end();
+        // tmp += m_row_start(2) + m_col(3, '줄거리', 'right') + m_col(9, data.ser_description) + m_row_end();
+
+        tmp += "<div>" + data.des1 + "</div>"
+        str += m_col(9, tmp)
+        str += m_row_end();
+
+        str += m_hr_black();
+        for (i in data.episode) {
+            str += m_row_start();
+            tmp = '';
+            if (data.episode[i].thumbnail)
+                tmp = '<img src="' + data.episode[i].thumbnail + '" class="img-fluid">'
+            str += m_col(3, tmp)
+            tmp = '<strong>' + data.episode[i].ep_num + '화. ' + data.episode[i].title + '</strong>';
+            tmp += '<br>';
+            tmp += data.episode[i].date + '<br>';
+
+            tmp += '<div class="form-inline">'
+            tmp += '<input id="checkbox_' + i + '" name="checkbox_' + i + '" type="checkbox" checked data-toggle="toggle" data-on="선 택" data-off="-" data-onstyle="success" data-offstyle="danger" data-size="small">&nbsp;&nbsp;&nbsp;&nbsp;'
+            tmp += m_button('add_queue_btn', '다운로드 추가', [{'key': 'idx', 'value': i}])
+            tmp += '</div>'
+            str += m_col(9, tmp)
+            str += m_row_end();
+            if (i != data.length - 1) str += m_hr(0);
+        }
+        document.getElementById("episode_list").innerHTML = str;
+        $('input[id^="checkbox_"]').bootstrapToggle()
+    }
+
+    $(function () {
+        console.log(params.wr_id)
+        console.log(findGetParameter('wr_id'))
+        console.log(params.code)
+        if (params.code === '') {
+
+        } else {
+            document.getElementById("code").value = params.code
+            document.getElementById("analysis_btn").click();
+        }
+
+        if ("{{arg['anilife_current_code']}}" !== "") {
+            if (params.code === null) {
+                console.log('params.code === null')
+                document.getElementById("code").value = "{{arg['anilife_current_code']}}";
+
+            } else if (params.code === '') {
+                document.getElementById("code").value = "{{arg['anilife_current_code']}}";
+            } else {
+
+                console.log('params code exist')
+                console.log(params.code)
+                document.getElementById("code").value = params.code
+
+                analyze(params.wr_id, params.bo_table)
+                // document.getElementById("analysis_btn").click();
+                // $('#analysis_btn').trigger('click')
+            }
+            // 값이 공백이 아니면 분석 버튼 계속 누름
+            // {#document.getElementById("analysis_btn").click();#}
+        } else {
+
+        }
+
+    })
+
+    $(document).ready(function () {
+        $("#loader").css("display", 'none')
+        // console.log('wr_id::', params.wr_id)
+
+
+    });
+
+    $("#analysis_btn").unbind("click").bind('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation()
+        $("#loader").css("display", 'block')
+        const code = document.getElementById("code").value
+        console.log(code)
+        $.ajax({
+            url: '/' + package_name + '/ajax/' + sub + '/analysis',
+            type: "POST",
+            cache: false,
+            data: {code: code},
+            dataType: "json",
+            success: function (ret) {
+                $("#loader").css("display", 'none')
+                if (ret.ret === 'success' && ret.data != null) {
+                    // {#console.log(ret.code)#}
+                    console.log(ret.data)
+
+                    make_program(ret.data)
+                    dismissLoadingScreen()
+                } else {
+                    $.notify('<strong>분석 실패</strong><br>' + ret.log, {type: 'warning'});
+                }
+            }
+        });
+    });
+
+
+    $("body").on('click', '#go_anilife_btn', function (e) {
+        e.preventDefault();
+        window.open("{{arg['anilife_url']}}", "_blank");
+    });
+
+    $("body").on('click', '#all_check_on_btn', function (e) {
+        e.preventDefault();
+        $('input[id^="checkbox_"]').bootstrapToggle('on')
+    });
+
+    $("body").on('click', '#all_check_off_btn', function (e) {
+        e.preventDefault();
+        $('input[id^="checkbox_"]').bootstrapToggle('off')
+    });
+
+    $("body").on('click', '#add_queue_btn', function (e) {
+        e.preventDefault();
+        data = current_data.episode[$(this).data('idx')];
+        console.log('data:::>', data)
+        $.ajax({
+            url: '/' + package_name + '/ajax/' + sub + '/add_queue',
+            type: "POST",
+            cache: false,
+            data: {data: JSON.stringify(data)},
+            dataType: "json",
+            success: function (data) {
+                console.log('#add_queue_btn::data >>', data)
+                if (data.ret == 'enqueue_db_append' || data.ret == 'enqueue_db_exist') {
+                    $.notify('<strong>다운로드 작업을 추가 하였습니다.</strong>', {type: 'success'});
+                } else if (data.ret == 'queue_exist') {
+                    $.notify('<strong>이미 큐에 있습니다. 삭제 후 추가하세요.</strong>', {type: 'warning'});
+                } else if (data.ret == 'db_completed') {
+                    $.notify('<strong>DB에 완료 기록이 있습니다.</strong>', {type: 'warning'});
+                } else {
+                    $.notify('<strong>추가 실패</strong><br>' + ret.log, {type: 'warning'});
+                }
+            }
+        });
+
+    });
+
+    $("body").on('click', '#check_download_btn', function (e) {
+        e.preventDefault();
+        all = $('input[id^="checkbox_"]');
+        let data = [];
+        let idx;
+        for (let i in all) {
+            if (all[i].checked) {
+                idx = parseInt(all[i].id.split('_')[1])
+                data.push(current_data.episode[idx]);
+            }
+        }
+        if (data.length == 0) {
+            $.notify('<strong>선택하세요.</strong>', {type: 'warning'});
+            return;
+        }
+        $.ajax({
+            url: '/' + package_name + '/ajax/' + sub + '/add_queue_checked_list',
+            type: "POST",
+            cache: false,
+            data: {data: JSON.stringify(data)},
+            dataType: "json",
+            success: function (data) {
+                $.notify('<strong>백그라운드로 작업을 추가합니다.</strong>', {type: 'success'});
+            }
+        });
+    });
+</script>
+<style>
+    button.code-button {
+        min-width: 82px !important;
+    }
+
+    .tooltip {
+        position: relative;
+        display: block;
+    }
+
+    [data-tooltip-text]:hover {
+        position: relative;
+    }
+
+    [data-tooltip-text]:after {
+        -webkit-transition: bottom 0.3s ease-in-out, opacity 0.3s ease-in-out;
+        -moz-transition: bottom 0.3s ease-in-out, opacity 0.3s ease-in-out;
+        transition: bottom 0.3s ease-in-out, opacity 0.3s ease-in-out;
+
+        background-color: rgba(0, 0, 0, 0.8);
+
+        -webkit-box-shadow: 0px 0px 3px 1px rgba(50, 50, 50, 0.4);
+        -moz-box-shadow: 0px 0px 3px 1px rgba(50, 50, 50, 0.4);
+        box-shadow: 0px 0px 3px 1px rgba(50, 50, 50, 0.4);
+
+        -webkit-border-radius: 5px;
+        -moz-border-radius: 5px;
+        border-radius: 5px;
+
+        color: #ffffff;
+        font-size: 12px;
+        margin-bottom: 10px;
+        padding: 7px 12px;
+        position: absolute;
+        width: auto;
+        min-width: 50px;
+        max-width: 300px;
+        word-wrap: break-word;
+
+        z-index: 9999;
+
+        opacity: 0;
+        left: -9999px;
+        top: 90%;
+
+        content: attr(data-tooltip-text);
+    }
+
+    [data-tooltip-text]:hover:after {
+        top: 230%;
+        left: 0;
+        opacity: 1;
+    }
+
+    [data-tooltip-text]:hover {
+        position: relative;
+    }
+
+    [data-tooltip-text]:after {
+        -webkit-transition: bottom 0.3s ease-in-out, opacity 0.3s ease-in-out;
+        -moz-transition: bottom 0.3s ease-in-out, opacity 0.3s ease-in-out;
+        transition: bottom 0.3s ease-in-out, opacity 0.3s ease-in-out;
+
+        background-color: rgba(0, 0, 0, 0.8);
+
+        -webkit-box-shadow: 0px 0px 3px 1px rgba(50, 50, 50, 0.4);
+        -moz-box-shadow: 0px 0px 3px 1px rgba(50, 50, 50, 0.4);
+        box-shadow: 0px 0px 3px 1px rgba(50, 50, 50, 0.4);
+
+        -webkit-border-radius: 5px;
+        -moz-border-radius: 5px;
+        border-radius: 5px;
+
+        color: #ffffff;
+        font-size: 12px;
+        margin-bottom: 10px;
+        padding: 7px 12px;
+        position: absolute;
+        width: auto;
+        min-width: 50px;
+        max-width: 300px;
+        word-wrap: break-word;
+
+        z-index: 9999;
+
+        opacity: 0;
+        left: -9999px;
+        top: -210% !important;
+
+        content: attr(data-tooltip-text);
+    }
+
+    [data-tooltip-text]:hover:after {
+        top: 130%;
+        left: 0;
+        opacity: 1;
+    }
+
+    #airing_list {
+        display: none;
+    }
+
+    .cut-text {
+        text-overflow: ellipsis;
+        overflow: hidden;
+        white-space: nowrap;
+        width: 100%;
+    }
+
+    #screen_movie_list {
+        margin-top: 10px;
+    }
+
+    #preloader {
+        /*background-color: green;*/
+        /*color: white;*/
+        /*height: 100vh;*/
+        /*width: 100%;*/
+        /*position: fixed;*/
+        /*z-index: 100;*/
+        background: rgba(0, 0, 0, 0.2);
+        background: radial-gradient(#222, #000);
+        bottom: 0;
+        left: 0;
+        overflow: hidden;
+        position: fixed;
+        right: 0;
+        top: 0;
+        z-index: 99999;
+        opacity: 0.5;
+    }
+
+    .loader {
+        background: rgb(0, 0, 0, 0.8);
+        background: radial-gradient(#222, #000);
+        bottom: 0;
+        left: 0;
+        overflow: hidden;
+        position: fixed;
+        right: 0;
+        top: 0;
+        z-index: 99999;
+    }
+
+    .loader-inner {
+        bottom: 0;
+        height: 60px;
+        left: 0;
+        margin: auto;
+        position: absolute;
+        right: 0;
+        top: 0;
+        width: 100px;
+    }
+
+    .loader-line-wrap {
+        animation: spin 2000ms cubic-bezier(.175, .885, .32, 1.275) infinite;
+        box-sizing: border-box;
+        height: 50px;
+        left: 0;
+        overflow: hidden;
+        position: absolute;
+        top: 0;
+        transform-origin: 50% 100%;
+        width: 100px;
+    }
+
+    .loader-line {
+        border: 4px solid transparent;
+        border-radius: 100%;
+        box-sizing: border-box;
+        height: 100px;
+        left: 0;
+        margin: 0 auto;
+        position: absolute;
+        right: 0;
+        top: 0;
+        width: 100px;
+    }
+
+    .loader-line-wrap:nth-child(1) {
+        animation-delay: -50ms;
+    }
+
+    .loader-line-wrap:nth-child(2) {
+        animation-delay: -100ms;
+    }
+
+    .loader-line-wrap:nth-child(3) {
+        animation-delay: -150ms;
+    }
+
+    .loader-line-wrap:nth-child(4) {
+        animation-delay: -200ms;
+    }
+
+    .loader-line-wrap:nth-child(5) {
+        animation-delay: -250ms;
+    }
+
+    .loader-line-wrap:nth-child(1) .loader-line {
+        border-color: hsl(0, 80%, 60%);
+        height: 90px;
+        width: 90px;
+        top: 7px;
+    }
+
+    .loader-line-wrap:nth-child(2) .loader-line {
+        border-color: hsl(60, 80%, 60%);
+        height: 76px;
+        width: 76px;
+        top: 14px;
+    }
+
+    .loader-line-wrap:nth-child(3) .loader-line {
+        border-color: hsl(120, 80%, 60%);
+        height: 62px;
+        width: 62px;
+        top: 21px;
+    }
+
+    .loader-line-wrap:nth-child(4) .loader-line {
+        border-color: hsl(180, 80%, 60%);
+        height: 48px;
+        width: 48px;
+        top: 28px;
+    }
+
+    .loader-line-wrap:nth-child(5) .loader-line {
+        border-color: hsl(240, 80%, 60%);
+        height: 34px;
+        width: 34px;
+        top: 35px;
+    }
+
+    @keyframes spin {
+        0%, 15% {
+            transform: rotate(0);
+        }
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+</style>
+{% endblock %}

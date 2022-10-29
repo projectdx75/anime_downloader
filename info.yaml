@@ -1,0 +1,7 @@
+title: "애니 다운로더"
+version: "0.1.0"
+package_name: "anime_downloader"
+developer: "projectdx"
+description: "anime downloader"
+home: "https://github.com/flaskfarm/ffmpeg"
+more: "https://raw.githubusercontent.com/flaskfarm/ffmpeg/main/README.md"

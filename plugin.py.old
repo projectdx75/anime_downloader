@@ -1,0 +1,102 @@
+# -*- coding: utf-8 -*-
+# @Time    : 2022/02/08 2:57 PM
+# @Author  : yommi
+# @Site    :
+# @File    : plugin
+# @Software: PyCharm
+
+import os, traceback
+
+# third-party
+from flask import Blueprint
+
+# sjva 공용
+from framework.logger import get_logger
+from framework import app, path_data
+from plugin import get_model_setting, Logic, default_route, PluginUtil
+
+
+#######################################################################
+
+
+class P(object):
+    package_name = __name__.split(".")[0]
+    logger = get_logger(package_name)
+    blueprint = Blueprint(
+        package_name,
+        package_name,
+        url_prefix="/%s" % package_name,
+        template_folder=os.path.join(os.path.dirname(__file__), "templates"),
+        static_folder="static",
+    )
+    menu = {
+        "main": [package_name, "애니 다운로드"],
+        "sub": [
+            ["ohli24", "OHLI24"],
+            ["linkkf", "LINKKF"],
+            ["anilife", "애니라이프"],
+            ["log", "로그"],
+        ],
+        "category": "vod",
+        "sub2": {
+            "ohli24": [
+                ["setting", "설정"],
+                ["request", "요청"],
+                ["queue", "큐"],
+                ["category", "검색"],
+                ["list", "목록"],
+            ],
+            "linkkf": [
+                ["setting", "설정"],
+                ["request", "요청"],
+                ["queue", "큐"],
+                ["category", "검색"],
+                ["list", "목록"],
+            ],
+            "anilife": [
+                ["setting", "설정"],
+                ["request", "요청"],
+                ["category", "검색"],
+                ["queue", "큐"],
+                ["list", "목록"],
+            ],
+        },
+    }
+    plugin_info = {
+        "version": "0.1.2.0",
+        "name": "anime_downloader",
+        "category_name": "vod",
+        "icon": "",
+        "developer": "soju6jan && projectdx",
+        "description": "비디오 다운로드",
+        "home": "http://yommi.duckdns.org:20080/projectdx/anime-downloader",
+        "more": "",
+    }
+    ModelSetting = get_model_setting(package_name, logger)
+    logic = None
+    module_list = None
+    home_module = "ohli24"
+
+
+# 초기화 함수
+def initialize():
+    try:
+        app.config["SQLALCHEMY_BINDS"][P.package_name] = "sqlite:///%s" % (
+            os.path.join(
+                path_data, "db", "{package_name}.db".format(package_name=P.package_name)
+            )
+        )
+        PluginUtil.make_info_json(P.plugin_info, __file__)
+        from .logic_ohli24 import LogicOhli24
+        from .logic_anilife import LogicAniLife
+
+        # P.module_list = [LogicOhli24(P), LogicLinkkf(P)]
+        P.module_list = [LogicOhli24(P), LogicAniLife(P)]
+        P.logic = Logic(P)
+        default_route(P)
+    except Exception as e:
+        P.logger.error("Exception:%s", e)
+        P.logger.error(traceback.format_exc())
+
+
+initialize()
