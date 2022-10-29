@@ -11,6 +11,8 @@ import copy
 
 # third-party
 import requests
+from lxml import html
+from urllib import parse
 
 # third-party
 from flask import request, render_template, jsonify
@@ -79,7 +81,7 @@ class LogicLinkkf(PluginModuleBase):
     def process_menu(self, sub, req):
         arg = P.ModelSetting.to_dict()
         arg["sub"] = self.name
-        if sub in ["setting", "queue", "category", "list", "request"]:
+        if sub in ["setting", "queue", "category", "list", "request", "search"]:
             if sub == "request" and req.args.get("content_code") is not None:
                 arg["linkkf_current_code"] = req.args.get("content_code")
             if sub == "setting":
@@ -97,13 +99,49 @@ class LogicLinkkf(PluginModuleBase):
     def process_ajax(self, sub, req):
         try:
             if sub == "analysis":
-                pass
+                # code = req.form['code']
+                code = request.form["code"]
+
+                wr_id = request.form.get("wr_id", None)
+                bo_table = request.form.get("bo_table", None)
+                data = []
+                # print(code)
+                # logger.info("code::: %s", code)
+                P.ModelSetting.set("ohli24_current_code", code)
+                data = self.get_series_info(code, wr_id, bo_table)
+                self.current_data = data
+                return jsonify({"ret": "success", "data": data, "code": code})
             elif sub == "anime_list":
-                pass
+                data = []
+                cate = request.form["type"]
+                page = request.form["page"]
+
+                data = self.get_anime_info(cate, page)
+                # self.current_data = data
+                return jsonify(
+                    {"ret": "success", "cate": cate, "page": page, "data": data}
+                )
             elif sub == "complete_list":
                 pass
             elif sub == "search":
-                pass
+                data = []
+                # cate = request.form["type"]
+                # page = request.form["page"]
+                cate = request.form["type"]
+                query = request.form["query"]
+                page = request.form["page"]
+
+                data = self.get_search_result(query, page, cate)
+                # self.current_data = data
+                return jsonify(
+                    {
+                        "ret": "success",
+                        "cate": cate,
+                        "page": page,
+                        "query": query,
+                        "data": data,
+                    }
+                )
             elif sub == "add_queue":
                 pass
             elif sub == "entity_list":
@@ -123,9 +161,86 @@ class LogicLinkkf(PluginModuleBase):
             P.logger.error("Exception:%s", e)
             P.logger.error(traceback.format_exc())
 
-    pass
+    def get_anime_info(self, cate, page):
+        try:
+            if cate == "ing":
+                url = (
+                        P.ModelSetting.get("ohli24_url")
+                        + "/bbs/board.php?bo_table="
+                        + cate
+                        + "&page="
+                        + page
+                )
+            elif cate == "movie":
+                url = (
+                        P.ModelSetting.get("ohli24_url")
+                        + "/bbs/board.php?bo_table="
+                        + cate
+                        + "&page="
+                        + page
+                )
+            else:
+                url = (
+                        P.ModelSetting.get("ohli24_url")
+                        + "/bbs/board.php?bo_table="
+                        + cate
+                        + "&page="
+                        + page
+                )
+                # cate == "complete":
+            logger.info("url:::> %s", url)
+            data = {}
+            response_data = LogicOhli24.get_html(url, timeout=10)
+            tree = html.fromstring(response_data)
+            tmp_items = tree.xpath('//div[@class="list-row"]')
+            data["anime_count"] = len(tmp_items)
+            data["anime_list"] = []
 
+            for item in tmp_items:
+                entity = {}
+                entity["link"] = item.xpath(".//a/@href")[0]
+                entity["code"] = entity["link"].split("/")[-1]
+                entity["title"] = item.xpath(".//div[@class='post-title']/text()")[
+                    0
+                ].strip()
+                entity["image_link"] = item.xpath(".//div[@class='img-item']/img/@src")[
+                    0
+                ].replace("..", P.ModelSetting.get("ohli24_url"))
+                data["ret"] = "success"
+                data["anime_list"].append(entity)
 
+            return data
+        except Exception as e:
+            P.logger.error("Exception:%s", e)
+            P.logger.error(traceback.format_exc())
+            return {"ret": "exception", "log": str(e)}
+    @staticmethod
+    def get_html(url, referer=None, stream=False, timeout=5):
+        data = ""
+        headers = {
+            "referer": f"https://linkkf.app",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) "
+                          "Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36"
+                          "Mozilla/5.0 (Macintosh; Intel "
+                          "Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 "
+                          "Whale/3.12.129.46 Safari/537.36",
+            "X-Requested-With": "XMLHttpRequest",
+        }
+        try:
+
+            if LogicOhli24.session is None:
+                LogicOhli24.session = requests.session()
+
+            # logger.debug('get_html :%s', url)
+            headers["Referer"] = "" if referer is None else referer
+            page_content = LogicOhli24.session.get(
+                url, headers=headers, timeout=timeout
+            )
+            data = page_content.text
+        except Exception as e:
+            logger.error("Exception:%s", e)
+            logger.error(traceback.format_exc())
+        return data
 class ModelLinkkfItem(db.Model):
     __tablename__ = "{package_name}_linkkf_item".format(package_name=P.package_name)
     __table_args__ = {"mysql_collate": "utf8_general_ci"}
@@ -152,8 +267,8 @@ class ModelLinkkfItem(db.Model):
     status = db.Column(db.String)
     linkkf_info = db.Column(db.JSON)
 
-    def __int__(self):
-        self.created_time == datetime.now()
+    def __init__(self):
+        self.created_time = datetime.now()
 
     def __repr__(self):
         return repr(self.as_dict())
