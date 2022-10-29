@@ -5,33 +5,34 @@
 # @Site    :
 # @File    : logic_linkkf
 # @Software: PyCharm
-import os, sys, traceback, re, json, threading
+import os
+import re
+import sys
+import traceback
 from datetime import datetime
-import copy
 
+import PIL.Image
 # third-party
 import requests
-from lxml import html
-from urllib import parse
-
+from bs4 import BeautifulSoup
 # third-party
-from flask import request, render_template, jsonify
-from sqlalchemy import or_, and_, func, not_, desc
-
+from flask import jsonify, render_template, request
 # sjva 공용
-from framework import db, scheduler, path_data, socketio
-from framework.util import Util
-from framework import F
-from plugin import (
-    PluginModuleBase
-)
-from flaskfarm.lib.plugin._ffmpeg_queue import FfmpegQueueEntity, FfmpegQueue
+from framework import db, path_data, scheduler
+from lxml import html
+from plugin import PluginModuleBase
+
+from anime_downloader.lib.util import Util
+# 패키지
+# from .plugin import P
+from anime_downloader.setup import *
+
+# from linkkf.model import ModelLinkkfProgram
+
+# from linkkf.model import ModelLinkkfProgram
 
 # from tool_base import d
 
-# 패키지
-# from .plugin import P
-from .setup import *
 
 logger = P.logger
 
@@ -58,18 +59,19 @@ class LogicLinkkf(PluginModuleBase):
     }
     current_headers = None
     current_data = None
+    referer = None
 
     session = requests.Session()
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/71.0.3578.98 Safari/537.36",
+                      "Chrome/71.0.3578.98 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
         "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
         "Referer": "",
     }
     useragent = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, "
-        "like Gecko) Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36"
+                      "like Gecko) Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36"
     }
 
     def __init__(self, P):
@@ -107,8 +109,8 @@ class LogicLinkkf(PluginModuleBase):
                 data = []
                 # print(code)
                 # logger.info("code::: %s", code)
-                P.ModelSetting.set("ohli24_current_code", code)
-                data = self.get_series_info(code, wr_id, bo_table)
+                P.ModelSetting.set("linkkf_current_code", code)
+                data = self.get_series_info(code)
                 self.current_data = data
                 return jsonify({"ret": "success", "data": data, "code": code})
             elif sub == "anime_list":
@@ -164,58 +166,270 @@ class LogicLinkkf(PluginModuleBase):
     def get_anime_info(self, cate, page):
         try:
             if cate == "ing":
-                url = (
-                        P.ModelSetting.get("ohli24_url")
-                        + "/bbs/board.php?bo_table="
-                        + cate
-                        + "&page="
-                        + page
-                )
+                url = f"{P.ModelSetting.get('linkkf_url')}/airing/page/{page}"
+                items_xpath = '//div[@class="myui-vodlist__box"]'
+                title_xpath = './/a[@class="text-fff"]//text()'
             elif cate == "movie":
-                url = (
-                        P.ModelSetting.get("ohli24_url")
-                        + "/bbs/board.php?bo_table="
-                        + cate
-                        + "&page="
-                        + page
-                )
-            else:
-                url = (
-                        P.ModelSetting.get("ohli24_url")
-                        + "/bbs/board.php?bo_table="
-                        + cate
-                        + "&page="
-                        + page
-                )
-                # cate == "complete":
+                url = f"{P.ModelSetting.get('linkkf_url')}/ani/page/{page}"
+                items_xpath = '//div[@class="myui-vodlist__box"]'
+                title_xpath = './/a[@class="text-fff"]//text()'
+            elif cate == "complete":
+                url = f"{P.ModelSetting.get('linkkf_url')}/anime-list/page/{page}"
+                items_xpath = '//div[@class="myui-vodlist__box"]'
+                title_xpath = './/a[@class="text-fff"]//text()'
+            elif cate == "top_view":
+                url = f"{P.ModelSetting.get('linkkf_url')}/topview/page/{page}"
+                items_xpath = '//div[@class="myui-vodlist__box"]'
+                title_xpath = './/a[@class="text-fff"]//text()'
+
             logger.info("url:::> %s", url)
-            data = {}
-            response_data = LogicOhli24.get_html(url, timeout=10)
+            logger.info("test..........................")
+            logger.info("test..........................")
+            if self.referer is None:
+                self.referer = "https://linkkf.app"
+
+            data = {"ret": "success", "page": page}
+            response_data = LogicLinkkf.get_html(url, timeout=10)
+            # P.logger.debug(response_data)
+            P.logger.debug("debug.....................")
             tree = html.fromstring(response_data)
-            tmp_items = tree.xpath('//div[@class="list-row"]')
-            data["anime_count"] = len(tmp_items)
-            data["anime_list"] = []
+            tmp_items = tree.xpath(items_xpath)
+
+            if tree.xpath('//div[@id="wp_page"]//text()'):
+                data["total_page"] = tree.xpath('//div[@id="wp_page"]//text()')[-1]
+            else:
+                data["total_page"] = 0
+            data["episode_count"] = len(tmp_items)
+            data["episode"] = []
 
             for item in tmp_items:
-                entity = {}
+                entity = dict()
                 entity["link"] = item.xpath(".//a/@href")[0]
-                entity["code"] = entity["link"].split("/")[-1]
-                entity["title"] = item.xpath(".//div[@class='post-title']/text()")[
-                    0
-                ].strip()
-                entity["image_link"] = item.xpath(".//div[@class='img-item']/img/@src")[
-                    0
-                ].replace("..", P.ModelSetting.get("ohli24_url"))
-                data["ret"] = "success"
-                data["anime_list"].append(entity)
+                entity["code"] = re.search(r"[0-9]+", entity["link"]).group()
+                entity["title"] = item.xpath(title_xpath)[0].strip()
+                entity["image_link"] = item.xpath("./a/@data-original")[0]
+                entity["chapter"] = (
+                    item.xpath("./a/span//text()")[0].strip()
+                    if len(item.xpath("./a/span//text()")) > 0
+                    else ""
+                )
+                # logger.info('entity:::', entity['title'])
+                data["episode"].append(entity)
+
+            # logger.debug(data)
 
             return data
         except Exception as e:
             P.logger.error("Exception:%s", e)
             P.logger.error(traceback.format_exc())
             return {"ret": "exception", "log": str(e)}
+
+    def get_series_info(self, code):
+        data = {"code": code, "ret": False}
+        try:
+            # 이전 데이터가 있다면, 리턴 (# If you have previous data, return)
+            if (
+                    LogicLinkkf.current_data is not None
+                    and LogicLinkkf.current_data["code"] == code
+                    and LogicLinkkf.current_data["ret"]
+            ):
+                return LogicLinkkf.current_data
+            url = "%s/%s" % (P.ModelSetting.get("linkkf_url"), code)
+            logger.info(url)
+
+            logger.debug(LogicLinkkf.headers)
+            html_content = LogicLinkkf.get_html(url, cached=False)
+            # html_content = LogicLinkkf.get_html_playwright(url)
+            # html_content = LogicLinkkf.get_html_cloudflare(url, cached=False)
+
+            sys.setrecursionlimit(10 ** 7)
+            # logger.info(html_content)
+            tree = html.fromstring(html_content)
+            # tree = etree.fromstring(
+            #     html_content, parser=etree.XMLParser(huge_tree=True)
+            # )
+            # tree1 = BeautifulSoup(html_content, "lxml")
+
+            soup = BeautifulSoup(html_content, "html.parser")
+            # tree = etree.HTML(str(soup))
+            # logger.info(tree)
+
+            tmp2 = soup.select("ul > a")
+            if len(tmp2) == 0:
+                tmp = soup.select("u > a")
+            else:
+                tmp = soup.select("ul > a")
+
+            # logger.debug(f"tmp1 size:=> {str(len(tmp))}")
+
+            try:
+                tmp = (
+                    tree.xpath('//div[@class="hrecipe"]/article/center/strong')[0]
+                    .text_content()
+                    .strip()
+                )
+            except IndexError:
+                tmp = tree.xpath("//article/center/strong")[0].text_content().strip()
+
+            # logger.info(tmp)
+            match = re.compile(r"(?P<season>\d+)기").search(tmp)
+            if match:
+                data["season"] = match.group("season")
+            else:
+                data["season"] = "1"
+
+            data["_id"] = str(code)
+            data["title"] = tmp.replace(data["season"] + "기", "").strip()
+            data["title"] = data["title"].replace("()", "").strip()
+            data["title"] = (
+                Util.change_text_for_use_filename(data["title"])
+                .replace("OVA", "")
+                .strip()
+            )
+
+            try:
+                data["poster_url"] = tree.xpath(
+                    '//div[@class="myui-content__thumb"]/a/@data-original'
+                )
+                # print(tree.xpath('//div[@class="myui-content__detail"]/text()'))
+                if len(tree.xpath('//div[@class="myui-content__detail"]/text()')) > 3:
+                    data["detail"] = [
+                        {
+                            "info": str(tree.xpath(
+                                "//div[@class='myui-content__detail']/text()"
+                            )[3])
+                        }
+                    ]
+                else:
+                    data["detail"] = [{"정보없음": ""}]
+            except Exception as e:
+                logger.error(e)
+                data["detail"] = [{"정보없음": ""}]
+                data["poster_url"] = None
+
+            data["rate"] = tree.xpath('span[@class="tag-score"]')
+
+            tag_score = tree.xpath('//span[@class="taq-score"]')[0].text_content()
+            # logger.debug(tag_score)
+            tag_count = (
+                tree.xpath('//span[contains(@class, "taq-count")]')[0]
+                .text_content()
+                .strip()
+            )
+            data_rate = tree.xpath('//div[@class="rating"]/div/@data-rate')
+
+            tmp2 = soup.select("ul > a")
+            if len(tmp) == 0:
+                tmp = soup.select("u > a")
+            else:
+                tmp = soup.select("ul > a")
+
+            if tmp is not None:
+                data["episode_count"] = str(len(tmp))
+            else:
+                data["episode_count"] = "0"
+
+            data["episode"] = []
+            # tags = tree.xpath(
+            #     '//*[@id="syno-nsc-ext-gen3"]/article/div[1]/article/a')
+            # tags = tree.xpath("//ul/a")
+            tags = soup.select("ul > u > a")
+            if len(tags) > 0:
+                pass
+            else:
+                tags = soup.select("ul > a")
+
+            logger.debug(len(tags))
+
+            # logger.info("tags", tags)
+            # re1 = re.compile(r'\/(?P<code>\d+)')
+            re1 = re.compile(r"\-([^-])+\.")
+
+            data["save_folder"] = data["title"]
+            # logger.debug(f"save_folder::> {data['save_folder']}")
+
+            # program = (
+            #     db.session.query(ModelLinkkfProgram).filter_by(programcode=code).first()
+            # )
+
+            idx = 1
+            for t in tags:
+                entity = {
+                    "_id": data["code"],
+                    "program_code": data["code"],
+                    "program_title": data["title"],
+                    "save_folder": Util.change_text_for_use_filename(
+                        data["save_folder"]
+                    ),
+                    "title": t.text.strip(),
+                    # "title": t.text_content().strip(),
+                }
+                # entity['code'] = re1.search(t.attrib['href']).group('code')
+
+                # logger.debug(f"title ::>{entity['title']}")
+
+                # 고유id임을 알수 없는 말도 안됨..
+                # 에피소드 코드가 고유해야 상태값 갱신이 제대로 된 값에 넣어짐
+                p = re.compile(r"([0-9]+)화?")
+                m_obj = p.match(entity["title"])
+                # logger.info(m_obj.group())
+                # entity['code'] = data['code'] + '_' +str(idx)
+
+                episode_code = None
+                # logger.debug(f"m_obj::> {m_obj}")
+                if m_obj is not None:
+                    episode_code = m_obj.group(1)
+                    entity["code"] = data["code"] + episode_code.zfill(4)
+                else:
+                    entity["code"] = data["code"]
+
+                aa = t["href"]
+                if "/player" in aa:
+                    entity["url"] = "https://linkkf.app" + t["href"]
+                else:
+                    entity["url"] = t["href"]
+                entity["season"] = data["season"]
+
+                # 저장 경로 저장
+                # Todo: db
+                tmp_save_path = P.ModelSetting.get(f"linkkf_download_path")
+                if P.ModelSetting.get("linkkf_auto_make_folder") == "True":
+                    program_path = os.path.join(tmp_save_path, entity["save_folder"])
+                    entity["save_path"] = program_path
+                    if P.ModelSetting.get("linkkf_auto_make_season_folder"):
+                        entity["save_path"] = os.path.join(
+                            entity["save_path"], "Season %s" % int(entity["season"])
+                        )
+
+                entity["image"] = data["poster_url"]
+
+                entity["filename"] = LogicLinkkf.get_filename(
+                    data["save_folder"], data["season"], entity["title"]
+                )
+                data["episode"].append(entity)
+                idx = idx + 1
+
+            data["ret"] = True
+            # logger.info('data', data)
+            self.current_data = data
+
+            return data
+
+        except Exception as e:
+            logger.error("Exception:%s", e)
+            logger.error(traceback.format_exc())
+            data["log"] = str(e)
+            data["ret"] = "error"
+            return data
+        except IndexError as e:
+            logger.error("Exception:%s", e)
+            logger.error(traceback.format_exc())
+            data["log"] = str(e)
+            data["ret"] = "error"
+            return data
+
     @staticmethod
-    def get_html(url, referer=None, stream=False, timeout=5):
+    def get_html(url: str, referer: str = None, cached: bool = False, stream: bool = False, timeout: int = 5):
         data = ""
         headers = {
             "referer": f"https://linkkf.app",
@@ -241,6 +455,42 @@ class LogicLinkkf(PluginModuleBase):
             logger.error("Exception:%s", e)
             logger.error(traceback.format_exc())
         return data
+
+    @staticmethod
+    def get_filename(maintitle, season, title):
+        try:
+            # logger.debug("get_filename()===")
+            # logger.info("title:: %s", title)
+            # logger.info("maintitle:: %s", maintitle)
+            match = re.compile(
+                r"(?P<title>.*?)\s?((?P<season>\d+)기)?\s?((?P<epi_no>\d+)화?)"
+            ).search(title)
+            if match:
+                epi_no = int(match.group("epi_no"))
+                if epi_no < 10:
+                    epi_no = "0%s" % epi_no
+                else:
+                    epi_no = "%s" % epi_no
+
+                if int(season) < 10:
+                    season = "0%s" % season
+                else:
+                    season = "%s" % season
+
+                # title_part = match.group('title').strip()
+                # ret = '%s.S%sE%s%s.720p-SA.mp4' % (maintitle, season, epi_no, date_str)
+                ret = "%s.S%sE%s.720p-LK.mp4" % (maintitle, season, epi_no)
+            else:
+                logger.debug("NOT MATCH")
+                ret = "%s.720p-SA.mp4" % maintitle
+
+            return Util.change_text_for_use_filename(ret)
+        except Exception as e:
+            logger.error("Exception:%s", e)
+            logger.error(traceback.format_exc())
+
+
+
 class ModelLinkkfItem(db.Model):
     __tablename__ = "{package_name}_linkkf_item".format(package_name=P.package_name)
     __table_args__ = {"mysql_collate": "utf8_general_ci"}
