@@ -5,6 +5,7 @@
 # @Site    :
 # @File    : logic_linkkf
 # @Software: PyCharm
+import json
 import os
 import re
 import sys
@@ -21,6 +22,7 @@ from flask import jsonify, render_template, request
 from framework import db, path_data, scheduler
 from lxml import html
 from plugin import PluginModuleBase
+from requests_cache import CachedSession
 
 from anime_downloader.lib.util import Util
 # 패키지
@@ -60,6 +62,7 @@ class LogicLinkkf(PluginModuleBase):
     current_headers = None
     current_data = None
     referer = None
+    cache_path = os.path.dirname(__file__)
 
     session = requests.Session()
     headers = {
@@ -123,6 +126,16 @@ class LogicLinkkf(PluginModuleBase):
                 return jsonify(
                     {"ret": "success", "cate": cate, "page": page, "data": data}
                 )
+            elif sub == "screen_movie_list":
+                try:
+                    logger.debug("request:::> %s", request.form["page"])
+                    page = request.form["page"]
+                    data = self.get_screen_movie_info(page)
+                    dummy_data = {"ret": "success", "data": data}
+                    return jsonify(data)
+                except Exception as e:
+                    logger.error("Exception:%s", e)
+                    logger.error(traceback.format_exc())
             elif sub == "complete_list":
                 pass
             elif sub == "search":
@@ -145,7 +158,11 @@ class LogicLinkkf(PluginModuleBase):
                     }
                 )
             elif sub == "add_queue":
-                pass
+                logger.debug(f"anilife add_queue routine ===============")
+                ret = {}
+                info = json.loads(request.form["data"])
+                logger.info(f"info:: {info}")
+                ret["ret"] = self.add(info)
             elif sub == "entity_list":
                 pass
             elif sub == "queue_command":
@@ -428,6 +445,62 @@ class LogicLinkkf(PluginModuleBase):
             data["ret"] = "error"
             return data
 
+    def get_screen_movie_info(self, page):
+        try:
+            url = f"{P.ModelSetting.get('linkkf_url')}/ani/page/{page}"
+
+            html_content = self.get_html_requests(url, cached=True)
+            # html_content = LogicLinkkfYommi.get_html_cloudflare(url, cached=False)
+            download_path = P.ModelSetting.get("linkkf_download_path")
+            tree = html.fromstring(html_content)
+            tmp_items = tree.xpath('//div[@class="myui-vodlist__box"]')
+            title_xpath = './/a[@class="text-fff"]//text()'
+            # logger.info('tmp_items:::', tmp_items)
+            data = dict()
+            data = {"ret": "success", "page": page}
+
+            data["episode_count"] = len(tmp_items)
+            data["episode"] = []
+
+            for item in tmp_items:
+                entity = dict()
+                entity["link"] = item.xpath(".//a/@href")[0]
+                entity["code"] = re.search(r"[0-9]+", entity["link"]).group()
+                entity["title"] = item.xpath(title_xpath)[0].strip()
+                if len(item.xpath("./a/@style")) > 0:
+                    print(
+                        re.search(
+                            r"url\(((http|https|ftp|ftps)\:\/\/[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,3}(\/\S*)?)\)",
+                            item.xpath("./a/@style")[0],
+                        ).group()
+                    )
+
+                if item.xpath(".//a/@data-original"):
+                    entity["image_link"] = item.xpath(".//a/@data-original")[0]
+
+                else:
+                    entity["image_link"] = ""
+                # entity["image_link"] = item.xpath("./a/@data-original")[0]
+                entity["chapter"] = (
+                    item.xpath("./a/span//text()")[0]
+                    if len(item.xpath("./a/span//text()")) > 0
+                    else ""
+                )
+                # logger.info('entity:::', entity['title'])
+                data["episode"].append(entity)
+
+            # json_file_path = os.path.join(download_path, "airing_list.json")
+            # logger.debug("json_file_path:: %s", json_file_path)
+            #
+            # with open(json_file_path, "w") as outfile:
+            #     json.dump(data, outfile)
+
+            return data
+
+        except Exception as e:
+            logger.error("Exception:%s", e)
+            logger.error(traceback.format_exc())
+
     @staticmethod
     def get_html(url: str, referer: str = None, cached: bool = False, stream: bool = False, timeout: int = 5):
         data = ""
@@ -455,6 +528,34 @@ class LogicLinkkf(PluginModuleBase):
             logger.error("Exception:%s", e)
             logger.error(traceback.format_exc())
         return data
+
+    def get_html_requests(self, url, cached=False):
+        if LogicLinkkf.session is None:
+            if cached:
+                logger.debug("cached===========++++++++++++")
+
+                LogicLinkkf.session = CachedSession(
+                    os.path.join(self.cache_path, "linkkf_cache"),
+                    backend="sqlite",
+                    expire_after=300,
+                    cache_control=True,
+                )
+                # print(f"{cache_path}")
+                # print(f"cache_path:: {LogicLinkkfYommi.session.cache}")
+            else:
+                LogicLinkkf.session = requests.Session()
+
+        LogicLinkkf.referer = "https://linkkf.app"
+
+        LogicLinkkf.headers["Referer"] = LogicLinkkf.referer
+
+        # logger.debug(
+        #     f"get_html()::LogicLinkkfYommi.referer = {LogicLinkkfYommi.referer}"
+        # )
+        page = LogicLinkkf.session.get(url, headers=LogicLinkkf.headers)
+        # logger.info(f"page: {page}")
+
+        return page.content.decode("utf8", errors="replace")
 
     @staticmethod
     def get_filename(maintitle, season, title):
@@ -488,7 +589,6 @@ class LogicLinkkf(PluginModuleBase):
         except Exception as e:
             logger.error("Exception:%s", e)
             logger.error(traceback.format_exc())
-
 
 
 class ModelLinkkfItem(db.Model):

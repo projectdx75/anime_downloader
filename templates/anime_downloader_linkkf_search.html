@@ -34,34 +34,33 @@
             </button>
         </div>
 
-        <div>
-            <div
-                    id="anime_category"
-                    class="btn-group"
-                    role="group"
-                    aria-label="Basic example"
-            >
-                <button id="ing" type="button" class="btn btn-success">방영중</button>
-                <button id="theater" type="button" class="btn btn-primary">극장판</button>
-                <button id="complete_anilist" type="button" class="btn btn-dark">
-                    완결
-                </button>
-            </div>
-            <form id="airing_list_form">
-                <div id="airing_list"></div>
-            </form>
-            <form id="screen_movie_list_form">
-                <div id="screen_movie_list" class="container"></div>
-            </form>
-            <div class="text-center">
-                <div id="spinner" class="spinner-border" role="status">
-                    <span class="sr-only">Loading...</span>
-                </div>
-            </div>
-            <form id="program_auto_form">
-                <div id="episode_list"></div>
-            </form>
+
+        <div
+                id="anime_category"
+                class="btn-group"
+                role="group"
+                aria-label="Linkkf Button"
+        >
+            <button id="ing" type="button" class="btn btn-success">방영중</button>
+            <button id="movie" type="button" class="btn btn-primary">극장판</button>
+            <button id="complete_anilist" type="button" class="btn btn-dark">완결</button>
+            <button id="top_view" type="button" class="btn btn-yellow">Top</button>
         </div>
+        <form id="airing_list_form">
+            <div id="airing_list"></div>
+        </form>
+        <form id="screen_movie_list_form">
+            <div id="screen_movie_list" class="container"></div>
+        </form>
+        {#            <div class="text-center">#}
+        {#                <div id="spinner" class="spinner-border" role="status">#}
+        {#                    <span class="sr-only">Loading...</span>#}
+        {#                </div>#}
+        {#            </div>#}
+        <form id="program_auto_form">
+            <div id="episode_list"></div>
+        </form>
+
     </div>
     <!--전체-->
 
@@ -106,8 +105,34 @@
         observer.observe();
 
 
+        const get_anime_screen_movie = (page) => {
+            let data = {page: page};
+            $.ajax({
+                url: '/' + package_name + '/ajax/' + sub + '/screen_movie_list',
+                type: "POST",
+                data: data,
+                cache: false,
+                dataType: "json",
+                success: (ret) => {
+                    current_screen_movie_data = ret;
+                    total_page = ret.total_page;
+                    // console.log("ret::>", ret);
+
+                    if (current_screen_movie_data !== "") {
+                        make_screen_movie_list(ret, page);
+                        $("img.lazyload").lazyload({
+                            threshold: 100,
+                            effect: "fadeIn",
+                        });
+                        div_visible = true;
+                    }
+                    next_page = page + 1;
+                },
+            });
+        };
+
         const get_anime_list = (type, page) => {
-            console.log(`type: ${type}, page: ${page}`)
+            //console.log(`type: ${type}, page: ${page}`);
             let url = ''
             let data = {"page": page, "type": type}
 
@@ -124,7 +149,7 @@
                     url = '/' + package_name + '/ajax/' + sub + '/anime_list'
                     current_cate = 'complete'
                     break;
-                case 'complete':
+                case 'top_view':
                     url = '/' + package_name + '/ajax/' + sub + '/complete_list'
                     current_cate = 'complete'
                     break
@@ -161,7 +186,7 @@
                     }
                     next_page = page + 1
                 }
-            })
+            });
         }
 
         function make_airing_list(data, page) {
@@ -433,26 +458,45 @@
             });
         });
 
-        $('#anime_category #ing').on("click", function () {
-            // {#console.log(this.id)#}
-            let spinner = document.getElementById('spinner');
-            spinner.style.visibility = 'visible';
-            get_anime_list("ing", 1)
-        })
 
-        $('#anime_category #complete_anilist').on("click", function () {
-            // {#console.log(this.id)#}
-            let spinner = document.getElementById('spinner');
-            spinner.style.visibility = 'visible';
-            get_anime_list("fin", 1)
-        })
+        $("#anime_category").on("click", function (e) {
+            // console.log($(this))
+            // console.log(e)
 
-        $('#anime_category #theater').on("click", function () {
-            // {#console.log(this.id)#}
-            let spinner = document.getElementById('spinner');
-            spinner.style.visibility = 'visible';
-            get_anime_list("theater", 1)
-        })
+            switch (e.target.id) {
+                case "ing":
+                    console.log("ing.....")
+
+                    {#spinner_loading.style.display = "block";#}
+                    current_cate = "ing";
+                    get_anime_list(1, "ing");
+                    break;
+                case "movie":
+                    console.log("movie")
+                    current_cate = "movie";
+                    get_anime_screen_movie(1);
+                    break;
+                case "complete_anilist":
+                    console.log("complete")
+                    current_cate = "complete";
+                    get_complete_anilist(1);
+                    break;
+                case "top_view":
+                    console.log("top_view")
+                    current_cate = "top_view";
+                    get_anime_list(1, "top_view");
+                    break;
+                default:
+                    console.log("default")
+                    spinner_loading.style.display = "block";
+                    current_cate = "ing";
+                    get_anime_list(1, "ing");
+                    break;
+
+            }
+        });
+
+        /*
 
         // 분석 버튼 클릭시 호출
         $("body").on('click', '#analysis_btn', function (e) {
@@ -476,6 +520,7 @@
                 }
             });
         });
+        */
 
 
         $("body").on('click', '#go_anilife_btn', function (e) {
@@ -546,8 +591,11 @@
         //  	const el = document.querySelector('img');
         // const observer = lozad(el); // passing a `NodeList` (e.g. `document.querySelectorAll()`) is also valid
         // observer.observe();
-        const loadNextAnimes = (cate, page) => {
-            spinner.style.display = "block";
+        console.log('scroll 세로크기:', document.body.scrollHeight)
+
+        const loadNextAnimes = (cate, page, ch) => {
+            // spinner.style.display = "block";
+            loader.style.display = "block";
             let data = {type: cate, page: String(page)};
             let url = ''
             switch (cate) {
@@ -590,12 +638,23 @@
                     // {#imagesContainer.appendChild()#}
                     console.log("return page:::> ", String(response.page));
                     // {#page = response.page#}
+                    loader.style.display = "block";
                     if (current_cate === 'search') {
                         make_search_result_list(response.data, response.page);
 
                     } else {
                         make_screen_movie_list(response.data, response.page);
                     }
+
+                    console.log(document.body.scrollHeight)
+                    console.log(ch)
+                    window.scrollBy({
+                        top: ch + 35,
+                        left: 0,
+                        behavior: 'smooth'
+                    });
+
+                    loader.style.display = "none";
                     page++;
                     next_page++;
                 })
@@ -606,12 +665,20 @@
         const onScroll = (e) => {
             console.dir(e.target.scrollingElement.scrollHeight);
             const {scrollTop, scrollHeight, clientHeight} = e.target.scrollingElement;
-            if (Math.round(scrollHeight - scrollTop) <= clientHeight) {
-                document.getElementById("spinner").style.display = "block";
+            if (Math.round(scrollHeight - scrollTop) <= clientHeight + 170) {
+                {#document.getElementById("spinner").style.display = "block";#}
                 console.log("loading");
                 console.log("now page::> ", page);
                 console.log("next_page::> ", String(next_page));
-                loadNextAnimes(current_cate, next_page);
+                loadNextAnimes(current_cate, next_page, clientHeight);
+                /*window.scrollBy({
+                    top: e.target.scrollingElement.scrollHeight + 200,
+                    left: 0,
+                    behavior: 'smooth'
+                });
+                */
+
+
             }
         };
 
@@ -1049,7 +1116,42 @@
             }
         }
 
+        .card-body {
+            padding: 0 !important;
+        }
+
+        .new-anime {
+            border-color: darksalmon;
+            border-width: 4px;
+            border-style: dashed;
+
+        }
+
+        .card-title {
+            padding: 1rem !important;
+        }
+
+        button#add_whitelist {
+            float: right;
+        }
+
+        button.btn-favorite {
+            background-color: #e0ff42;
+        }
+
+
+        body {
+            font-family: NanumSquareNeo, system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Noto Sans, Liberation Sans, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji;
+        }
+
+        body {
+            background-image: linear-gradient(90deg, #233f48, #6c6fa2, #768dae);
 
     </style>
+    <link
+            href="{{ url_for('.static', filename='css/bootstrap.min.css') }}"
+            type="text/css"
+            rel="stylesheet"
+    />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.1/font/bootstrap-icons.css">
 {% endblock %}

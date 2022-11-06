@@ -4,9 +4,12 @@
 import os
 import re
 import json
+import time
 import traceback
 import platform
 import subprocess
+from functools import wraps
+
 # third-party
 from sqlalchemy.ext.declarative import DeclarativeMeta
 # sjva 공용
@@ -38,7 +41,21 @@ def read_file(filename):
         logger.error(traceback.format_exc())
 
 
+def yommi_timeit(func):
+    @wraps(func)
+    def timeit_wrapper(*args, **kwargs):
+        start_time = time.perf_counter()
+        result = func(*args, **kwargs)
+        end_time = time.perf_counter()
+        total_time = end_time - start_time
+        print(f'Function {func.__name__}{args} {kwargs} Took {total_time:.4f} seconds')
+        return result
+
+    return timeit_wrapper
+
+
 class Util(object):
+
     @staticmethod
     def change_text_for_use_filename(text):
         # text = text.replace('/', '')

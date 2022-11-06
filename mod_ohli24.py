@@ -6,27 +6,26 @@
 # @File    : logic_ohli24
 # @Software: PyCharm
 
-import os, sys, traceback, re, json, threading
-from datetime import datetime, date
-import copy
+import asyncio
 import hashlib
+import importlib
+import json
+import os
+import re
 import subprocess
+import sys
+import threading
+import traceback
+import urllib
+from datetime import datetime, date
+from urllib import parse
 
-import PIL.Image
 # third-party
 import requests
-from lxml import html
-from urllib import parse
-import urllib
-import asyncio
-import importlib
-
-# import aiohttp
-
 # third-party
 from flask import request, render_template, jsonify
-from sqlalchemy import or_, and_, func, not_, desc
-from pip._internal import main
+from lxml import html
+from sqlalchemy import or_, desc
 
 pkgs = ["bs4", "jsbeautifier", "aiohttp"]
 for pkg in pkgs:
@@ -39,6 +38,7 @@ for pkg in pkgs:
         subprocess.check_call([sys.executable, '-m', 'pip', 'install', pkg])
         importlib.import_module(pkg)
 
+# third party package
 import aiohttp
 
 from bs4 import BeautifulSoup
@@ -56,16 +56,12 @@ from .lib._ffmpeg_queue import FfmpegQueueEntity, FfmpegQueue
 from support.expand.ffmpeg import SupportFfmpeg
 
 from .lib.util import Util
-# from tool_base import d
 
-# 패키지
-# from .plugin import P
 from .setup import *
 
 logger = P.logger
 
-
-#########################################################
+print('*=' * 50)
 
 
 class LogicOhli24(PluginModuleBase):
@@ -92,14 +88,7 @@ class LogicOhli24(PluginModuleBase):
     current_data = None
 
     session = requests.Session()
-    # headers = {
-    #     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36",
-    #     "authority": "ndoodle.xyz",
-    #     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
-    #     "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-    #     # "Referer": "https://ndoodle.xyz/video/8a66cd1b3045b820efd42dbf18eb28e1",
-    #     "Referer": "https://ndoodle.xyz/video/8a66cd1b3045b820efd42dbf18eb28e1",
-    # }
+
     headers = {
         'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.5249.114 Whale/3.17.145.12 Safari/537.36',
         'authority': 'ndoodle.xyz',
@@ -140,7 +129,7 @@ class LogicOhli24(PluginModuleBase):
         if sub in ["setting", "queue", "list", "category", "request", "search"]:
             if sub == "request" and req.args.get("content_code") is not None:
                 arg["ohli24_current_code"] = req.args.get("content_code")
-            if sub == "setting":
+            elif sub == "setting":
                 job_id = "%s_%s" % (self.P.package_name, self.name)
                 arg["scheduler"] = str(scheduler.is_include(job_id))
                 arg["is_running"] = str(scheduler.is_running(job_id))
@@ -154,52 +143,42 @@ class LogicOhli24(PluginModuleBase):
 
     # @staticmethod
     def process_ajax(self, sub, req):
-        try:
-            if sub == "analysis":
-                # code = req.form['code']
-                code = request.form["code"]
 
+        try:
+            data = []
+            cate = request.form.get("type", None)
+            page = request.form.get("page", None)
+
+            if sub == "analysis":
+                code = request.form["code"]
+                # cate = request.form["type"]
                 wr_id = request.form.get("wr_id", None)
                 bo_table = request.form.get("bo_table", None)
-                data = []
-                # print(code)
-                # logger.info("code::: %s", code)
                 P.ModelSetting.set("ohli24_current_code", code)
                 data = self.get_series_info(code, wr_id, bo_table)
                 self.current_data = data
                 return jsonify({"ret": "success", "data": data, "code": code})
             elif sub == "anime_list":
-                data = []
-                cate = request.form["type"]
-                page = request.form["page"]
 
                 data = self.get_anime_info(cate, page)
-                # self.current_data = data
                 return jsonify(
                     {"ret": "success", "cate": cate, "page": page, "data": data}
                 )
             elif sub == "complete_list":
-                data = []
 
-                cate = request.form["type"]
                 logger.debug("cate:: %s", cate)
                 page = request.form["page"]
 
                 data = self.get_anime_info(cate, page)
-                # self.current_data = data
                 return jsonify(
                     {"ret": "success", "cate": cate, "page": page, "data": data}
                 )
             elif sub == "search":
-                data = []
-                # cate = request.form["type"]
-                # page = request.form["page"]
-                cate = request.form["type"]
+
                 query = request.form["query"]
                 page = request.form["page"]
 
                 data = self.get_search_result(query, page, cate)
-                # self.current_data = data
                 return jsonify(
                     {
                         "ret": "success",
@@ -263,10 +242,10 @@ class LogicOhli24(PluginModuleBase):
                         ret = LogicOhli24.add_whitelist()
                     return jsonify(ret)
                 except Exception as e:
-                    logger.error("Exception:%s", e)
+                    logger.error(f"Exception: {e}")
                     logger.error(traceback.format_exc())
         except Exception as e:
-            P.logger.error("Exception:%s", e)
+            P.logger.error(f"Exception: {e}")
             P.logger.error(traceback.format_exc())
 
     @staticmethod
@@ -447,11 +426,7 @@ class LogicOhli24(PluginModuleBase):
                 else:
                     pass
 
-            logger.debug("url:::> %s", url)
-
-            # self.current_headers = { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)
-            # AppleWebKit/537.36 (KHTML, like Gecko) ' 'Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36',
-            # 'Referer': url }
+            logger.debug('url:::> %s', url)
 
             response_data = LogicOhli24.get_html(url, timeout=10)
             tree = html.fromstring(response_data)
@@ -527,7 +502,7 @@ class LogicOhli24(PluginModuleBase):
                     }
                 )
 
-            logger.info("des_items length:: %s", len(des_items))
+            # logger.info("des_items length:: %s", len(des_items))
             for idx, item in enumerate(des_items):
                 # key = des_key[idx]
                 span = item.xpath(".//span//text()")
@@ -569,6 +544,7 @@ class LogicOhli24(PluginModuleBase):
             return {"ret": "exception", "log": str(e)}
 
     def get_anime_info(self, cate, page):
+        print(cate, page)
         try:
             if cate == "ing":
                 url = (
@@ -982,14 +958,15 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
             )
             packed_script = soup3.find("script", text=s_pattern)
             # packed_script = soup3.find('script')
-            # logger.info('packed_script>>> %s', packed_script.text)
+            logger.info('packed_script>>> %s', packed_script.text)
             unpack_script = None
             if packed_script is not None:
                 # logger.debug('zzzzzzzzzzzz')
-                match = packed_pattern.search(packed_script.text)
+                # match = packed_pattern.search(packed_script.text)
                 # match = re.search(packed_pattern, packed_script.text)
                 # logger.debug("match::: %s", match.group())
-                unpack_script = jsbeautifier.beautify(match.group(3))
+                # unpack_script = jsbeautifier.beautify(match.group(3))
+                unpack_script = jsbeautifier.beautify(packed_script.text)
 
                 # logger.info('match groups:: %s', match.groups())
                 # logger.info('match group3:: %s', match.group(3))

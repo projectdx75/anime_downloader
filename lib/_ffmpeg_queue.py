@@ -144,6 +144,7 @@ class FfmpegQueue(object):
                 # 파일 존재여부 체크
                 print(entity.info)
                 filepath = entity.get_video_filepath()
+                P.logger.debug(f'filepath:: {filepath}')
                 if os.path.exists(filepath):
                     entity.ffmpeg_status_kor = '파일 있음'
                     entity.ffmpeg_percent = 100
@@ -162,7 +163,8 @@ class FfmpegQueue(object):
                 P.logger.debug(P)
                 # P.logger.debug(P.system_setting.get("port"))
 
-                ffmpeg = SupportFfmpeg(video_url, os.path.basename(filepath), callback_function=self.callback_function,
+                ffmpeg = SupportFfmpeg(video_url, os.path.basename(str(filepath)),
+                                       callback_function=self.callback_function,
                                        max_pf_count=0, save_path=ToolUtil.make_path(dirname), timeout_minute=60,
                                        )
                 #
@@ -359,6 +361,7 @@ class FfmpegQueue(object):
 
     def get_entity_list(self):
         ret = []
+        P.logger.debug(self)
         for x in self.entity_list:
             tmp = x.as_dict()
             ret.append(tmp)

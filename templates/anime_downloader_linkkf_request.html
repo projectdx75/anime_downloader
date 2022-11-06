@@ -93,6 +93,8 @@
 
         function make_program(data) {
             current_data = data;
+            {#$("body").css({"background":"url("+data.poster_url+")"})#}
+
             // console.log('current_data:: ', data)
             str = "";
             tmp = '<div class="form-inline w-100">';

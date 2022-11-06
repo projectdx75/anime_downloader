@@ -32,12 +32,13 @@
     </form>
 </div>
 <!--전체-->
+<script src="{{ url_for('.static', filename='js/sjva_ui14.js') }}"></script>
 
 <script type="text/javascript">
     const package_name = "{{arg['package_name'] }}";
     const sub = "{{arg['sub'] }}";
     const anilife_url = "{{arg['anilife_url']}}";
-    let current_data = null;
+    {#let current_data = null;#}
 
     const params = new Proxy(new URLSearchParams(window.location.search), {
         get: (searchParams, prop) => searchParams.get(prop),

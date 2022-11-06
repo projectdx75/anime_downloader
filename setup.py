@@ -120,6 +120,7 @@ try:
         from .mod_ohli24 import LogicOhli24
         from .mod_anilife import LogicAniLife
         from .mod_linkkf import LogicLinkkf
+
     else:
         from support import SupportSC
 

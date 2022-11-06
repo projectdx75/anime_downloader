@@ -1,6 +1,6 @@
 import os
 import sys
-import threading
+# import threading
 import traceback
 import json
 from datetime import datetime
@@ -9,10 +9,13 @@ import re
 import asyncio
 import platform
 
+import PIL.Image
+
 import lxml.etree
 
 # third-party
 import requests
+from gevent import threading
 from lxml import html
 from urllib import parse
 import urllib
@@ -46,21 +49,23 @@ from framework import F
 from plugin import (
     PluginModuleBase
 )
-from flaskfarm.lib.plugin._ffmpeg_queue import FfmpegQueueEntity, FfmpegQueue
+from .lib._ffmpeg_queue import FfmpegQueueEntity, FfmpegQueue
+from .lib.crawler import Crawler
 
 # from tool_base import d
 
+
 # 패키지
 # from .plugin import P
+from .lib.util import Util, yommi_timeit
+from typing import Awaitable, TypeVar
+
+T = TypeVar("T")
+
 from .setup import *
 
 logger = P.logger
 
-
-# =================================================================#
-
-
-# 패키지
 class LogicAniLife(PluginModuleBase):
     db_default = {
         "anilife_db_version": "1",
@@ -87,8 +92,8 @@ class LogicAniLife(PluginModuleBase):
     origin_url = None
     episode_url = None
     cookies = None
-
-    os_platform = platform.system()
+    OS_PLATFORM = None
+    response_data = None
 
     session = requests.Session()
     headers = {
@@ -102,232 +107,42 @@ class LogicAniLife(PluginModuleBase):
     }
     useragent = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, "
-        "like Gecko) Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36"
+                      "like Gecko) Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36"
     }
 
     def __init__(self, P):
         super(LogicAniLife, self).__init__(P, "setting", scheduler_desc="애니라이프 자동 다운로드")
         self.name = "anilife"
         self.queue = None
+        self.OS_PLATFORM = platform.system()
         default_route_socketio_module(self, attach='/search')
 
-    @staticmethod
-    def get_html(url: str, referer: str = None, stream: bool = False, timeout: int = 5):
+    # @staticmethod
+    def get_html(self, url: str, referer: str = None, stream: bool = False, is_stealth: bool = False, timeout: int = 5):
         data = ""
         try:
             print("cloudflare protection bypass ==================")
+            print(self)
             # return LogicAniLife.get_html_cloudflare(url)
-            return LogicAniLife.get_html_selenium(url, referer)
-            # return LogicAniLife.get_html_playwright(url)
+            # return self.get_html_selenium(url=url, referer=referer, is_stealth=is_stealth)
+            # url: str,
+            # headless: bool = False,
+            # referer: str = None,
+            # engine: str = "chrome",
+            # stealth: bool = False,
+            # return asyncio.run(LogicAniLife.get_html_playwright(url, engine="chrome", headless=True))
+            return asyncio.run(LogicAniLife.get_html_playwright(url, engine="chromium", headless=True))
+            # return LogicAniLife.get_html_playwright_sync(url, engine="chrome", headless=True)
 
         except Exception as e:
             logger.error("Exception:%s", e)
             logger.error(traceback.format_exc())
         return data
 
-    @staticmethod
-    def get_html_requests(
-        url: str, referer: str = None, stream: str = False, timeout: int = 5
-    ) -> str:
-        data = ""
-        try:
-            print("get_html_requests ==================")
-
-            # cj = browser_cookie3.chrome(domain_name="anilife.live")
-            referer = "https://anilife.live/"
-
-            if LogicAniLife.session is None:
-                LogicAniLife.session = requests.session()
-
-            # logger.debug('get_html :%s', url)
-            LogicAniLife.headers["Referer"] = "" if referer is None else referer
-            LogicAniLife.headers[
-                "Cookie"
-            ] = "_ga=GA1.1.578607927.1660813724; __gads=ID=10abb8b98b6828ae-2281c943a9d500fd:T=1660813741:RT=1660813741:S=ALNI_MYU_iB2lBgSrEQUBwhKpNsToaqQ8A; sbtsck=javuwDzcOJqUyweM1OQeNGzHbjoHp7Cgw44XnPdM738c3E=;  SPSI=e48379959d54a6a62cc7abdcafdb2761; SPSE=h5HfMGLJzLqzNafMD3YaOvHSC9xfh77CcWdKvexp/z5N5OsTkIiYSCudQhFffEfk/0pcOTVf0DpeV0RoNopzig==; anilife_csrf=b93b9f25a12a51cf185805ec4de7cf9d; UTGv2=h46b326af644f4ac5d0eb1502881136b3750; __gpi=UID=000008ba227e99e0:T=1660813741:RT=1660912282:S=ALNI_MaJHIVJIGpQ5nTE9lvypKQxJnn10A; DSR=SXPX8ELcRgh6N/9rNgjpQoNfaX2DRceeKYR0/ul7qTI9gApWQpZxr8jgymf/r0HsUT551vtOv2CMWpIn0Hd26A==; DCSS=89508000A76BBD939F6DDACE5BD9EB902D2212A; DGCC=Wdm; adOtr=7L4Xe58995d; spcsrf=6554fa003bf6a46dd9b7417acfacc20a; _ga_56VYJJ7FTM=GS1.1.1660912281.10.1.1660912576.0.0.0; PRLST=EO"
-
-            LogicAniLife.headers["Referer"] = referer
-
-            page_content = LogicAniLife.session.get(
-                url, headers=headers, timeout=timeout, allow_redirects=True
-            )
-            data = page_content.text
-        except Exception as e:
-            logger.error("Exception:%s", e)
-            logger.error(traceback.format_exc())
-        return data
-
-    @staticmethod
-    async def get_html_playwright(
-        url: str,
-        headless: bool = False,
-        referer: str = None,
-        engine: str = "chrome",
-        stealth: bool = False,
-    ) -> str:
-        try:
-            from playwright.sync_api import sync_playwright
-            from playwright.async_api import async_playwright
-            from playwright_stealth import stealth_sync, stealth_async
-
-            import time
-
-            cookie = None
-            browser_args = [
-                "--window-size=1300,570",
-                "--window-position=000,000",
-                "--disable-dev-shm-usage",
-                "--no-sandbox",
-                "--disable-web-security",
-                "--disable-features=site-per-process",
-                "--disable-setuid-sandbox",
-                "--disable-accelerated-2d-canvas",
-                "--no-first-run",
-                "--no-zygote",
-                # '--single-process',
-                "--disable-gpu",
-                "--use-gl=egl",
-                "--disable-blink-features=AutomationControlled",
-                "--disable-background-networking",
-                "--enable-features=NetworkService,NetworkServiceInProcess",
-                "--disable-background-timer-throttling",
-                "--disable-backgrounding-occluded-windows",
-                "--disable-breakpad",
-                "--disable-client-side-phishing-detection",
-                "--disable-component-extensions-with-background-pages",
-                "--disable-default-apps",
-                "--disable-extensions",
-                "--disable-features=Translate",
-                "--disable-hang-monitor",
-                "--disable-ipc-flooding-protection",
-                "--disable-popup-blocking",
-                "--disable-prompt-on-repost",
-                "--disable-renderer-backgrounding",
-                "--disable-sync",
-                "--force-color-profile=srgb",
-                "--metrics-recording-only",
-                "--enable-automation",
-                "--password-store=basic",
-                "--use-mock-keychain",
-                "--hide-scrollbars",
-                "--mute-audio",
-            ]
-            # scraper = cloudscraper.create_scraper(
-            #     browser={"browser": "chrome", "platform": "windows", "desktop": True},
-            #     debug=False,
-            #     # sess=LogicAniLife.session,
-            #     delay=10,
-            # )
-            #
-            # cookie_value, user_agent = scraper.get_cookie_string(url)
-            #
-            # logger.debug(f"cookie_value:: {cookie_value}")
-
-            start = time.time()
-            ua = (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/69.0.3497.100 Safari/537.36"
-            )
-
-            # from playwright_stealth import stealth_sync
-
-            def set_cookie(req):
-                nonlocal cookie
-                if "cookie" in req.headers:
-                    cookie = req.headers["cookie"]
-
-            async with async_playwright() as p:
-                try:
-                    if engine == "chrome":
-                        browser = await p.chromium.launch(
-                            channel="chrome", args=browser_args, headless=headless
-                        )
-                    elif engine == "webkit":
-                        browser = await p.webkit.launch(
-                            headless=headless,
-                            args=browser_args,
-                        )
-                    else:
-                        browser = await p.firefox.launch(
-                            headless=headless,
-                            args=browser_args,
-                        )
-                    # context = browser.new_context(
-                    #     user_agent=ua,
-                    # )
-
-                    LogicAniLife.headers[
-                        "Referer"
-                    ] = "https://anilife.live/detail/id/471"
-                    # print(LogicAniLife.headers)
-
-                    LogicAniLife.headers["Referer"] = LogicAniLife.episode_url
-
-                    if referer is not None:
-                        LogicAniLife.headers["Referer"] = referer
-
-                    logger.debug(f"LogicAniLife.headers::: {LogicAniLife.headers}")
-                    context = await browser.new_context(
-                        extra_http_headers=LogicAniLife.headers
-                    )
-                    await context.add_cookies(LogicAniLife.cookies)
-
-                    # LogicAniLife.headers["Cookie"] = cookie_value
-
-                    # context.set_extra_http_headers(LogicAniLife.headers)
-
-                    page = await context.new_page()
-
-                    # page.set_extra_http_headers(LogicAniLife.headers)
-
-                    if stealth:
-                        await stealth_async(page)
-
-                    # page.on("request", set_cookie)
-                    # stealth_sync(page)
-                    print(LogicAniLife.headers["Referer"])
-
-                    page.on("request", set_cookie)
-
-                    print(f'Referer:: {LogicAniLife.headers["Referer"]}')
-                    # await page.set_extra_http_headers(LogicAniLife.headers)
-
-                    await page.goto(
-                        url, wait_until="load", referer=LogicAniLife.headers["Referer"]
-                    )
-                    # page.wait_for_timeout(10000)
-                    await asyncio.sleep(2.9)
-
-                    # await page.reload()
-
-                    # time.sleep(10)
-                    # cookies = context.cookies
-                    # print(cookies)
-
-                    print(f"page.url:: {page.url}")
-                    LogicAniLife.origin_url = page.url
-
-                    # print(page.content())
-
-                    print(f"run at {time.time() - start} sec")
-
-                    return await page.content()
-                except Exception as e:
-                    logger.error("Exception:%s", e)
-                    logger.error(traceback.format_exc())
-                finally:
-                    await browser.close()
-
-        except Exception as e:
-            logger.error("Exception:%s", e)
-            logger.error(traceback.format_exc())
-        finally:
-            # browser.close()
-            pass
 
     @staticmethod
     async def get_vod_url_v1(
-        url, headless=False, referer=None, engine="chrome", stealth=False
+            url, headless=False, referer=None, engine="chrome", stealth=False
     ):
         from playwright.sync_api import sync_playwright
         from playwright.async_api import async_playwright
@@ -582,171 +397,25 @@ class LogicAniLife(PluginModuleBase):
                 await browser.close()
 
     @staticmethod
-    def get_html_selenium(url: str, referer: str) -> bytes:
-        from selenium.webdriver.common.by import By
-        from selenium import webdriver
-        from selenium_stealth import stealth
-        from webdriver_manager.chrome import ChromeDriverManager
-        import time
+    def get_vod_url_v2(url: str, headless: bool = False) -> str:
+        try:
+            import json
+            post_data = {
+                "url": url,
+                "headless": headless,
+                "engine": "webkit",
+                "stealth": True,
+            }
+            payload = json.dumps(post_data)
+            logger.debug(payload)
+            response_data = requests.post(url="http://localhost:7070/get_vod_url", data=payload)
 
-        options = webdriver.ChromeOptions()
-        # 크롬드라이버 헤더 옵션추가 (리눅스에서 실행시 필수)
-        options.add_argument("start-maximized")
-        options.add_argument("--headless")
-        options.add_argument("--no-sandbox")
-        options.add_argument("window-size=1920x1080")
-        options.add_argument("disable-gpu")
-        # options.add_argument('--no-sandbox')
-        options.add_argument("--disable-dev-shm-usage")
-        options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        options.add_experimental_option("useAutomationExtension", False)
+            logger.debug(response_data.text)
 
-        if LogicAniLife.os_platform == "Darwin":
-            # 크롬드라이버 경로
-            driver_path = "./bin/Darwin/chromedriver"
-            # driver = webdriver.Chrome(executable_path=driver_path, chrome_options=options)
-            driver = webdriver.Chrome(
-                ChromeDriverManager().install(), chrome_options=options
-            )
-        else:
-            driver_bin_path = os.path.join(
-                os.path.dirname(__file__), "bin", f"{LogicAniLife.os_platform}"
-            )
-            driver_path = f"{driver_bin_path}/chromedriver"
-            driver = webdriver.Chrome(
-                executable_path=driver_path, chrome_options=options
-            )
-
-        stealth(
-            driver,
-            languages=["ko-KR", "ko"],
-            vendor="Google Inc.",
-            platform="Win32",
-            webgl_vendor="Intel Inc.",
-            renderer="Intel Iris OpenGL Engine",
-            fix_hairline=True,
-        )
-        driver.get(url)
-
-        driver.refresh()
-        logger.debug(f"current_url:: {driver.current_url}")
-        # logger.debug(f"current_cookie:: {driver.get_cookies()}")
-        cookies_list = driver.get_cookies()
-
-        cookies_dict = {}
-        for cookie in cookies_list:
-            cookies_dict[cookie["name"]] = cookie["value"]
-
-        # logger.debug(cookies_dict)
-        LogicAniLife.cookies = cookies_list
-        # LogicAniLife.headers["Cookie"] = driver.get_cookies()
-        LogicAniLife.episode_url = driver.current_url
-        time.sleep(1)
-        elem = driver.find_element(By.XPATH, "//*")
-        source_code = elem.get_attribute("outerHTML")
-
-        driver.close()
-
-        return source_code.encode("utf-8")
-
-    # Create a request interceptor
-    @staticmethod
-    def interceptor(request):
-        del request.headers["Referer"]  # Delete the header first
-        request.headers[
-            "Referer"
-        ] = "https://anilife.live/g/l?id=0a36917f-39cc-43ea-b0c6-0c86d27c2408"
-
-    @staticmethod
-    def get_html_seleniumwire(url, referer, wired=False):
-        from selenium import webdriver
-        from selenium.webdriver.common.by import By
-        from seleniumwire import webdriver as wired_webdriver
-        from selenium_stealth import stealth
-        import time
-
-        options = webdriver.ChromeOptions()
-        # 크롬드라이버 헤더 옵션추가 (리눅스에서 실행시 필수)
-        options.add_argument("start-maximized")
-        options.add_argument("--headless")
-        options.add_argument("--no-sandbox")
-        options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        options.add_experimental_option("useAutomationExtension", False)
-        # 크롬드라이버 경로
-        driver_path = "./bin/Darwin/chromedriver"
-        if wired:
-            driver = wired_webdriver.Chrome(
-                executable_path=driver_path, chrome_options=options
-            )
-        else:
-            driver = webdriver.Chrome(
-                executable_path=driver_path, chrome_options=options
-            )
-
-        # stealth ======================================
-        # stealth(
-        #     driver,
-        #     languages=["en-US", "en"],
-        #     vendor="Google Inc.",
-        #     platform="Win32",
-        #     webgl_vendor="Intel Inc.",
-        #     renderer="Intel Iris OpenGL Engine",
-        #     fix_hairline=True,
-        # )
-        if wired:
-            driver.request_interceptor = LogicAniLife.interceptor
-        driver.get(url)
-        driver.refresh()
-        time.sleep(1)
-        elem = driver.find_element(By.XPATH, "//*")
-        source_code = elem.get_attribute("outerHTML")
-
-        return source_code.encode("utf-8")
-
-    @staticmethod
-    def get_html_cloudflare(url, cached=False):
-        # scraper = cloudscraper.create_scraper(
-        #     # disableCloudflareV1=True,
-        #     # captcha={"provider": "return_response"},
-        #     delay=10,
-        #     browser="chrome",
-        # )
-        # scraper = cfscrape.create_scraper(
-        #     browser={"browser": "chrome", "platform": "android", "desktop": False}
-        # )
-
-        # scraper = cloudscraper.create_scraper(
-        #     browser={"browser": "chrome", "platform": "windows", "mobile": False},
-        #     debug=True,
-        # )
-
-        # LogicAniLife.headers["referer"] = LogicAniLife.referer
-        LogicAniLife.headers["Referer"] = "https://anilife.live/"
-        LogicAniLife.headers[
-            "Cookie"
-        ] = "_ga=GA1.1.578607927.1660813724; __gads=ID=10abb8b98b6828ae-2281c943a9d500fd:T=1660813741:RT=1660813741:S=ALNI_MYU_iB2lBgSrEQUBwhKpNsToaqQ8A; sbtsck=javuwDzcOJqUyweM1OQeNGzHbjoHp7Cgw44XnPdM738c3E=;  SPSI=e48379959d54a6a62cc7abdcafdb2761; SPSE=h5HfMGLJzLqzNafMD3YaOvHSC9xfh77CcWdKvexp/z5N5OsTkIiYSCudQhFffEfk/0pcOTVf0DpeV0RoNopzig==; anilife_csrf=b93b9f25a12a51cf185805ec4de7cf9d; UTGv2=h46b326af644f4ac5d0eb1502881136b3750; __gpi=UID=000008ba227e99e0:T=1660813741:RT=1660912282:S=ALNI_MaJHIVJIGpQ5nTE9lvypKQxJnn10A; DSR=SXPX8ELcRgh6N/9rNgjpQoNfaX2DRceeKYR0/ul7qTI9gApWQpZxr8jgymf/r0HsUT551vtOv2CMWpIn0Hd26A==; DCSS=89508000A76BBD939F6DDACE5BD9EB902D2212A; DGCC=Wdm; adOtr=7L4Xe58995d; spcsrf=6554fa003bf6a46dd9b7417acfacc20a; _ga_56VYJJ7FTM=GS1.1.1660912281.10.1.1660912576.0.0.0; PRLST=EO"
-        # logger.debug(f"headers:: {LogicAniLife.headers}")
-
-        if LogicAniLife.session is None:
-            LogicAniLife.session = requests.Session()
-            LogicAniLife.session.headers = LogicAniLife.headers
-
-        # LogicAniLife.session = requests.Session()
-
-        sess = cloudscraper.create_scraper(
-            browser={"browser": "firefox", "platform": "windows", "desktop": True},
-            debug=False,
-            sess=LogicAniLife.session,
-            delay=10,
-        )
-
-        # print(scraper.get(url, headers=LogicAniLife.headers).content)
-        # print(scraper.get(url).content)
-        # return scraper.get(url, headers=LogicAniLife.headers).content
-        # print(LogicAniLife.headers)
-        return sess.get(
-            url, headers=LogicAniLife.session.headers, timeout=10, allow_redirects=True
-        ).content.decode("utf8", errors="replace")
+            return response_data.text
+        except Exception as e:
+            logger.error("Exception:%s", e)
+            logger.error(traceback.format_exc())
 
     @staticmethod
     def db_init():
@@ -755,7 +424,7 @@ class LogicAniLife(PluginModuleBase):
     def process_menu(self, sub, req):
         arg = P.ModelSetting.to_dict()
         arg["sub"] = self.name
-        if sub in ["setting", "queue", "list", "category", "request"]:
+        if sub in ["setting", "queue", "list", "search", "request"]:
             if sub == "request" and req.args.get("content_code") is not None:
                 arg["anilife_current_code"] = req.args.get("content_code")
             if sub == "setting":
@@ -828,7 +497,7 @@ class LogicAniLife(PluginModuleBase):
                     }
                 )
             elif sub == "add_queue":
-                logger.debug(f"add_queue routine ===============")
+                logger.debug(f"anilife add_queue routine ===============")
                 ret = {}
                 info = json.loads(request.form["data"])
                 logger.info(f"info:: {info}")
@@ -926,7 +595,7 @@ class LogicAniLife(PluginModuleBase):
 
     def setting_save_after(self, change_list):
         if self.queue.get_max_ffmpeg_count() != P.ModelSetting.get_int(
-            "anilife_max_ffmpeg_process_count"
+                "anilife_max_ffmpeg_process_count"
         ):
             self.queue.set_max_ffmpeg_count(
                 P.ModelSetting.get_int("anilife_max_ffmpeg_process_count")
@@ -947,6 +616,14 @@ class LogicAniLife(PluginModuleBase):
         self.current_data = None
         self.queue.queue_start()
 
+        # fastapi running script
+        # import os
+        # cur_abspath = os.path.dirname(os.path.abspath(__file__))
+        # logger.debug(cur_abspath)
+        # os.popen(f"python {os.path.join(cur_abspath, 'yommi_api')}/main.py")
+
+        # asyncio_run2(hello("https://anilife.live"))
+
     def reset_db(self):
         db.session.query(ModelAniLifeItem).delete()
         db.session.commit()
@@ -961,8 +638,26 @@ class LogicAniLife(PluginModuleBase):
                 url = P.ModelSetting.get("anilife_url") + "/g/l?id=" + code
 
             logger.debug("url::: > %s", url)
-            response_data = LogicAniLife.get_html(url, timeout=10)
-            tree = html.fromstring(response_data)
+            # response_data = LogicAniLife.get_html(self, url=url, timeout=10)
+
+            import json
+            post_data = {
+                "url": url,
+                "headless": True,
+                "engine": "webkit"
+            }
+            payload = json.dumps(post_data)
+            logger.debug(payload)
+            response_data = None
+
+            response_data = requests.post(url="http://localhost:7070/get_html_playwright", data=payload)
+
+            # logger.debug(response_data.json()["html"])
+            soup_text = BeautifulSoup(response_data.json()["html"], 'lxml')
+
+            tree = html.fromstring(response_data.json()["html"])
+
+            # tree = html.fromstring(response_data)
             # logger.debug(response_data)
             main_title = tree.xpath('//div[@class="infox"]/h1/text()')[0]
             image = tree.xpath('//div[@class="thumb"]/img/@src')[0]
@@ -1097,7 +792,8 @@ class LogicAniLife(PluginModuleBase):
         else:
             print("Request was not redirected")
 
-    def get_anime_info(self, cate, page):
+    @staticmethod
+    def get_anime_info(cate, page):
         logger.debug(f"get_anime_info() routine")
         logger.debug(f"cate:: {cate}")
         wrapper_xpath = '//div[@class="bsx"]'
@@ -1109,33 +805,59 @@ class LogicAniLife(PluginModuleBase):
                 )
             elif cate == "theater":
                 url = (
-                    P.ModelSetting.get("anilife_url")
-                    + "/vodtype/categorize/Movie/"
-                    + page
+                        P.ModelSetting.get("anilife_url")
+                        + "/vodtype/categorize/Movie/"
+                        + page
                 )
                 wrapper_xpath = '//div[@class="bsx"]'
             else:
                 url = (
-                    P.ModelSetting.get("anilife_url")
-                    + "/vodtype/categorize/Movie/"
-                    + page
+                        P.ModelSetting.get("anilife_url")
+                        + "/vodtype/categorize/Movie/"
+                        + page
                 )
                 # cate == "complete":
             logger.info("url:::> %s", url)
             data = {}
-            response_data = LogicAniLife.get_html(url, timeout=10)
-            # logger.debug(response_data)
+
+            import json
+            post_data = {
+                "url": url,
+                "headless": True,
+                "engine": "chromium"
+            }
+            payload = json.dumps(post_data)
+            logger.debug(payload)
+            response_data = requests.post(url="http://localhost:7070/get_html_playwright", data=payload)
+
+            LogicAniLife.episode_url = response_data.json()["url"]
+            logger.info(response_data.json()["url"])
+            logger.debug(LogicAniLife.episode_url)
+
+            # logger.debug(response_data.json())
 
             # logger.debug(f"wrapper_xath:: {wrapper_xpath}")
-            tree = html.fromstring(response_data)
+            # logger.debug(LogicAniLife.response_data)
+            # print(type(response_data))
+            # logger.debug(response_data.json()["html"])
+            soup_text = BeautifulSoup(response_data.json()["html"], 'lxml')
+            # print(len(soup_text.select("div.bsx")))
+
+            tree = html.fromstring(response_data.json()["html"])
+            # tree = lxml.etree.HTML(str(soup_text))
+            # logger.debug(tree)
+            # print(wrapper_xpath)
             tmp_items = tree.xpath(wrapper_xpath)
+            # tmp_items = tree.xpath('//div[@class="bsx"]')
+
+            logger.debug(tmp_items)
             data["anime_count"] = len(tmp_items)
             data["anime_list"] = []
 
             for item in tmp_items:
                 entity = {}
                 entity["link"] = item.xpath(".//a/@href")[0]
-                # logger.debug(entity["link"])
+                logger.debug(entity["link"])
                 p = re.compile(r"^[http?s://]+[a-zA-Z0-9-]+/[a-zA-Z0-9-_.?=]+$")
 
                 # print(p.match(entity["link"]) != None)
@@ -1237,19 +959,19 @@ class AniLifeQueueEntity(FfmpegQueueEntity):
             # 다운로드 추가
             base_url = "https://anilife.live"
             iframe_url = ""
+            LogicAniLife.episode_url = self.info["ep_url"]
+
+            logger.debug(LogicAniLife.episode_url)
 
             url = self.info["va"]
+            # LogicAniLife.episode_url = url
             logger.debug(f"url:: {url}")
 
             ourls = parse.urlparse(url)
 
-            self.headers = {
-                "Referer": f"{ourls.scheme}://{ourls.netloc}",
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36",
-            }
-
-            headers["Referer"] = "https://anilife.live/detail/id/471"
-            headers["Referer"] = LogicAniLife.episode_url
+            self.headers = {"Referer": LogicAniLife.episode_url,
+                            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, "
+                                          "like Gecko) Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36"}
 
             logger.debug("make_episode_info()::url==> %s", url)
             logger.info(f"self.info:::> {self.info}")
@@ -1266,23 +988,51 @@ class AniLifeQueueEntity(FfmpegQueueEntity):
             referer_url = LogicAniLife.episode_url
 
             logger.debug(f"LogicAniLife.episode_url:: {LogicAniLife.episode_url}")
-            text = asyncio.run(
-                LogicAniLife.get_html_playwright(
-                    url,
-                    headless=True,
-                    referer=referer_url,
-                    engine="chrome",
-                    stealth=True,
-                )
-            )
+
+            # gevent 에서 asyncio.run
+            # text = asyncio.run(
+            #     LogicAniLife.get_html_playwright(
+            #         url,
+            #         headless=False,
+            #         referer=referer_url,
+            #         engine="chrome",
+            #         stealth=True,
+            #     )
+            # )
+            # task1 = asyncio.create_task(LogicAniLife.get_html_playwright(
+            #     url,
+            #     headless=True,
+            #     referer=referer_url,
+            #     engine="chrome",
+            #     stealth=True
+            # ))
+
+            # loop = asyncio.new_event_loop()
+
+            import json
+            post_data = {
+                "url": url,
+                "headless": True,
+                "engine": "chromium",
+                "referer": referer_url,
+                "stealth": "False"
+            }
+            payload = json.dumps(post_data)
+            logger.debug(payload)
+            response_data = requests.post(url="http://localhost:7070/get_html_playwright", data=payload)
+
+            # logger.debug(response_data.json()["html"])
+            # soup_text = BeautifulSoup(response_data.json()["html"], 'lxml')
+            #
+            # tree = html.fromstring(response_data.json()["html"])
+            text = response_data.json()["html"]
 
             # vod_1080p_url = text
-
             # logger.debug(text)
             soup = BeautifulSoup(text, "lxml")
 
             all_scripts = soup.find_all("script")
-            # print(all_scripts)
+            print(f"all_scripts:: {all_scripts}")
 
             regex = r"(?P<jawcloud_url>http?s:\/\/.*=jawcloud)"
             match = re.compile(regex).search(text)
@@ -1352,9 +1102,11 @@ class AniLifeQueueEntity(FfmpegQueueEntity):
             if not os.path.exists(self.savepath):
                 os.makedirs(self.savepath)
 
-            vod_1080p_url = asyncio.run(
-                LogicAniLife.get_vod_url(jawcloud_url, headless=True)
-            )
+            # vod_1080p_url = asyncio.run(
+            #     LogicAniLife.get_vod_url(jawcloud_url, headless=True)
+            # )
+            vod_1080p_url = LogicAniLife.get_vod_url_v2(jawcloud_url, headless=True)
+
             print(f"vod_1080p_url:: {vod_1080p_url}")
             self.url = vod_1080p_url
 
