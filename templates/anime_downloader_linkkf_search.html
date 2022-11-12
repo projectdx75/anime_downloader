@@ -1,66 +1,68 @@
 {% extends "base.html" %} {% block content %}
     <!--<div id="preloader"></div>-->
-    <div id="preloader" class="loader">
-        <div class="loader-inner">
-            <div class="loader-line-wrap">
-                <div class="loader-line"></div>
-            </div>
-            <div class="loader-line-wrap">
-                <div class="loader-line"></div>
-            </div>
-            <div class="loader-line-wrap">
-                <div class="loader-line"></div>
-            </div>
-            <div class="loader-line-wrap">
-                <div class="loader-line"></div>
-            </div>
-            <div class="loader-line-wrap">
-                <div class="loader-line"></div>
+    <div id="anime_downloader_wrapper">
+        <div id="preloader" class="loader">
+            <div class="loader-inner">
+                <div class="loader-line-wrap">
+                    <div class="loader-line"></div>
+                </div>
+                <div class="loader-line-wrap">
+                    <div class="loader-line"></div>
+                </div>
+                <div class="loader-line-wrap">
+                    <div class="loader-line"></div>
+                </div>
+                <div class="loader-line-wrap">
+                    <div class="loader-line"></div>
+                </div>
+                <div class="loader-line-wrap">
+                    <div class="loader-line"></div>
+                </div>
             </div>
         </div>
-    </div>
-    <div id="yommi_wrapper">
-        <div class="input-group mb-2">
-            <input
-                    id="input_search"
-                    type="search"
-                    class="form-control rounded"
-                    placeholder="Search"
-                    aria-label="Search"
-                    aria-describedby="search-addon"
-            />
-            <button id="btn_search" type="button" class="btn btn-primary">
-                search
-            </button>
+        <div id="yommi_wrapper">
+            <div class="input-group mb-2">
+                <input
+                        id="input_search"
+                        type="search"
+                        class="form-control rounded"
+                        placeholder="Search"
+                        aria-label="Search"
+                        aria-describedby="search-addon"
+                />
+                <button id="btn_search" type="button" class="btn btn-primary">
+                    search
+                </button>
+            </div>
+
+
+            <div
+                    id="anime_category"
+                    class="btn-group"
+                    role="group"
+                    aria-label="Linkkf Button"
+            >
+                <button id="ing" type="button" class="btn btn-success">방영중</button>
+                <button id="movie" type="button" class="btn btn-primary">극장판</button>
+                <button id="complete_anilist" type="button" class="btn btn-dark">완결</button>
+                <button id="top_view" type="button" class="btn btn-yellow">Top</button>
+            </div>
+            <form id="airing_list_form">
+                <div id="airing_list"></div>
+            </form>
+            <form id="screen_movie_list_form">
+                <div id="screen_movie_list" class="container"></div>
+            </form>
+            {#            <div class="text-center">#}
+            {#                <div id="spinner" class="spinner-border" role="status">#}
+            {#                    <span class="sr-only">Loading...</span>#}
+            {#                </div>#}
+            {#            </div>#}
+            <form id="program_auto_form">
+                <div id="episode_list"></div>
+            </form>
+
         </div>
-
-
-        <div
-                id="anime_category"
-                class="btn-group"
-                role="group"
-                aria-label="Linkkf Button"
-        >
-            <button id="ing" type="button" class="btn btn-success">방영중</button>
-            <button id="movie" type="button" class="btn btn-primary">극장판</button>
-            <button id="complete_anilist" type="button" class="btn btn-dark">완결</button>
-            <button id="top_view" type="button" class="btn btn-yellow">Top</button>
-        </div>
-        <form id="airing_list_form">
-            <div id="airing_list"></div>
-        </form>
-        <form id="screen_movie_list_form">
-            <div id="screen_movie_list" class="container"></div>
-        </form>
-        {#            <div class="text-center">#}
-        {#                <div id="spinner" class="spinner-border" role="status">#}
-        {#                    <span class="sr-only">Loading...</span>#}
-        {#                </div>#}
-        {#            </div>#}
-        <form id="program_auto_form">
-            <div id="episode_list"></div>
-        </form>
-
     </div>
     <!--전체-->
 
@@ -467,7 +469,7 @@
                 case "ing":
                     console.log("ing.....")
 
-                    {#spinner_loading.style.display = "block";#}
+                {#spinner_loading.style.display = "block";#}
                     current_cate = "ing";
                     get_anime_list(1, "ing");
                     break;
@@ -782,6 +784,20 @@
     ></script>
 
     <style>
+        #anime_downloader_wrapper {
+            font-family: NanumSquareNeo, system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Noto Sans, Liberation Sans, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji;
+        }
+
+        body {
+            background-image: linear-gradient(90deg, #33242c, #263341, #17273a);
+
+        }
+
+        #anime_downloader_wrapper {
+
+            color: #d6eaf8;
+        }
+
         button.code-button {
             min-width: 82px !important;
         }

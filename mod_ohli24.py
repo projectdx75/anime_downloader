@@ -27,7 +27,7 @@ from flask import request, render_template, jsonify
 from lxml import html
 from sqlalchemy import or_, desc
 
-pkgs = ["bs4", "jsbeautifier", "aiohttp"]
+pkgs = ["bs4", "jsbeautifier", "aiohttp", "lxml", "loguru"]
 for pkg in pkgs:
     try:
         importlib.import_module(pkg)
@@ -52,38 +52,22 @@ from framework import F
 from plugin import (
     PluginModuleBase
 )
-from .lib._ffmpeg_queue import FfmpegQueueEntity, FfmpegQueue
+from .lib.ffmpeg_queue import FfmpegQueueEntity, FfmpegQueue
 from support.expand.ffmpeg import SupportFfmpeg
 
 from .lib.util import Util
+
+# from support_site import SupportKakaotv
 
 from .setup import *
 
 logger = P.logger
 
 print('*=' * 50)
+name = 'ohli24'
 
 
 class LogicOhli24(PluginModuleBase):
-    db_default = {
-        "ohli24_db_version": "1",
-        "ohli24_url": "https://ohli24.net",
-        "ohli24_download_path": os.path.join(path_data, P.package_name, "ohli24"),
-        "ohli24_auto_make_folder": "True",
-        "ohli24_auto_make_season_folder": "True",
-        "ohli24_finished_insert": "[완결]",
-        "ohli24_max_ffmpeg_process_count": "1",
-        "ohli24_order_desc": "False",
-        "ohli24_auto_start": "False",
-        "ohli24_interval": "* 5 * * *",
-        "ohli24_auto_mode_all": "False",
-        "ohli24_auto_code_list": "all",
-        "ohli24_current_code": "",
-        "ohli24_uncompleted_auto_enqueue": "False",
-        "ohli24_image_url_prefix_series": "https://www.jetcloud.cc/series/",
-        "ohli24_image_url_prefix_episode": "https://www.jetcloud-list.cc/thumbnail/",
-        "ohli24_discord_notify": "True",
-    }
     current_headers = None
     current_data = None
 
@@ -104,9 +88,34 @@ class LogicOhli24(PluginModuleBase):
                       "like Gecko) Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36"
     }
 
+    download_queue = None
+    download_thread = None
+    current_download_count = 0
+
     def __init__(self, P):
         super(LogicOhli24, self).__init__(P, "setting", scheduler_desc="ohli24 자동 다운로드")
-        self.name = "ohli24"
+        self.name = name
+
+        self.db_default = {
+            "ohli24_db_version": "1",
+            "ohli24_url": "https://ohli24.net",
+            "ohli24_download_path": os.path.join(path_data, P.package_name, "ohli24"),
+            "ohli24_auto_make_folder": "True",
+            f"{self.name}_recent_code": "",
+            "ohli24_auto_make_season_folder": "True",
+            "ohli24_finished_insert": "[완결]",
+            "ohli24_max_ffmpeg_process_count": "1",
+            "ohli24_order_desc": "False",
+            "ohli24_auto_start": "False",
+            "ohli24_interval": "* 5 * * *",
+            "ohli24_auto_mode_all": "False",
+            "ohli24_auto_code_list": "all",
+            "ohli24_current_code": "",
+            "ohli24_uncompleted_auto_enqueue": "False",
+            "ohli24_image_url_prefix_series": "https://www.jetcloud.cc/series/",
+            "ohli24_image_url_prefix_episode": "https://www.jetcloud-list.cc/thumbnail/",
+            "ohli24_discord_notify": "True",
+        }
         self.queue = None
         # default_route_socketio(P, self)
         default_route_socketio_module(self, attach='/search')
@@ -143,7 +152,6 @@ class LogicOhli24(PluginModuleBase):
 
     # @staticmethod
     def process_ajax(self, sub, req):
-
         try:
             data = []
             cate = request.form.get("type", None)
@@ -156,6 +164,7 @@ class LogicOhli24(PluginModuleBase):
                 bo_table = request.form.get("bo_table", None)
                 P.ModelSetting.set("ohli24_current_code", code)
                 data = self.get_series_info(code, wr_id, bo_table)
+                P.ModelSetting.set(f"{self.name}_recent_code", code)
                 self.current_data = data
                 return jsonify({"ret": "success", "data": data, "code": code})
             elif sub == "anime_list":
@@ -194,8 +203,31 @@ class LogicOhli24(PluginModuleBase):
                 logger.info(f"info:: {info}")
                 ret["ret"] = self.add(info)
                 return jsonify(ret)
+
+                # todo: new version
+                # info = json.loads(request.form["data"])
+                # logger.info(info)
+                # logger.info(self.current_data)
+                # # 1. db 조회
+                # db_item = ModelOhli24Program.get(info['_id'])
+                # logger.debug(db_item)
+                #
+                # if db_item is not None:
+                #     print(f"db_item is not None")
+                #     pass
+                # else:
+                #     if db_item == None:
+                #         db_item = ModelOhli24Program(info['_id'], self.get_episode(info['_id']))
+                #         db_item.save()
+
+
+
+
             elif sub == "entity_list":
                 return jsonify(self.queue.get_entity_list())
+            elif sub == "queue_list":
+                print(sub)
+                return {"test"}
             elif sub == "queue_command":
                 ret = self.queue.command(
                     req.form["command"], int(req.form["entity_id"])
@@ -248,6 +280,43 @@ class LogicOhli24(PluginModuleBase):
             P.logger.error(f"Exception: {e}")
             P.logger.error(traceback.format_exc())
 
+    def get_episode(self, clip_id):
+        for _ in self.current_data["episode"]:
+            if _['title'] == clip_id:
+                return _
+
+    def process_command(self, command, arg1, arg2, arg3, req):
+        ret = {'ret': 'success'}
+        logger.debug('queue_list')
+        if command == 'queue_list':
+            logger.debug(f"self.queue.get_entity_list():: {self.queue.get_entity_list()}")
+            ret = [x for x in self.queue.get_entity_list()]
+
+            return ret
+        elif command == 'download_program':
+            _pass = arg2
+            db_item = ModelOhli24Program.get(arg1)
+            if _pass == 'false' and db_item != None:
+                ret['ret'] = 'warning'
+                ret['msg'] = '이미 DB에 있는 항목 입니다.'
+            elif _pass == 'true' and db_item != None and ModelOhli24Program.get_by_id_in_queue(db_item.id) != None:
+                ret['ret'] = 'warning'
+                ret['msg'] = '이미 큐에 있는 항목 입니다.'
+            else:
+                if db_item == None:
+                    db_item = ModelOhli24Program(arg1, self.get_episode(arg1))
+                    db_item.save()
+                db_item.init_for_queue()
+                self.download_queue.put(db_item)
+                ret['msg'] = '다운로드를 추가 하였습니다.'
+
+        elif command == 'list':
+            ret = []
+            for ins in SupportFfmpeg.get_list():
+                ret.append(ins.get_data())
+
+        return jsonify(ret)
+
     @staticmethod
     def add_whitelist(*args):
         ret = {}
@@ -295,7 +364,7 @@ class LogicOhli24(PluginModuleBase):
                 ret["ret"] = False
                 ret["log"] = "이미 추가되어 있습니다."
         except Exception as e:
-            logger.error("Exception:%s", e)
+            logger.error(f"Exception: {str(e)}")
             logger.error(traceback.format_exc())
             ret["ret"] = False
             ret["log"] = str(e)
@@ -319,9 +388,9 @@ class LogicOhli24(PluginModuleBase):
 
         week = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"]
         today = date.today()
-        print(today)
-        print()
-        print(today.weekday())
+        # print(today)
+        # print()
+        # print(today.weekday())
 
         url = f'{P.ModelSetting.get("ohli24_url")}/bbs/board.php?bo_table=ing&sca={week[today.weekday()]}'
 
@@ -362,7 +431,7 @@ class LogicOhli24(PluginModuleBase):
                         self.socketio_callback("list_refresh", "")
                 # logger.debug(f"data: {data}")
                 # self.current_data = data
-                # db에서 다운로드 완료 유무 체크
+                # db 에서 다운로드 완료 유무 체크
 
     @staticmethod
     async def get_data(url) -> str:
@@ -675,14 +744,15 @@ class LogicOhli24(PluginModuleBase):
     # @staticmethod
     def plugin_load(self):
         try:
-            # ffmpeg_modelsetting = get_model_setting("ffmpeg", logger)
-            # SupportFfmpeg.initialize(P.ModelSetting.get('ffmpeg_path'), os.path.join(F.config['path_data'], 'tmp'),
-            #                          self.callback_function, P.ModelSetting.get_int('max_pf_count'))
-            # P.logger.debug(ffmpeg_modelsetting.get('ffmpeg_path'))
+
             P.logger.debug(F.config['path_data'])
 
             # SupportFfmpeg.initialize(ffmpeg_modelsetting.get('ffmpeg_path'), os.path.join(F.config['path_data'], 'tmp'),
             #                          self.callback_function, ffmpeg_modelsetting.get_int('max_pf_count'))
+
+            # plugin loading download_queue 가 없으면 생성
+            if self.download_queue is None:
+                self.download_queue = queue.Queue()
 
             SupportFfmpeg.initialize("ffmpeg", os.path.join(F.config['path_data'], 'tmp'),
                                      self.callback_function, 1)
@@ -692,7 +762,7 @@ class LogicOhli24(PluginModuleBase):
                 P, P.ModelSetting.get_int("ohli24_max_ffmpeg_process_count")
             )
             self.current_data = None
-            self.queue.queue_start()
+            # self.queue.queue_start()
 
         except Exception as e:
             logger.error("Exception:%s", e)
@@ -747,7 +817,9 @@ class LogicOhli24(PluginModuleBase):
             return "queue_exist"
         else:
             db_entity = ModelOhli24Item.get_by_ohli24_id(episode_info["_id"])
-            # logger.debug("db_entity:::> %s", db_entity)
+
+            logger.debug("db_entity:::> %s", db_entity)
+            # logger.debug("db_entity.status ::: %s", db_entity.status)
             if db_entity is None:
                 entity = Ohli24QueueEntity(P, self, episode_info)
                 logger.debug("entity:::> %s", entity.as_dict())
@@ -771,8 +843,8 @@ class LogicOhli24(PluginModuleBase):
 
                 logger.debug("entity:::> %s", entity.as_dict())
 
-                P.logger.debug(F.config['path_data'])
-                P.logger.debug(self.headers)
+                # P.logger.debug(F.config['path_data'])
+                # P.logger.debug(self.headers)
 
                 filename = os.path.basename(entity.filepath)
                 ffmpeg = SupportFfmpeg(entity.url, entity.filename, callback_function=self.callback_function,
@@ -787,10 +859,11 @@ class LogicOhli24(PluginModuleBase):
                 return "db_completed"
 
     def is_exist(self, info):
-        # for en in self.queue.entity_list:
-        #     if en.info["_id"] == info["_id"]:
-        #         return True
-        return False
+        print(self.queue.entity_list)
+        for en in self.queue.entity_list:
+            if en.info["_id"] == info["_id"]:
+                return True
+        # return False
 
     def callback_function(self, **args):
         refresh_type = None
@@ -1071,8 +1144,6 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
             self.savepath = P.ModelSetting.get("ohli24_download_path")
             logger.info(f"self.savepath::> {self.savepath}")
 
-            # TODO: 완결 처리
-
             if P.ModelSetting.get_bool("ohli24_auto_make_folder"):
                 if self.info["day"].find("완결") != -1:
                     folder_name = "%s %s" % (
@@ -1097,7 +1168,8 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
                 self.savepath, self.filename.replace(".mp4", ".ko.srt")
             )
 
-            if self.srt_url is not None and not os.path.exists(srt_filepath):
+            if self.srt_url is not None and not os.path.exists(srt_filepath) and not self.srt_url.split("/")[
+                                                                                         -1] == 'thumbnails.vtt':
                 if requests.get(self.srt_url, headers=headers).status_code == 200:
                     srt_data = requests.get(self.srt_url, headers=headers).text
                     Util.write_file(srt_data, srt_filepath)
@@ -1235,3 +1307,86 @@ class ModelOhli24Item(db.Model):
         item.status = "wait"
         item.ohli24_info = q["ohli24_info"]
         item.save()
+
+
+class ModelOhli24Program(ModelBase):
+    P = P
+    __tablename__ = f'{P.package_name}_{name}_program'
+    __table_args__ = {'mysql_collate': 'utf8_general_ci'}
+    __bind_key__ = P.package_name
+
+    id = db.Column(db.Integer, primary_key=True)
+    created_time = db.Column(db.DateTime, nullable=False)
+    completed_time = db.Column(db.DateTime)
+    completed = db.Column(db.Boolean)
+
+    clip_id = db.Column(db.String)
+    info = db.Column(db.String)
+    status = db.Column(db.String)
+    call = db.Column(db.String)
+    queue_list = []
+
+    def __init__(self, clip_id, info, call='user'):
+        self.clip_id = clip_id
+        self.info = info
+        self.completed = False
+        self.created_time = datetime.now()
+        self.status = "READY"
+        self.call = call
+
+    def init_for_queue(self):
+        self.status = "READY"
+        self.queue_list.append(self)
+
+    @classmethod
+    def get(cls, clip_id):
+        with F.app.app_context():
+            return db.session.query(cls).filter_by(
+                clip_id=clip_id,
+            ).order_by(desc(cls.id)).first()
+
+    @classmethod
+    def is_duplicate(cls, clip_id):
+        return (cls.get(clip_id) != None)
+
+    # 오버라이딩
+    @classmethod
+    def make_query(cls, req, order='desc', search='', option1='all', option2='all'):
+        with F.app.app_context():
+            query = F.db.session.query(cls)
+            # query = cls.make_query_search(query, search, cls.program_title)
+            query = query.filter(cls.info['channel_name'].like('%' + search + '%'))
+            if option1 == 'completed':
+                query = query.filter_by(completed=True)
+            elif option1 == 'incompleted':
+                query = query.filter_by(completed=False)
+            elif option1 == 'auto':
+                query = query.filter_by(call="user")
+
+            if order == 'desc':
+                query = query.order_by(desc(cls.id))
+            else:
+                query = query.order_by(cls.id)
+            return query
+
+    @classmethod
+    def remove_all(cls, is_completed=True):  # to remove_all(True/False)
+        with F.app.app_context():
+            count = db.session.query(cls).filter_by(completed=is_completed).delete()
+            db.session.commit()
+            return count
+
+    @classmethod
+    def get_failed(cls):
+        with F.app.app_context():
+            return db.session.query(cls).filter_by(
+                completed=False
+            ).all()
+
+    ### only for queue
+    @classmethod
+    def get_by_id_in_queue(cls, id):
+        for _ in cls.queue_list:
+            if _.id == int(id):
+                return _
+    ### only for queue END

@@ -49,7 +49,7 @@ from framework import F
 from plugin import (
     PluginModuleBase
 )
-from .lib._ffmpeg_queue import FfmpegQueueEntity, FfmpegQueue
+from .lib.ffmpeg_queue import FfmpegQueueEntity, FfmpegQueue
 from .lib.crawler import Crawler
 
 # from tool_base import d
@@ -459,12 +459,19 @@ class LogicAniLife(PluginModuleBase):
                 data = []
                 cate = request.form["type"]
                 page = request.form["page"]
+                try:
+                    data = self.get_anime_info(cate, page)
+                    logger.debug(data)
+                    if data is not None:
+                        return jsonify(
+                            {"ret": "success", "cate": cate, "page": page, "data": data}
+                        )
+                    else:
+                        return jsonify({"ret": "error", "data": data})
 
-                data = self.get_anime_info(cate, page)
-                # self.current_data = data
-                return jsonify(
-                    {"ret": "success", "cate": cate, "page": page, "data": data}
-                )
+                except Exception as e:
+                    print("error catch")
+                    return jsonify({"ret": "error", "data": data})
             elif sub == "complete_list":
                 data = []
 
@@ -828,7 +835,11 @@ class LogicAniLife(PluginModuleBase):
             }
             payload = json.dumps(post_data)
             logger.debug(payload)
-            response_data = requests.post(url="http://localhost:7070/get_html_playwright", data=payload)
+            try:
+                response_data = requests.post(url="http://localhost:7070/get_html_playwright", data=payload)
+            except Exception as e:
+                logger.error(f"Exception: {str(e)}")
+                return
 
             LogicAniLife.episode_url = response_data.json()["url"]
             logger.info(response_data.json()["url"])
@@ -857,15 +868,13 @@ class LogicAniLife(PluginModuleBase):
             for item in tmp_items:
                 entity = {}
                 entity["link"] = item.xpath(".//a/@href")[0]
-                logger.debug(entity["link"])
+                # logger.debug(entity["link"])
                 p = re.compile(r"^[http?s://]+[a-zA-Z0-9-]+/[a-zA-Z0-9-_.?=]+$")
 
                 # print(p.match(entity["link"]) != None)
                 if p.match(entity["link"]) is None:
                     entity["link"] = P.ModelSetting.get("anilife_url") + entity["link"]
                     # real_url = LogicAniLife.get_real_link(url=entity["link"])
-
-                # logger.debug(entity["link"])
 
                 entity["code"] = entity["link"].split("/")[-1]
                 entity["title"] = item.xpath(".//div[@class='tt']/text()")[0].strip()

@@ -1,4 +1,5 @@
 {% extends "base.html" %} {% block content %}
+ <div id="anime_downloader_wrapper">
     <div id="preloader">
         <div class='demo'>
             <!--        <div class="loader-inner">-->
@@ -30,6 +31,7 @@
             <div id="episode_list"></div>
         </form>
     </div>
+ </div>
     <!--전체-->
     <script src="{{ url_for('.static', filename='js/sjva_ui14.js') }}"></script>
 
@@ -171,6 +173,14 @@
                 tmp += m_button("add_queue_btn", "다운로드 추가", [
                     {key: "idx", value: i},
                 ]);
+                tmp += j_button('insert_download_btn', '다운로드 추가', {
+                    code: data.episode[i]._id,
+                });
+                tmp += j_button(
+                    'force_insert_download_btn',
+                    '다운로드 추가 (DB무시)',
+                    {code: data.episode[i]._id}
+                );
                 // tmp += '<button id="play_video" name="play_video" class="btn btn-sm btn-outline-primary" data-idx="'+i+'">바로보기</button>';
                 tmp += "</div>";
                 str += m_col(12, tmp);
@@ -316,6 +326,20 @@
         });
     </script>
     <style>
+        #anime_downloader_wrapper {
+            font-family: NanumSquareNeo, system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Noto Sans, Liberation Sans, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji;
+        }
+
+        body {
+            background-image: linear-gradient(90deg, #33242c, #263341, #17273a);
+
+        }
+
+        #anime_downloader_wrapper {
+
+            color: #d6eaf8;
+        }
+
         button.code-button {
             min-width: 82px !important;
         }
@@ -411,6 +435,20 @@
             top: 130%;
             left: 0;
             opacity: 1;
+        }
+
+        .card {
+            border: none;
+            box-shadow: inset 1px 1px hsl(0deg 0% 100% / 20%), inset -1px -1px hsl(0deg 0% 100% / 10%), 1px 3px 24px -1px rgb(0 0 0 / 15%);
+            background-color: transparent;
+            background-image: linear-gradient(125deg, hsla(0, 0%, 100%, .3), hsla(0, 0%, 100%, .2) 70%);
+            backdrop-filter: blur(5px);
+        }
+
+        .card.border-light {
+            border-radius: 30px 10px;
+            --bs-border-opacity: 1;
+            border-color: rgba(var(--bs-light-rgb), var(--bs-border-opacity)) !important;
         }
 
         #airing_list {
@@ -542,6 +580,23 @@
             position: absolute;
             top: 50%;
 
+        }
+
+        .circle {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+        }
+
+        .circle .inner {
+            width: 100%;
+            height: 100%;
+            border-radius: 100%;
+            border: 5px solid rgba(0, 255, 170, 0.7);
+            border-right: none;
+            border-top: none;
+            backgroudn-clip: padding;
+            box-shadow: inset 0px 0px 10px rgba(0, 255, 170, 0.15);
         }
 
         .loader-inner {

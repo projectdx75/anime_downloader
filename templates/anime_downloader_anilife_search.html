@@ -57,11 +57,7 @@
             <form id="screen_movie_list_form">
                 <div id="screen_movie_list" class="container"></div>
             </form>
-            <div class="text-center">
-                <div id="spinner" class="spinner-border" role="status">
-                    <span class="sr-only">Loading...</span>
-                </div>
-            </div>
+
             <form id="program_auto_form">
                 <div id="episode_list"></div>
             </form>
@@ -132,35 +128,44 @@
             }
 
             $.ajax({
-                url: url,
-                type: "POST",
-                data: data,
-                cache: false,
-                dataType: "json",
-                success: (ret) => {
-                    current_screen_movie_data = ret
-                    console.log('ret::>', ret)
-
-                    if (current_screen_movie_data !== '') {
-                        if (type === "ing") {
-                            make_airing_list(ret.data, page)
-                            observer.observe();
-                        } else if (type === "fin") {
-                            make_screen_movie_list(ret.data, page)
-                            observer.observe();
-                        } else if (type === "theater") {
-                            make_screen_movie_list(ret.data, page)
-                            observer.observe();
-                        } else {
-                            make_screen_movie_list(ret.data, page)
+                    url: url,
+                    type: "POST",
+                    data: data,
+                    cache: false,
+                    dataType: "json",
+                    success: (ret) => {
+                        if (ret.ret === "error") {
+                            $.notify("<strong>분석 실패</strong><br>" + ret.log, {
+                                type: "warning",
+                            });
+                            return false;
                         }
-                        div_visible = true
-                        console.log(div_visible)
+
+
+                        current_screen_movie_data = ret
+                        console.log('ret::>', ret)
+
+                        if (current_screen_movie_data !== '') {
+                            if (type === "ing") {
+                                make_airing_list(ret.data, page)
+                                observer.observe();
+                            } else if (type === "fin") {
+                                make_screen_movie_list(ret.data, page)
+                                observer.observe();
+                            } else if (type === "theater") {
+                                make_screen_movie_list(ret.data, page)
+                                observer.observe();
+                            } else {
+                                make_screen_movie_list(ret.data, page)
+                            }
+                            div_visible = true
+                            console.log(div_visible)
+                        }
+                        dismissLoadingScreen()
+                        next_page = page + 1
                     }
-                    dismissLoadingScreen()
-                    next_page = page + 1
                 }
-            })
+            )
         }
 
         function make_airing_list(data, page) {
