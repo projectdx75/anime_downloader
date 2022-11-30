@@ -52,7 +52,7 @@ from framework import F
 from plugin import (
     PluginModuleBase
 )
-from .lib.ffmpeg_queue import FfmpegQueueEntity, FfmpegQueue
+from .lib.ffmpeg_queue_v1 import FfmpegQueueEntity, FfmpegQueue
 from support.expand.ffmpeg import SupportFfmpeg
 
 from .lib.util import Util
@@ -118,7 +118,7 @@ class LogicOhli24(PluginModuleBase):
         }
         self.queue = None
         # default_route_socketio(P, self)
-        default_route_socketio_module(self, attach='/search')
+        default_route_socketio_module(self, attach='/queue')
 
     @staticmethod
     def db_init():
@@ -219,10 +219,6 @@ class LogicOhli24(PluginModuleBase):
                 #     if db_item == None:
                 #         db_item = ModelOhli24Program(info['_id'], self.get_episode(info['_id']))
                 #         db_item.save()
-
-
-
-
             elif sub == "entity_list":
                 return jsonify(self.queue.get_entity_list())
             elif sub == "queue_list":
@@ -255,7 +251,8 @@ class LogicOhli24(PluginModuleBase):
                 thread.daemon = True
                 thread.start()
                 return jsonify("")
-            elif sub == "web_list":
+            elif sub == "web_list2":
+                logger.debug("web_list2")
                 return jsonify(ModelOhli24Item.web_list(request))
             elif sub == "db_remove":
                 return jsonify(ModelOhli24Item.delete_by_id(req.form["id"]))
@@ -287,8 +284,9 @@ class LogicOhli24(PluginModuleBase):
 
     def process_command(self, command, arg1, arg2, arg3, req):
         ret = {'ret': 'success'}
-        logger.debug('queue_list')
+
         if command == 'queue_list':
+            logger.debug('queue_list')
             logger.debug(f"self.queue.get_entity_list():: {self.queue.get_entity_list()}")
             ret = [x for x in self.queue.get_entity_list()]
 
@@ -314,6 +312,19 @@ class LogicOhli24(PluginModuleBase):
             ret = []
             for ins in SupportFfmpeg.get_list():
                 ret.append(ins.get_data())
+
+        elif command == 'queue_command':
+            if arg1 == 'cancel':
+                pass
+            elif arg1 == 'reset':
+                logger.debug('reset')
+                # if self.queue is not None:
+                #     with self.queue.mutex:
+                #         self.queue.queue.clear()
+
+                if self.download_queue is not None:
+                    with self.download_queue.mutex:
+                        self.download_queue.queue.clear()
 
         return jsonify(ret)
 
@@ -751,8 +762,8 @@ class LogicOhli24(PluginModuleBase):
             #                          self.callback_function, ffmpeg_modelsetting.get_int('max_pf_count'))
 
             # plugin loading download_queue 가 없으면 생성
-            if self.download_queue is None:
-                self.download_queue = queue.Queue()
+            # if self.download_queue is None:
+            #     self.download_queue = queue.Queue()
 
             SupportFfmpeg.initialize("ffmpeg", os.path.join(F.config['path_data'], 'tmp'),
                                      self.callback_function, 1)
@@ -762,7 +773,7 @@ class LogicOhli24(PluginModuleBase):
                 P, P.ModelSetting.get_int("ohli24_max_ffmpeg_process_count")
             )
             self.current_data = None
-            # self.queue.queue_start()
+            self.queue.queue_start()
 
         except Exception as e:
             logger.error("Exception:%s", e)
@@ -859,13 +870,16 @@ class LogicOhli24(PluginModuleBase):
                 return "db_completed"
 
     def is_exist(self, info):
-        print(self.queue.entity_list)
+        # print(self.queue)
+        # print(self.queue.entity_list)
         for en in self.queue.entity_list:
             if en.info["_id"] == info["_id"]:
                 return True
         # return False
 
     def callback_function(self, **args):
+        logger.debug('callback_function============')
+        logger.debug(args)
         refresh_type = None
         if args['type'] == 'status_change':
             if args['status'] == SupportFfmpeg.Status.DOWNLOADING:
@@ -876,7 +890,7 @@ class LogicOhli24(PluginModuleBase):
                 data = {'type': 'info',
                         'msg': '다운로드중 Duration(%s)' % args['data']['duration_str'] + '<br>' + args['data'][
                             'save_fullpath'], 'url': '/ffmpeg/download/list'}
-                socketio.emit("notify", data, namespace='/framework', broadcast=True)
+                # socketio.emit("notify", data, namespace='/framework', broadcast=True)
                 refresh_type = 'add'
         elif args['type'] == 'last':
             if args['status'] == SupportFfmpeg.Status.WRONG_URL:
@@ -899,7 +913,9 @@ class LogicOhli24(PluginModuleBase):
             elif args['status'] == SupportFfmpeg.Status.COMPLETED:
                 data = {'type': 'success', 'msg': '다운로드가 완료 되었습니다.<br>' + args['data']['save_fullpath'],
                         'url': '/ffmpeg/download/list'}
-                socketio.emit("notify", data, namespace='/framework', broadcast=True)
+
+                # socketio.emit("notify", data, namespace='/framework', broadcast=True)
+
                 refresh_type = 'last'
             elif args['status'] == SupportFfmpeg.Status.TIME_OVER:
                 data = {'type': 'warning', 'msg': '시간초과로 중단 되었습니다.<br>' + args['data']['save_fullpath'],

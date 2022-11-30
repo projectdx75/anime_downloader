@@ -23,7 +23,9 @@ class FfmpegQueueEntity(abc.ABCMeta('ABC', (object,), {'__slots__': ()})):
         self.P = P
         # SupportFfmpeg.initialize()
         self.module_logic = module_logic
-        self.entity_id = -1  # FfmpegQueueEntity.static_index
+        self.entity_id = -1
+        self.entity_list = []
+        # FfmpegQueueEntity.static_index
         self.info = info
         self.url = None
         self.ffmpeg_status = -1
@@ -97,8 +99,8 @@ class FfmpegQueue(object):
             if self.download_thread is None:
                 self.download_thread = threading.Thread(target=self.download_thread_function, args=())
                 self.download_thread.daemon = True
-                # todo:
-                # self.download_thread.start()
+                # todo: 동작 방식 고찰
+                self.download_thread.start()
         except Exception as exception:
             self.P.logger.error(f'Exception: {exception}')
             self.P.logger.error(traceback.format_exc())
@@ -170,7 +172,7 @@ class FfmpegQueue(object):
                                        )
                 #
                 # todo: 임시로 start() 중지
-                # ffmpeg.start()
+                ffmpeg.start()
                 self.current_ffmpeg_count += 1
                 self.download_queue.task_done()
 
@@ -178,72 +180,72 @@ class FfmpegQueue(object):
                 self.P.logger.error('Exception:%s', exception)
                 self.P.logger.error(traceback.format_exc())
 
-    def callback_function(self, **args):
-        refresh_type = None
-        if args['type'] == 'status_change':
-            if args['status'] == SupportFfmpeg.Status.DOWNLOADING:
-                refresh_type = 'status_change'
-            elif args['status'] == SupportFfmpeg.Status.COMPLETED:
-                refresh_type = 'status_change'
-            elif args['status'] == SupportFfmpeg.Status.READY:
-                data = {'type': 'info',
-                        'msg': '다운로드중 Duration(%s)' % args['data']['duration_str'] + '<br>' + args['data'][
-                            'save_fullpath'], 'url': '/ffmpeg/download/list'}
-                socketio.emit("notify", data, namespace='/framework', broadcast=True)
-                refresh_type = 'add'
-        elif args['type'] == 'last':
-            if args['status'] == SupportFfmpeg.Status.WRONG_URL:
-                data = {'type': 'warning', 'msg': '잘못된 URL입니다'}
-                socketio.emit("notify", data, namespace='/framework', broadcast=True)
-                refresh_type = 'add'
-            elif args['status'] == SupportFfmpeg.Status.WRONG_DIRECTORY:
-                data = {'type': 'warning', 'msg': '잘못된 디렉토리입니다.<br>' + args['data']['save_fullpath']}
-                socketio.emit("notify", data, namespace='/framework', broadcast=True)
-                refresh_type = 'add'
-            elif args['status'] == SupportFfmpeg.Status.ERROR or args['status'] == SupportFfmpeg.Status.EXCEPTION:
-                data = {'type': 'warning', 'msg': '다운로드 시작 실패.<br>' + args['data']['save_fullpath']}
-                socketio.emit("notify", data, namespace='/framework', broadcast=True)
-                refresh_type = 'add'
-            elif args['status'] == SupportFfmpeg.Status.USER_STOP:
-                data = {'type': 'warning', 'msg': '다운로드가 중지 되었습니다.<br>' + args['data']['save_fullpath'],
-                        'url': '/ffmpeg/download/list'}
-                socketio.emit("notify", data, namespace='/framework', broadcast=True)
-                refresh_type = 'last'
-            elif args['status'] == SupportFfmpeg.Status.COMPLETED:
-                data = {'type': 'success', 'msg': '다운로드가 완료 되었습니다.<br>' + args['data']['save_fullpath'],
-                        'url': '/ffmpeg/download/list'}
-                socketio.emit("notify", data, namespace='/framework', broadcast=True)
-                refresh_type = 'last'
-            elif args['status'] == SupportFfmpeg.Status.TIME_OVER:
-                data = {'type': 'warning', 'msg': '시간초과로 중단 되었습니다.<br>' + args['data']['save_fullpath'],
-                        'url': '/ffmpeg/download/list'}
-                socketio.emit("notify", data, namespace='/framework', broadcast=True)
-                refresh_type = 'last'
-            elif args['status'] == SupportFfmpeg.Status.PF_STOP:
-                data = {'type': 'warning', 'msg': 'PF초과로 중단 되었습니다.<br>' + args['data']['save_fullpath'],
-                        'url': '/ffmpeg/download/list'}
-                socketio.emit("notify", data, namespace='/framework', broadcast=True)
-                refresh_type = 'last'
-            elif args['status'] == SupportFfmpeg.Status.FORCE_STOP:
-                data = {'type': 'warning', 'msg': '강제 중단 되었습니다.<br>' + args['data']['save_fullpath'],
-                        'url': '/ffmpeg/download/list'}
-                socketio.emit("notify", data, namespace='/framework', broadcast=True)
-                refresh_type = 'last'
-            elif args['status'] == SupportFfmpeg.Status.HTTP_FORBIDDEN:
-                data = {'type': 'warning', 'msg': '403에러로 중단 되었습니다.<br>' + args['data']['save_fullpath'],
-                        'url': '/ffmpeg/download/list'}
-                socketio.emit("notify", data, namespace='/framework', broadcast=True)
-                refresh_type = 'last'
-            elif args['status'] == SupportFfmpeg.Status.ALREADY_DOWNLOADING:
-                data = {'type': 'warning', 'msg': '임시파일폴더에 파일이 있습니다.<br>' + args['data']['temp_fullpath'],
-                        'url': '/ffmpeg/download/list'}
-                socketio.emit("notify", data, namespace='/framework', broadcast=True)
-                refresh_type = 'last'
-        elif args['type'] == 'normal':
-            if args['status'] == SupportFfmpeg.Status.DOWNLOADING:
-                refresh_type = 'status'
-        # P.logger.info(refresh_type)
-        self.socketio_callback(refresh_type, args['data'])
+    # def callback_function(self, **args):
+    #     refresh_type = None
+    #     if args['type'] == 'status_change':
+    #         if args['status'] == SupportFfmpeg.Status.DOWNLOADING:
+    #             refresh_type = 'status_change'
+    #         elif args['status'] == SupportFfmpeg.Status.COMPLETED:
+    #             refresh_type = 'status_change'
+    #         elif args['status'] == SupportFfmpeg.Status.READY:
+    #             data = {'type': 'info',
+    #                     'msg': '다운로드중 Duration(%s)' % args['data']['duration_str'] + '<br>' + args['data'][
+    #                         'save_fullpath'], 'url': '/ffmpeg/download/list'}
+    #             socketio.emit("notify", data, namespace='/framework', broadcast=True)
+    #             refresh_type = 'add'
+    #     elif args['type'] == 'last':
+    #         if args['status'] == SupportFfmpeg.Status.WRONG_URL:
+    #             data = {'type': 'warning', 'msg': '잘못된 URL입니다'}
+    #             socketio.emit("notify", data, namespace='/framework', broadcast=True)
+    #             refresh_type = 'add'
+    #         elif args['status'] == SupportFfmpeg.Status.WRONG_DIRECTORY:
+    #             data = {'type': 'warning', 'msg': '잘못된 디렉토리입니다.<br>' + args['data']['save_fullpath']}
+    #             socketio.emit("notify", data, namespace='/framework', broadcast=True)
+    #             refresh_type = 'add'
+    #         elif args['status'] == SupportFfmpeg.Status.ERROR or args['status'] == SupportFfmpeg.Status.EXCEPTION:
+    #             data = {'type': 'warning', 'msg': '다운로드 시작 실패.<br>' + args['data']['save_fullpath']}
+    #             socketio.emit("notify", data, namespace='/framework', broadcast=True)
+    #             refresh_type = 'add'
+    #         elif args['status'] == SupportFfmpeg.Status.USER_STOP:
+    #             data = {'type': 'warning', 'msg': '다운로드가 중지 되었습니다.<br>' + args['data']['save_fullpath'],
+    #                     'url': '/ffmpeg/download/list'}
+    #             socketio.emit("notify", data, namespace='/framework', broadcast=True)
+    #             refresh_type = 'last'
+    #         elif args['status'] == SupportFfmpeg.Status.COMPLETED:
+    #             data = {'type': 'success', 'msg': '다운로드가 완료 되었습니다.<br>' + args['data']['save_fullpath'],
+    #                     'url': '/ffmpeg/download/list'}
+    #             socketio.emit("notify", data, namespace='/framework', broadcast=True)
+    #             refresh_type = 'last'
+    #         elif args['status'] == SupportFfmpeg.Status.TIME_OVER:
+    #             data = {'type': 'warning', 'msg': '시간초과로 중단 되었습니다.<br>' + args['data']['save_fullpath'],
+    #                     'url': '/ffmpeg/download/list'}
+    #             socketio.emit("notify", data, namespace='/framework', broadcast=True)
+    #             refresh_type = 'last'
+    #         elif args['status'] == SupportFfmpeg.Status.PF_STOP:
+    #             data = {'type': 'warning', 'msg': 'PF초과로 중단 되었습니다.<br>' + args['data']['save_fullpath'],
+    #                     'url': '/ffmpeg/download/list'}
+    #             socketio.emit("notify", data, namespace='/framework', broadcast=True)
+    #             refresh_type = 'last'
+    #         elif args['status'] == SupportFfmpeg.Status.FORCE_STOP:
+    #             data = {'type': 'warning', 'msg': '강제 중단 되었습니다.<br>' + args['data']['save_fullpath'],
+    #                     'url': '/ffmpeg/download/list'}
+    #             socketio.emit("notify", data, namespace='/framework', broadcast=True)
+    #             refresh_type = 'last'
+    #         elif args['status'] == SupportFfmpeg.Status.HTTP_FORBIDDEN:
+    #             data = {'type': 'warning', 'msg': '403에러로 중단 되었습니다.<br>' + args['data']['save_fullpath'],
+    #                     'url': '/ffmpeg/download/list'}
+    #             socketio.emit("notify", data, namespace='/framework', broadcast=True)
+    #             refresh_type = 'last'
+    #         elif args['status'] == SupportFfmpeg.Status.ALREADY_DOWNLOADING:
+    #             data = {'type': 'warning', 'msg': '임시파일폴더에 파일이 있습니다.<br>' + args['data']['temp_fullpath'],
+    #                     'url': '/ffmpeg/download/list'}
+    #             socketio.emit("notify", data, namespace='/framework', broadcast=True)
+    #             refresh_type = 'last'
+    #     elif args['type'] == 'normal':
+    #         if args['status'] == SupportFfmpeg.Status.DOWNLOADING:
+    #             refresh_type = 'status'
+    #     # P.logger.info(refresh_type)
+    #     self.socketio_callback(refresh_type, args['data'])
 
     def ffmpeg_listener(self, **arg):
         import ffmpeg

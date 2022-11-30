@@ -49,7 +49,8 @@ from framework import F
 from plugin import (
     PluginModuleBase
 )
-from .lib.ffmpeg_queue import FfmpegQueueEntity, FfmpegQueue
+from .lib.ffmpeg_queue_v1 import FfmpegQueueEntity, FfmpegQueue
+from support.expand.ffmpeg import SupportFfmpeg
 from .lib.crawler import Crawler
 
 # from tool_base import d
@@ -547,6 +548,40 @@ class LogicAniLife(PluginModuleBase):
             P.logger.error("Exception:%s", e)
             P.logger.error(traceback.format_exc())
 
+
+    def process_command(self, command, arg1, arg2, arg3, req):
+        ret = {'ret': 'success'}
+        logger.debug('queue_list')
+        if command == 'queue_list':
+            logger.debug(f"self.queue.get_entity_list():: {self.queue.get_entity_list()}")
+            ret = [x for x in self.queue.get_entity_list()]
+
+            return ret
+        elif command == 'download_program':
+            _pass = arg2
+            db_item = ModelOhli24Program.get(arg1)
+            if _pass == 'false' and db_item != None:
+                ret['ret'] = 'warning'
+                ret['msg'] = '이미 DB에 있는 항목 입니다.'
+            elif _pass == 'true' and db_item != None and ModelOhli24Program.get_by_id_in_queue(db_item.id) != None:
+                ret['ret'] = 'warning'
+                ret['msg'] = '이미 큐에 있는 항목 입니다.'
+            else:
+                if db_item == None:
+                    db_item = ModelOhli24Program(arg1, self.get_episode(arg1))
+                    db_item.save()
+                db_item.init_for_queue()
+                self.download_queue.put(db_item)
+                ret['msg'] = '다운로드를 추가 하였습니다.'
+
+        elif command == 'list':
+            ret = []
+            for ins in SupportFfmpeg.get_list():
+                ret.append(ins.get_data())
+
+        return jsonify(ret)
+
+
     @staticmethod
     def add_whitelist(*args):
         ret = {}
@@ -650,7 +685,7 @@ class LogicAniLife(PluginModuleBase):
             import json
             post_data = {
                 "url": url,
-                "headless": True,
+                "headless": False,
                 "engine": "webkit"
             }
             payload = json.dumps(post_data)
@@ -830,8 +865,9 @@ class LogicAniLife(PluginModuleBase):
             import json
             post_data = {
                 "url": url,
-                "headless": True,
-                "engine": "chromium"
+                "headless": False,
+                "engine": "chrome",
+                "reload": True,
             }
             payload = json.dumps(post_data)
             logger.debug(payload)
@@ -877,6 +913,7 @@ class LogicAniLife(PluginModuleBase):
                     # real_url = LogicAniLife.get_real_link(url=entity["link"])
 
                 entity["code"] = entity["link"].split("/")[-1]
+                entity["epx"] = item.xpath(".//span[@class='epx']/text()")[0].strip()
                 entity["title"] = item.xpath(".//div[@class='tt']/text()")[0].strip()
                 entity["image_link"] = item.xpath(".//div[@class='limit']/img/@src")[
                     0
@@ -986,14 +1023,15 @@ class AniLifeQueueEntity(FfmpegQueueEntity):
             logger.info(f"self.info:::> {self.info}")
 
             referer = "https://anilife.live/g/l?id=13fd4d28-ff18-4764-9968-7e7ea7347c51"
-            referer = LogicAniLife.episode_url
+
 
             # text = requests.get(url, headers=headers).text
             # text = LogicAniLife.get_html_seleniumwire(url, referer=referer, wired=True)
             # https://anilife.live/ani/provider/10f60832-20d1-4918-be62-0f508bf5460c
             referer_url = (
-                "https://anilife.live/g/l?id=d4be1e0e-301b-403b-be1b-cf19f3ccfd23"
+                "https://anilife.live/g/l?id=b012a355-a997-449a-ae2b-408a81a9b464"
             )
+
             referer_url = LogicAniLife.episode_url
 
             logger.debug(f"LogicAniLife.episode_url:: {LogicAniLife.episode_url}")
@@ -1017,14 +1055,16 @@ class AniLifeQueueEntity(FfmpegQueueEntity):
             # ))
 
             # loop = asyncio.new_event_loop()
-
+            logger.debug(url, referer_url)
             import json
             post_data = {
                 "url": url,
-                "headless": True,
-                "engine": "chromium",
+                "headless": False,
+                # "engine": "chromium",
+                "engine": "webkit",
                 "referer": referer_url,
-                "stealth": "False"
+                "stealth": "False",
+                "reload": True,
             }
             payload = json.dumps(post_data)
             logger.debug(payload)
@@ -1114,14 +1154,14 @@ class AniLifeQueueEntity(FfmpegQueueEntity):
             # vod_1080p_url = asyncio.run(
             #     LogicAniLife.get_vod_url(jawcloud_url, headless=True)
             # )
-            vod_1080p_url = LogicAniLife.get_vod_url_v2(jawcloud_url, headless=True)
+            vod_1080p_url = LogicAniLife.get_vod_url_v2(jawcloud_url, headless=False)
 
             print(f"vod_1080p_url:: {vod_1080p_url}")
             self.url = vod_1080p_url
 
             logger.info(self.url)
         except Exception as e:
-            P.logger.error("Exception:%s", e)
+            P.logger.error(f"Exception: str(e)")
             P.logger.error(traceback.format_exc())
 
 

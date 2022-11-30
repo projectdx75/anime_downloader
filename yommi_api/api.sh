@@ -7,7 +7,7 @@ WORK_DIR="/Volumes/WD/Users/Work/python/ff_dev_plugins/anime_downloader/yommi_ap
 echo "$LINE"
 echo "* fast api running..."
 echo "$LINE"
-pip install fastapi uvicorn[standard] playwright
+#pip install fastapi uvicorn[standard] playwright
 # shellcheck disable=SC2164
 cd "$WORK_DIR"
 uvicorn main:app --reload --port=$PORT
