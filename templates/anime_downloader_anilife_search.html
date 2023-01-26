@@ -378,6 +378,7 @@
                         $.notify("<strong>분석 실패</strong><br>" + ret.log, {
                             type: "warning",
                         });
+                        dismissLoadingScreen()
                     }
                 },
             });
@@ -429,6 +430,7 @@
                         make_program(ret.data)
                     } else {
                         $.notify('<strong>분석 실패</strong><br>' + ret.log, {type: 'warning'});
+                        dismissLoadingScreen()
                     }
                 }
             });
