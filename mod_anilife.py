@@ -1,5 +1,6 @@
 import os
 import sys
+
 # import threading
 import traceback
 import json
@@ -46,9 +47,7 @@ from sqlalchemy import or_, and_, func, not_, desc
 from framework import db, scheduler, path_data, socketio
 from framework.util import Util
 from framework import F
-from plugin import (
-    PluginModuleBase
-)
+from plugin import PluginModuleBase
 from .lib.ffmpeg_queue_v1 import FfmpegQueueEntity, FfmpegQueue
 from support.expand.ffmpeg import SupportFfmpeg
 from .lib.crawler import Crawler
@@ -66,7 +65,8 @@ T = TypeVar("T")
 from .setup import *
 
 logger = P.logger
-name = 'anilife'
+name = "anilife"
+
 
 class LogicAniLife(PluginModuleBase):
     db_default = {
@@ -109,7 +109,7 @@ class LogicAniLife(PluginModuleBase):
     }
     useragent = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, "
-                      "like Gecko) Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36"
+        "like Gecko) Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36"
     }
 
     def __init__(self, P):
@@ -117,14 +117,22 @@ class LogicAniLife(PluginModuleBase):
         self.name = "anilife"
         self.queue = None
         self.OS_PLATFORM = platform.system()
-        default_route_socketio_module(self, attach='/search')
+        default_route_socketio_module(self, attach="/search")
 
     # @staticmethod
-    def get_html(self, url: str, referer: str = None, stream: bool = False, is_stealth: bool = False, timeout: int = 5):
+    def get_html(
+        self,
+        url: str,
+        referer: str = None,
+        stream: bool = False,
+        is_stealth: bool = False,
+        timeout: int = 5,
+        headless: bool = False,
+    ):
         data = ""
         try:
             print("cloudflare protection bypass ==================")
-            print(self)
+            # print(self)
             # return LogicAniLife.get_html_cloudflare(url)
             # return self.get_html_selenium(url=url, referer=referer, is_stealth=is_stealth)
             # url: str,
@@ -133,7 +141,11 @@ class LogicAniLife(PluginModuleBase):
             # engine: str = "chrome",
             # stealth: bool = False,
             # return asyncio.run(LogicAniLife.get_html_playwright(url, engine="chrome", headless=True))
-            return asyncio.run(LogicAniLife.get_html_playwright(url, engine="chromium", headless=True))
+            return asyncio.run(
+                LogicAniLife.get_html_playwright(
+                    url, engine="chromium", headless=headless
+                )
+            )
             # return LogicAniLife.get_html_playwright_sync(url, engine="chrome", headless=True)
 
         except Exception as e:
@@ -141,10 +153,9 @@ class LogicAniLife(PluginModuleBase):
             logger.error(traceback.format_exc())
         return data
 
-
     @staticmethod
     async def get_vod_url_v1(
-            url, headless=False, referer=None, engine="chrome", stealth=False
+        url, headless=False, referer=None, engine="chrome", stealth=False
     ):
         from playwright.sync_api import sync_playwright
         from playwright.async_api import async_playwright
@@ -402,6 +413,7 @@ class LogicAniLife(PluginModuleBase):
     def get_vod_url_v2(url: str, headless: bool = False) -> str:
         try:
             import json
+
             post_data = {
                 "url": url,
                 "headless": headless,
@@ -410,7 +422,9 @@ class LogicAniLife(PluginModuleBase):
             }
             payload = json.dumps(post_data)
             logger.debug(payload)
-            response_data = requests.post(url="http://localhost:7070/get_vod_url", data=payload)
+            response_data = requests.post(
+                url="http://localhost:7070/get_vod_url", data=payload
+            )
 
             logger.debug(response_data.text)
 
@@ -549,39 +563,43 @@ class LogicAniLife(PluginModuleBase):
             P.logger.error("Exception:%s", e)
             P.logger.error(traceback.format_exc())
 
-
     def process_command(self, command, arg1, arg2, arg3, req):
-        ret = {'ret': 'success'}
-        logger.debug('queue_list')
-        if command == 'queue_list':
-            logger.debug(f"self.queue.get_entity_list():: {self.queue.get_entity_list()}")
+        ret = {"ret": "success"}
+        logger.debug("queue_list")
+        if command == "queue_list":
+            logger.debug(
+                f"self.queue.get_entity_list():: {self.queue.get_entity_list()}"
+            )
             ret = [x for x in self.queue.get_entity_list()]
 
             return ret
-        elif command == 'download_program':
+        elif command == "download_program":
             _pass = arg2
             db_item = ModelOhli24Program.get(arg1)
-            if _pass == 'false' and db_item != None:
-                ret['ret'] = 'warning'
-                ret['msg'] = '이미 DB에 있는 항목 입니다.'
-            elif _pass == 'true' and db_item != None and ModelOhli24Program.get_by_id_in_queue(db_item.id) != None:
-                ret['ret'] = 'warning'
-                ret['msg'] = '이미 큐에 있는 항목 입니다.'
+            if _pass == "false" and db_item != None:
+                ret["ret"] = "warning"
+                ret["msg"] = "이미 DB에 있는 항목 입니다."
+            elif (
+                _pass == "true"
+                and db_item != None
+                and ModelOhli24Program.get_by_id_in_queue(db_item.id) != None
+            ):
+                ret["ret"] = "warning"
+                ret["msg"] = "이미 큐에 있는 항목 입니다."
             else:
                 if db_item == None:
                     db_item = ModelOhli24Program(arg1, self.get_episode(arg1))
                     db_item.save()
                 db_item.init_for_queue()
                 self.download_queue.put(db_item)
-                ret['msg'] = '다운로드를 추가 하였습니다.'
+                ret["msg"] = "다운로드를 추가 하였습니다."
 
-        elif command == 'list':
+        elif command == "list":
             ret = []
             for ins in SupportFfmpeg.get_list():
                 ret.append(ins.get_data())
 
         return jsonify(ret)
-
 
     @staticmethod
     def add_whitelist(*args):
@@ -638,7 +656,7 @@ class LogicAniLife(PluginModuleBase):
 
     def setting_save_after(self, change_list):
         if self.queue.get_max_ffmpeg_count() != P.ModelSetting.get_int(
-                "anilife_max_ffmpeg_process_count"
+            "anilife_max_ffmpeg_process_count"
         ):
             self.queue.set_max_ffmpeg_count(
                 P.ModelSetting.get_int("anilife_max_ffmpeg_process_count")
@@ -684,19 +702,18 @@ class LogicAniLife(PluginModuleBase):
             # response_data = LogicAniLife.get_html(self, url=url, timeout=10)
 
             import json
-            post_data = {
-                "url": url,
-                "headless": False,
-                "engine": "webkit"
-            }
+
+            post_data = {"url": url, "headless": True, "engine": "webkit"}
             payload = json.dumps(post_data)
             logger.debug(payload)
             response_data = None
 
-            response_data = requests.post(url="http://localhost:7070/get_html_playwright", data=payload)
+            response_data = requests.post(
+                url="http://localhost:7070/get_html_by_playwright", data=payload
+            )
 
             # logger.debug(response_data.json()["html"])
-            soup_text = BeautifulSoup(response_data.json()["html"], 'lxml')
+            soup_text = BeautifulSoup(response_data.json()["html"], "lxml")
 
             tree = html.fromstring(response_data.json()["html"])
 
@@ -848,32 +865,36 @@ class LogicAniLife(PluginModuleBase):
                 )
             elif cate == "theater":
                 url = (
-                        P.ModelSetting.get("anilife_url")
-                        + "/vodtype/categorize/Movie/"
-                        + page
+                    P.ModelSetting.get("anilife_url")
+                    + "/vodtype/categorize/Movie/"
+                    + page
                 )
                 wrapper_xpath = '//div[@class="bsx"]'
             else:
                 url = (
-                        P.ModelSetting.get("anilife_url")
-                        + "/vodtype/categorize/Movie/"
-                        + page
+                    P.ModelSetting.get("anilife_url")
+                    + "/vodtype/categorize/Movie/"
+                    + page
                 )
                 # cate == "complete":
             logger.info("url:::> %s", url)
             data = {}
 
             import json
+
             post_data = {
                 "url": url,
-                "headless": False,
+                "headless": True,
                 "engine": "chrome",
                 "reload": True,
             }
             payload = json.dumps(post_data)
             logger.debug(payload)
             try:
-                response_data = requests.post(url="http://localhost:7070/get_html_playwright", data=payload)
+                API_BASE_URL = "http://localhost:7070"
+                response_data = requests.post(
+                    url=("%s/get_html_by_playwright" % API_BASE_URL), data=payload
+                )
             except Exception as e:
                 logger.error(f"Exception: {str(e)}")
                 return
@@ -888,7 +909,7 @@ class LogicAniLife(PluginModuleBase):
             # logger.debug(LogicAniLife.response_data)
             # print(type(response_data))
             # logger.debug(response_data.json()["html"])
-            soup_text = BeautifulSoup(response_data.json()["html"], 'lxml')
+            soup_text = BeautifulSoup(response_data.json()["html"], "lxml")
             # print(len(soup_text.select("div.bsx")))
 
             tree = html.fromstring(response_data.json()["html"])
@@ -1016,15 +1037,16 @@ class AniLifeQueueEntity(FfmpegQueueEntity):
 
             ourls = parse.urlparse(url)
 
-            self.headers = {"Referer": LogicAniLife.episode_url,
-                            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, "
-                                          "like Gecko) Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36"}
+            self.headers = {
+                "Referer": LogicAniLife.episode_url,
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, "
+                "like Gecko) Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36",
+            }
 
             logger.debug("make_episode_info()::url==> %s", url)
             logger.info(f"self.info:::> {self.info}")
 
             referer = "https://anilife.live/g/l?id=13fd4d28-ff18-4764-9968-7e7ea7347c51"
-
 
             # text = requests.get(url, headers=headers).text
             # text = LogicAniLife.get_html_seleniumwire(url, referer=referer, wired=True)
@@ -1058,6 +1080,7 @@ class AniLifeQueueEntity(FfmpegQueueEntity):
             # loop = asyncio.new_event_loop()
             logger.debug(url, referer_url)
             import json
+
             post_data = {
                 "url": url,
                 "headless": False,
@@ -1069,7 +1092,9 @@ class AniLifeQueueEntity(FfmpegQueueEntity):
             }
             payload = json.dumps(post_data)
             logger.debug(payload)
-            response_data = requests.post(url="http://localhost:7070/get_html_playwright", data=payload)
+            response_data = requests.post(
+                url="http://localhost:7070/get_html_by_playwright", data=payload
+            )
 
             # logger.debug(response_data.json()["html"])
             # soup_text = BeautifulSoup(response_data.json()["html"], 'lxml')

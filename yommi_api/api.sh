@@ -3,6 +3,8 @@ LINE="***********************************************"
 PORT="7070"
 #WORK_DIR="/mnt/WD/Users/Work/python/ff_dev_plugins/anime_downloader/yommi_api"
 WORK_DIR="/Volumes/WD/Users/Work/python/ff_dev_plugins/anime_downloader/yommi_api"
+WORK_DIR=$(dirname $(realpath $0))
+echo "$WORK_DIR"
 
 echo "$LINE"
 echo "* fast api running..."

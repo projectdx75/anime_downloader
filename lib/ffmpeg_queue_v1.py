@@ -95,8 +95,9 @@ class FfmpegQueue(object):
         self.name = sub_package_name
         if self.max_ffmpeg_count is None or self.max_ffmpeg_count == "":
             self.max_ffmpeg_count = 1
-
-        self.caller = caller
+        self.caller = None
+        if caller is not None:
+            self.caller = caller
         # self.support_init()
 
     def support_init(self):
@@ -193,12 +194,15 @@ class FfmpegQueue(object):
 
                 # SupportFfmpeg 초기화
                 self.support_init()
+                _headers = entity.headers
+                if self.caller is not None:
+                    _headers = self.caller.headers
 
                 ffmpeg = SupportFfmpeg(
                     url=video_url,
                     filename=filename,
                     callback_function=self.callback_function,
-                    headers=self.caller.headers,
+                    headers=_headers,
                     max_pf_count=0,
                     save_path=ToolUtil.make_path(dirname),
                     timeout_minute=60,
