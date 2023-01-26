@@ -99,7 +99,7 @@ class LogicOhli24(PluginModuleBase):
 
         self.db_default = {
             "ohli24_db_version": "1",
-            "ohli24_url": "https://ohli24.net",
+            "ohli24_url": "https://ohli24.org",
             "ohli24_download_path": os.path.join(path_data, P.package_name, "ohli24"),
             "ohli24_auto_make_folder": "True",
             f"{self.name}_recent_code": "",
@@ -823,7 +823,7 @@ class LogicOhli24(PluginModuleBase):
     def get_html(url, referer=None, stream=False, timeout=5):
         data = ""
         headers = {
-            "referer": f"https://ohli24.net",
+            "referer": f"https://ohli24.org",
             "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) "
             "Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36"
             "Mozilla/5.0 (Macintosh; Intel "
@@ -1055,11 +1055,11 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
 
     def make_episode_info(self):
         try:
-            # url = 'https://ohli24.net/e/' + self.info['va']
+            # url = 'https://ohli24.org/e/' + self.info['va']
             base_url = "https://ohli24.org"
             iframe_url = ""
 
-            # https://ohli24.net/e/%EB%85%B9%EC%9D%84%20%EB%A8%B9%EB%8A%94%20%EB%B9%84%EC%8A%A4%EC%BD%94%206%ED%99%94
+            # https://ohli24.org/e/%EB%85%B9%EC%9D%84%20%EB%A8%B9%EB%8A%94%20%EB%B9%84%EC%8A%A4%EC%BD%94%206%ED%99%94
             url = self.info["va"]
 
             ourls = parse.urlparse(url)
