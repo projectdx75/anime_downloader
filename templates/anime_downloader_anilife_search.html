@@ -138,6 +138,7 @@
                             $.notify("<strong>분석 실패</strong><br>" + ret.log, {
                                 type: "warning",
                             });
+                            dismissLoadingScreen()
                             return false;
                         }
 
