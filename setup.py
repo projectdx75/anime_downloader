@@ -132,5 +132,5 @@ try:
     P.set_module_list([LogicOhli24, LogicAniLife, LogicLinkkf])
 
 except Exception as e:
-    P.logger.error(f'Exception:{str(e)}')
+    P.logger.error(f'Exception: {str(e)}')
     P.logger.error(traceback.format_exc())

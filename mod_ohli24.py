@@ -22,6 +22,7 @@ from urllib import parse
 
 # third-party
 import requests
+
 # third-party
 from flask import request, render_template, jsonify
 from lxml import html
@@ -33,9 +34,11 @@ for pkg in pkgs:
         importlib.import_module(pkg)
     # except ImportError:
     except ImportError:
-        subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--upgrade', 'pip'])
+        subprocess.check_call(
+            [sys.executable, "-m", "pip", "install", "--upgrade", "pip"]
+        )
         # main(["install", pkg])
-        subprocess.check_call([sys.executable, '-m', 'pip', 'install', pkg])
+        subprocess.check_call([sys.executable, "-m", "pip", "install", pkg])
         importlib.import_module(pkg)
 
 # third party package
@@ -47,11 +50,10 @@ import jsbeautifier
 # sjva 공용
 from framework import db, scheduler, path_data, socketio
 from framework.util import Util
+
 # from framework.common.util import headers
 from framework import F
-from plugin import (
-    PluginModuleBase
-)
+from plugin import PluginModuleBase
 from .lib.ffmpeg_queue_v1 import FfmpegQueueEntity, FfmpegQueue
 from support.expand.ffmpeg import SupportFfmpeg
 
@@ -63,8 +65,8 @@ from .setup import *
 
 logger = P.logger
 
-print('*=' * 50)
-name = 'ohli24'
+print("*=" * 50)
+name = "ohli24"
 
 
 class LogicOhli24(PluginModuleBase):
@@ -74,18 +76,17 @@ class LogicOhli24(PluginModuleBase):
     session = requests.Session()
 
     headers = {
-        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.5249.114 Whale/3.17.145.12 Safari/537.36',
-        'authority': 'ndoodle.xyz',
-        'accept': '*/*',
-        'accept-language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
-        'cache-control': 'no-cache',
-        'pragma': 'no-cache',
-        'referer': 'https://ndoodle.xyz/video/e6e31529675d0ef99d777d729c423382'
-
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.5249.114 Whale/3.17.145.12 Safari/537.36",
+        "authority": "ndoodle.xyz",
+        "accept": "*/*",
+        "accept-language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+        "cache-control": "no-cache",
+        "pragma": "no-cache",
+        "referer": "https://ndoodle.xyz/video/e6e31529675d0ef99d777d729c423382",
     }
     useragent = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, "
-                      "like Gecko) Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36"
+        "like Gecko) Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36"
     }
 
     download_queue = None
@@ -109,7 +110,7 @@ class LogicOhli24(PluginModuleBase):
             "ohli24_auto_start": "False",
             "ohli24_interval": "* 5 * * *",
             "ohli24_auto_mode_all": "False",
-            "ohli24_auto_code_list": "all",
+            "ohli24_auto_code_list": "",
             "ohli24_current_code": "",
             "ohli24_uncompleted_auto_enqueue": "False",
             "ohli24_image_url_prefix_series": "https://www.jetcloud.cc/series/",
@@ -118,7 +119,7 @@ class LogicOhli24(PluginModuleBase):
         }
         self.queue = None
         # default_route_socketio(P, self)
-        default_route_socketio_module(self, attach='/queue')
+        default_route_socketio_module(self, attach="/queue")
 
     @staticmethod
     def db_init():
@@ -251,9 +252,21 @@ class LogicOhli24(PluginModuleBase):
                 thread.daemon = True
                 thread.start()
                 return jsonify("")
+            elif sub == "web_list3":
+                print("web_list3")
+                print(request)
+                P.logger.debug(req)
+                P.logger.debug("web_list3")
+                ret = ModelOhli24Item.web_list(req)
+                print(ret)
+                # return jsonify("test")
+                # return jsonify(ModelOhli24Item.web_list(req))
+
             elif sub == "web_list2":
+
                 logger.debug("web_list2")
                 return jsonify(ModelOhli24Item.web_list(request))
+
             elif sub == "db_remove":
                 return jsonify(ModelOhli24Item.delete_by_id(req.form["id"]))
             elif sub == "add_whitelist":
@@ -279,45 +292,51 @@ class LogicOhli24(PluginModuleBase):
 
     def get_episode(self, clip_id):
         for _ in self.current_data["episode"]:
-            if _['title'] == clip_id:
+            if _["title"] == clip_id:
                 return _
 
     def process_command(self, command, arg1, arg2, arg3, req):
-        ret = {'ret': 'success'}
+        ret = {"ret": "success"}
 
-        if command == 'queue_list':
-            logger.debug('queue_list')
-            logger.debug(f"self.queue.get_entity_list():: {self.queue.get_entity_list()}")
+        if command == "queue_list":
+            logger.debug("queue_list")
+            logger.debug(
+                f"self.queue.get_entity_list():: {self.queue.get_entity_list()}"
+            )
             ret = [x for x in self.queue.get_entity_list()]
 
             return ret
-        elif command == 'download_program':
+        elif command == "download_program":
             _pass = arg2
             db_item = ModelOhli24Program.get(arg1)
-            if _pass == 'false' and db_item != None:
-                ret['ret'] = 'warning'
-                ret['msg'] = '이미 DB에 있는 항목 입니다.'
-            elif _pass == 'true' and db_item != None and ModelOhli24Program.get_by_id_in_queue(db_item.id) != None:
-                ret['ret'] = 'warning'
-                ret['msg'] = '이미 큐에 있는 항목 입니다.'
+            if _pass == "false" and db_item != None:
+                ret["ret"] = "warning"
+                ret["msg"] = "이미 DB에 있는 항목 입니다."
+            elif (
+                _pass == "true"
+                and db_item != None
+                and ModelOhli24Program.get_by_id_in_queue(db_item.id) != None
+            ):
+                ret["ret"] = "warning"
+                ret["msg"] = "이미 큐에 있는 항목 입니다."
             else:
                 if db_item == None:
                     db_item = ModelOhli24Program(arg1, self.get_episode(arg1))
                     db_item.save()
                 db_item.init_for_queue()
                 self.download_queue.put(db_item)
-                ret['msg'] = '다운로드를 추가 하였습니다.'
+                ret["msg"] = "다운로드를 추가 하였습니다."
 
-        elif command == 'list':
+        elif command == "list":
             ret = []
             for ins in SupportFfmpeg.get_list():
                 ret.append(ins.get_data())
 
-        elif command == 'queue_command':
-            if arg1 == 'cancel':
+        elif command == "queue_command":
+            if arg1 == "cancel":
                 pass
-            elif arg1 == 'reset':
-                logger.debug('reset')
+            elif arg1 == "reset":
+                logger.debug("reset")
                 # if self.queue is not None:
                 #     with self.queue.mutex:
                 #         self.queue.queue.clear()
@@ -383,7 +402,7 @@ class LogicOhli24(PluginModuleBase):
 
     def setting_save_after(self, change_list):
         if self.queue.get_max_ffmpeg_count() != P.ModelSetting.get_int(
-                "ohli24_max_ffmpeg_process_count"
+            "ohli24_max_ffmpeg_process_count"
         ):
             self.queue.set_max_ffmpeg_count(
                 P.ModelSetting.get_int("ohli24_max_ffmpeg_process_count")
@@ -432,9 +451,11 @@ class LogicOhli24(PluginModuleBase):
         elif len(content_code_list) > 0:
             for item in content_code_list:
                 url = P.ModelSetting.get("ohli24_url") + "/c/" + item
-                print("scheduling url: %s", url)
+                logger.debug(f"scheduling url: {url}")
                 # ret_data = LogicOhli24.get_auto_anime_info(self, url=url)
                 content_info = self.get_series_info(item, "", "")
+
+                logger.debug(content_info)
 
                 for episode_info in content_info["episode"]:
                     add_ret = self.add(episode_info)
@@ -463,9 +484,9 @@ class LogicOhli24(PluginModuleBase):
 
         try:
             if (
-                    self.current_data is not None
-                    and "code" in self.current_data
-                    and self.current_data["code"] == code
+                self.current_data is not None
+                and "code" in self.current_data
+                and self.current_data["code"] == code
             ):
                 return self.current_data
 
@@ -497,16 +518,16 @@ class LogicOhli24(PluginModuleBase):
                 # print(len(wr_id))
                 if len(wr_id) > 0:
                     url = (
-                            P.ModelSetting.get("ohli24_url")
-                            + "/bbs/board.php?bo_table="
-                            + bo_table
-                            + "&wr_id="
-                            + wr_id
+                        P.ModelSetting.get("ohli24_url")
+                        + "/bbs/board.php?bo_table="
+                        + bo_table
+                        + "&wr_id="
+                        + wr_id
                     )
                 else:
                     pass
 
-            logger.debug('url:::> %s', url)
+            logger.debug("url:::> %s", url)
 
             response_data = LogicOhli24.get_html(url, timeout=10)
             tree = html.fromstring(response_data)
@@ -559,8 +580,8 @@ class LogicOhli24(PluginModuleBase):
                 thumbnail = image
                 # logger.info(li.xpath('//a[@class="item-subject"]/@href'))
                 link = (
-                        P.ModelSetting.get("ohli24_url")
-                        + li.xpath('.//a[@class="item-subject"]/@href')[0]
+                    P.ModelSetting.get("ohli24_url")
+                    + li.xpath('.//a[@class="item-subject"]/@href')[0]
                 )
                 # logger.debug(f"link:: {link}")
                 date = li.xpath('.//div[@class="wr-date"]/text()')[0]
@@ -628,27 +649,27 @@ class LogicOhli24(PluginModuleBase):
         try:
             if cate == "ing":
                 url = (
-                        P.ModelSetting.get("ohli24_url")
-                        + "/bbs/board.php?bo_table="
-                        + cate
-                        + "&page="
-                        + page
+                    P.ModelSetting.get("ohli24_url")
+                    + "/bbs/board.php?bo_table="
+                    + cate
+                    + "&page="
+                    + page
                 )
             elif cate == "movie":
                 url = (
-                        P.ModelSetting.get("ohli24_url")
-                        + "/bbs/board.php?bo_table="
-                        + cate
-                        + "&page="
-                        + page
+                    P.ModelSetting.get("ohli24_url")
+                    + "/bbs/board.php?bo_table="
+                    + cate
+                    + "&page="
+                    + page
                 )
             else:
                 url = (
-                        P.ModelSetting.get("ohli24_url")
-                        + "/bbs/board.php?bo_table="
-                        + cate
-                        + "&page="
-                        + page
+                    P.ModelSetting.get("ohli24_url")
+                    + "/bbs/board.php?bo_table="
+                    + cate
+                    + "&page="
+                    + page
                 )
                 # cate == "complete":
             logger.info("url:::> %s", url)
@@ -713,11 +734,11 @@ class LogicOhli24(PluginModuleBase):
         try:
             _query = urllib.parse.quote(query)
             url = (
-                    P.ModelSetting.get("ohli24_url")
-                    + "/bbs/search.php?srows=24&gr_id=&sfl=wr_subject&stx="
-                    + _query
-                    + "&page="
-                    + page
+                P.ModelSetting.get("ohli24_url")
+                + "/bbs/search.php?srows=24&gr_id=&sfl=wr_subject&stx="
+                + _query
+                + "&page="
+                + page
             )
 
             logger.info("get_search_result()::url> %s", url)
@@ -748,16 +769,13 @@ class LogicOhli24(PluginModuleBase):
 
             return data
         except Exception as e:
-            P.logger.error("Exception:%s", e)
+            P.logger.error(f"Exception: {str(e)}")
             P.logger.error(traceback.format_exc())
             return {"ret": "exception", "log": str(e)}
 
     # @staticmethod
     def plugin_load(self):
         try:
-
-            P.logger.debug(F.config['path_data'])
-
             # SupportFfmpeg.initialize(ffmpeg_modelsetting.get('ffmpeg_path'), os.path.join(F.config['path_data'], 'tmp'),
             #                          self.callback_function, ffmpeg_modelsetting.get_int('max_pf_count'))
 
@@ -765,12 +783,19 @@ class LogicOhli24(PluginModuleBase):
             # if self.download_queue is None:
             #     self.download_queue = queue.Queue()
 
-            SupportFfmpeg.initialize("ffmpeg", os.path.join(F.config['path_data'], 'tmp'),
-                                     self.callback_function, 1)
+            SupportFfmpeg.initialize(
+                "ffmpeg",
+                os.path.join(F.config["path_data"], "tmp"),
+                self.callback_function,
+                P.ModelSetting.get(f"{name}_max_ffmpeg_process_count"),
+            )
 
             logger.debug("%s plugin_load", P.package_name)
             self.queue = FfmpegQueue(
-                P, P.ModelSetting.get_int("ohli24_max_ffmpeg_process_count")
+                P,
+                P.ModelSetting.get_int(f"{name}_max_ffmpeg_process_count"),
+                name,
+                self,
             )
             self.current_data = None
             self.queue.queue_start()
@@ -800,10 +825,10 @@ class LogicOhli24(PluginModuleBase):
         headers = {
             "referer": f"https://ohli24.net",
             "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) "
-                          "Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36"
-                          "Mozilla/5.0 (Macintosh; Intel "
-                          "Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 "
-                          "Whale/3.12.129.46 Safari/537.36",
+            "Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36"
+            "Mozilla/5.0 (Macintosh; Intel "
+            "Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 "
+            "Whale/3.12.129.46 Safari/537.36",
             "X-Requested-With": "XMLHttpRequest",
         }
         try:
@@ -827,6 +852,7 @@ class LogicOhli24(PluginModuleBase):
         if self.is_exist(episode_info):
             return "queue_exist"
         else:
+            logger.debug(f"episode_info:: {episode_info}")
             db_entity = ModelOhli24Item.get_by_ohli24_id(episode_info["_id"])
 
             logger.debug("db_entity:::> %s", db_entity)
@@ -857,14 +883,14 @@ class LogicOhli24(PluginModuleBase):
                 # P.logger.debug(F.config['path_data'])
                 # P.logger.debug(self.headers)
 
-                filename = os.path.basename(entity.filepath)
-                ffmpeg = SupportFfmpeg(entity.url, entity.filename, callback_function=self.callback_function,
-                                       max_pf_count=0, save_path=entity.savepath, timeout_minute=60,
-                                       headers=self.headers)
-                ret = {'ret': 'success'}
-                ret['json'] = ffmpeg.start()
+                # filename = os.path.basename(entity.filepath)
+                # ffmpeg = SupportFfmpeg(entity.url, entity.filename, callback_function=self.callback_function,
+                #                        max_pf_count=0, save_path=entity.savepath, timeout_minute=60,
+                #                        headers=self.headers)
+                # ret = {'ret': 'success'}
+                # ret['json'] = ffmpeg.start()
 
-                # self.queue.add_queue(entity)
+                self.queue.add_queue(entity)
                 return "enqueue_db_exist"
             else:
                 return "db_completed"
@@ -878,75 +904,111 @@ class LogicOhli24(PluginModuleBase):
         # return False
 
     def callback_function(self, **args):
-        logger.debug('callback_function============')
+        logger.debug("callback_function============")
         logger.debug(args)
         refresh_type = None
-        if args['type'] == 'status_change':
-            if args['status'] == SupportFfmpeg.Status.DOWNLOADING:
-                refresh_type = 'status_change'
-            elif args['status'] == SupportFfmpeg.Status.COMPLETED:
-                refresh_type = 'status_change'
-            elif args['status'] == SupportFfmpeg.Status.READY:
-                data = {'type': 'info',
-                        'msg': '다운로드중 Duration(%s)' % args['data']['duration_str'] + '<br>' + args['data'][
-                            'save_fullpath'], 'url': '/ffmpeg/download/list'}
+        if args["type"] == "status_change":
+            if args["status"] == SupportFfmpeg.Status.DOWNLOADING:
+                refresh_type = "status_change"
+            elif args["status"] == SupportFfmpeg.Status.COMPLETED:
+                refresh_type = "status_change"
+                logger.debug("mod_ohli24.py:: download completed........")
+            elif args["status"] == SupportFfmpeg.Status.READY:
+                data = {
+                    "type": "info",
+                    "msg": "다운로드중 Duration(%s)" % args["data"]["duration_str"]
+                    + "<br>"
+                    + args["data"]["save_fullpath"],
+                    "url": "/ffmpeg/download/list",
+                }
                 # socketio.emit("notify", data, namespace='/framework', broadcast=True)
-                refresh_type = 'add'
-        elif args['type'] == 'last':
-            if args['status'] == SupportFfmpeg.Status.WRONG_URL:
-                data = {'type': 'warning', 'msg': '잘못된 URL입니다'}
-                socketio.emit("notify", data, namespace='/framework', broadcast=True)
-                refresh_type = 'add'
-            elif args['status'] == SupportFfmpeg.Status.WRONG_DIRECTORY:
-                data = {'type': 'warning', 'msg': '잘못된 디렉토리입니다.<br>' + args['data']['save_fullpath']}
-                socketio.emit("notify", data, namespace='/framework', broadcast=True)
-                refresh_type = 'add'
-            elif args['status'] == SupportFfmpeg.Status.ERROR or args['status'] == SupportFfmpeg.Status.EXCEPTION:
-                data = {'type': 'warning', 'msg': '다운로드 시작 실패.<br>' + args['data']['save_fullpath']}
-                socketio.emit("notify", data, namespace='/framework', broadcast=True)
-                refresh_type = 'add'
-            elif args['status'] == SupportFfmpeg.Status.USER_STOP:
-                data = {'type': 'warning', 'msg': '다운로드가 중지 되었습니다.<br>' + args['data']['save_fullpath'],
-                        'url': '/ffmpeg/download/list'}
-                socketio.emit("notify", data, namespace='/framework', broadcast=True)
-                refresh_type = 'last'
-            elif args['status'] == SupportFfmpeg.Status.COMPLETED:
-                data = {'type': 'success', 'msg': '다운로드가 완료 되었습니다.<br>' + args['data']['save_fullpath'],
-                        'url': '/ffmpeg/download/list'}
+                refresh_type = "add"
+        elif args["type"] == "last":
+            if args["status"] == SupportFfmpeg.Status.WRONG_URL:
+                data = {"type": "warning", "msg": "잘못된 URL입니다"}
+                socketio.emit("notify", data, namespace="/framework", broadcast=True)
+                refresh_type = "add"
+            elif args["status"] == SupportFfmpeg.Status.WRONG_DIRECTORY:
+                data = {
+                    "type": "warning",
+                    "msg": "잘못된 디렉토리입니다.<br>" + args["data"]["save_fullpath"],
+                }
+                socketio.emit("notify", data, namespace="/framework", broadcast=True)
+                refresh_type = "add"
+            elif (
+                args["status"] == SupportFfmpeg.Status.ERROR
+                or args["status"] == SupportFfmpeg.Status.EXCEPTION
+            ):
+                data = {
+                    "type": "warning",
+                    "msg": "다운로드 시작 실패.<br>" + args["data"]["save_fullpath"],
+                }
+                socketio.emit("notify", data, namespace="/framework", broadcast=True)
+                refresh_type = "add"
+            elif args["status"] == SupportFfmpeg.Status.USER_STOP:
+                data = {
+                    "type": "warning",
+                    "msg": "다운로드가 중지 되었습니다.<br>" + args["data"]["save_fullpath"],
+                    "url": "/ffmpeg/download/list",
+                }
+                socketio.emit("notify", data, namespace="/framework", broadcast=True)
+                refresh_type = "last"
+            elif args["status"] == SupportFfmpeg.Status.COMPLETED:
+                logger.debug("download completed........")
+                data = {
+                    "type": "success",
+                    "msg": "다운로드가 완료 되었습니다.<br>" + args["data"]["save_fullpath"],
+                    "url": "/ffmpeg/download/list",
+                }
 
-                # socketio.emit("notify", data, namespace='/framework', broadcast=True)
+                socketio.emit("notify", data, namespace="/framework", broadcast=True)
 
-                refresh_type = 'last'
-            elif args['status'] == SupportFfmpeg.Status.TIME_OVER:
-                data = {'type': 'warning', 'msg': '시간초과로 중단 되었습니다.<br>' + args['data']['save_fullpath'],
-                        'url': '/ffmpeg/download/list'}
-                socketio.emit("notify", data, namespace='/framework', broadcast=True)
-                refresh_type = 'last'
-            elif args['status'] == SupportFfmpeg.Status.PF_STOP:
-                data = {'type': 'warning', 'msg': 'PF초과로 중단 되었습니다.<br>' + args['data']['save_fullpath'],
-                        'url': '/ffmpeg/download/list'}
-                socketio.emit("notify", data, namespace='/framework', broadcast=True)
-                refresh_type = 'last'
-            elif args['status'] == SupportFfmpeg.Status.FORCE_STOP:
-                data = {'type': 'warning', 'msg': '강제 중단 되었습니다.<br>' + args['data']['save_fullpath'],
-                        'url': '/ffmpeg/download/list'}
-                socketio.emit("notify", data, namespace='/framework', broadcast=True)
-                refresh_type = 'last'
-            elif args['status'] == SupportFfmpeg.Status.HTTP_FORBIDDEN:
-                data = {'type': 'warning', 'msg': '403에러로 중단 되었습니다.<br>' + args['data']['save_fullpath'],
-                        'url': '/ffmpeg/download/list'}
-                socketio.emit("notify", data, namespace='/framework', broadcast=True)
-                refresh_type = 'last'
-            elif args['status'] == SupportFfmpeg.Status.ALREADY_DOWNLOADING:
-                data = {'type': 'warning', 'msg': '임시파일폴더에 파일이 있습니다.<br>' + args['data']['temp_fullpath'],
-                        'url': '/ffmpeg/download/list'}
-                socketio.emit("notify", data, namespace='/framework', broadcast=True)
-                refresh_type = 'last'
-        elif args['type'] == 'normal':
-            if args['status'] == SupportFfmpeg.Status.DOWNLOADING:
-                refresh_type = 'status'
+                refresh_type = "last"
+            elif args["status"] == SupportFfmpeg.Status.TIME_OVER:
+                data = {
+                    "type": "warning",
+                    "msg": "시간초과로 중단 되었습니다.<br>" + args["data"]["save_fullpath"],
+                    "url": "/ffmpeg/download/list",
+                }
+                socketio.emit("notify", data, namespace="/framework", broadcast=True)
+                refresh_type = "last"
+            elif args["status"] == SupportFfmpeg.Status.PF_STOP:
+                data = {
+                    "type": "warning",
+                    "msg": "PF초과로 중단 되었습니다.<br>" + args["data"]["save_fullpath"],
+                    "url": "/ffmpeg/download/list",
+                }
+                socketio.emit("notify", data, namespace="/framework", broadcast=True)
+                refresh_type = "last"
+            elif args["status"] == SupportFfmpeg.Status.FORCE_STOP:
+                data = {
+                    "type": "warning",
+                    "msg": "강제 중단 되었습니다.<br>" + args["data"]["save_fullpath"],
+                    "url": "/ffmpeg/download/list",
+                }
+                socketio.emit("notify", data, namespace="/framework", broadcast=True)
+                refresh_type = "last"
+            elif args["status"] == SupportFfmpeg.Status.HTTP_FORBIDDEN:
+                data = {
+                    "type": "warning",
+                    "msg": "403에러로 중단 되었습니다.<br>" + args["data"]["save_fullpath"],
+                    "url": "/ffmpeg/download/list",
+                }
+                socketio.emit("notify", data, namespace="/framework", broadcast=True)
+                refresh_type = "last"
+            elif args["status"] == SupportFfmpeg.Status.ALREADY_DOWNLOADING:
+                data = {
+                    "type": "warning",
+                    "msg": "임시파일폴더에 파일이 있습니다.<br>" + args["data"]["temp_fullpath"],
+                    "url": "/ffmpeg/download/list",
+                }
+                socketio.emit("notify", data, namespace="/framework", broadcast=True)
+                refresh_type = "last"
+        elif args["type"] == "normal":
+            if args["status"] == SupportFfmpeg.Status.DOWNLOADING:
+                refresh_type = "status"
         # P.logger.info(refresh_type)
-        self.socketio_callback(refresh_type, args['data'])
+        self.socketio_callback(refresh_type, args["data"])
 
 
 class Ohli24QueueEntity(FfmpegQueueEntity):
@@ -981,7 +1043,8 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
         tmp["epi_queue"] = self.epi_queue
         return tmp
 
-    def donwload_completed(self):
+    def download_completed(self):
+        logger.debug("download completed.......!!")
         db_entity = ModelOhli24Item.get_by_ohli24_id(self.info["_id"])
         if db_entity is not None:
             db_entity.status = "completed"
@@ -993,7 +1056,7 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
     def make_episode_info(self):
         try:
             # url = 'https://ohli24.net/e/' + self.info['va']
-            base_url = "https://ohli24.net"
+            base_url = "https://ohli24.org"
             iframe_url = ""
 
             # https://ohli24.net/e/%EB%85%B9%EC%9D%84%20%EB%A8%B9%EB%8A%94%20%EB%B9%84%EC%8A%A4%EC%BD%94%206%ED%99%94
@@ -1002,13 +1065,17 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
             ourls = parse.urlparse(url)
 
             headers = {
-                "referer": f"{ourls.scheme}://{ourls.netloc}",
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36",
+                "Referer": f"{ourls.scheme}://{ourls.netloc}",
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36",
             }
             logger.debug("make_episode_info()::url==> %s", url)
             logger.info(f"self.info:::> {self.info}")
 
-            text = requests.get(url, headers=headers).text
+            # text = requests.get(url, headers=headers).text
+            text = LogicOhli24.get_html(
+                url, headers=headers, referer=f"{ourls.scheme}://{ourls.netloc}"
+            )
             # logger.debug(text)
             soup1 = BeautifulSoup(text, "lxml")
             pattern = re.compile(r"url : \"\.\.(.*)\"")
@@ -1047,7 +1114,7 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
             )
             packed_script = soup3.find("script", text=s_pattern)
             # packed_script = soup3.find('script')
-            logger.info('packed_script>>> %s', packed_script.text)
+            logger.info("packed_script>>> %s", packed_script.text)
             unpack_script = None
             if packed_script is not None:
                 # logger.debug('zzzzzzzzzzzz')
@@ -1087,10 +1154,10 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
             headers = {
                 "referer": f"{iframe_src}",
                 "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) "
-                              "Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36"
-                              "Mozilla/5.0 (Macintosh; Intel "
-                              "Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 "
-                              "Whale/3.12.129.46 Safari/537.36",
+                "Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36"
+                "Mozilla/5.0 (Macintosh; Intel "
+                "Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 "
+                "Whale/3.12.129.46 Safari/537.36",
                 "X-Requested-With": "XMLHttpRequest",
             }
             # print(headers)
@@ -1115,8 +1182,8 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
             logger.debug(f"stream_info:: {stream_info}")
             self.headers = {
                 "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
-                              "Chrome/71.0.3554.0 Safari/537.36Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                              "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3554.0 Safari/537.36",
+                "Chrome/71.0.3554.0 Safari/537.36Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3554.0 Safari/537.36",
                 "Referer": "https://ndoodle.xyz/video/03a3655fff3e9bdea48de9f49e938e32",
             }
 
@@ -1184,8 +1251,11 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
                 self.savepath, self.filename.replace(".mp4", ".ko.srt")
             )
 
-            if self.srt_url is not None and not os.path.exists(srt_filepath) and not self.srt_url.split("/")[
-                                                                                         -1] == 'thumbnails.vtt':
+            if (
+                self.srt_url is not None
+                and not os.path.exists(srt_filepath)
+                and not self.srt_url.split("/")[-1] == "thumbnails.vtt"
+            ):
                 if requests.get(self.srt_url, headers=headers).status_code == 200:
                     srt_data = requests.get(self.srt_url, headers=headers).text
                     Util.write_file(srt_data, srt_filepath)
@@ -1194,8 +1264,85 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
             P.logger.error("Exception:%s", e)
             P.logger.error(traceback.format_exc())
 
+    # def callback_function(self, **args):
+    #     refresh_type = None
+    #     # entity = self.get_entity_by_entity_id(arg['plugin_id'])
+    #     entity = self.get_entity_by_entity_id(args['data']['callback_id'])
+    #
+    #     if args['type'] == 'status_change':
+    #         if args['status'] == SupportFfmpeg.Status.DOWNLOADING:
+    #             refresh_type = 'status_change'
+    #         elif args['status'] == SupportFfmpeg.Status.COMPLETED:
+    #             refresh_type = 'status_change'
+    #             logger.debug('ffmpeg_queue_v1.py:: download completed........')
+    #         elif args['status'] == SupportFfmpeg.Status.READY:
+    #             data = {'type': 'info',
+    #                     'msg': '다운로드중 Duration(%s)' % args['data']['duration_str'] + '<br>' + args['data'][
+    #                         'save_fullpath'], 'url': '/ffmpeg/download/list'}
+    #             socketio.emit("notify", data, namespace='/framework', broadcast=True)
+    #             refresh_type = 'add'
+    #     elif args['type'] == 'last':
+    #         if args['status'] == SupportFfmpeg.Status.WRONG_URL:
+    #             data = {'type': 'warning', 'msg': '잘못된 URL입니다'}
+    #             socketio.emit("notify", data, namespace='/framework', broadcast=True)
+    #             refresh_type = 'add'
+    #         elif args['status'] == SupportFfmpeg.Status.WRONG_DIRECTORY:
+    #             data = {'type': 'warning', 'msg': '잘못된 디렉토리입니다.<br>' + args['data']['save_fullpath']}
+    #             socketio.emit("notify", data, namespace='/framework', broadcast=True)
+    #             refresh_type = 'add'
+    #         elif args['status'] == SupportFfmpeg.Status.ERROR or args['status'] == SupportFfmpeg.Status.EXCEPTION:
+    #             data = {'type': 'warning', 'msg': '다운로드 시작 실패.<br>' + args['data']['save_fullpath']}
+    #             socketio.emit("notify", data, namespace='/framework', broadcast=True)
+    #             refresh_type = 'add'
+    #         elif args['status'] == SupportFfmpeg.Status.USER_STOP:
+    #             data = {'type': 'warning', 'msg': '다운로드가 중지 되었습니다.<br>' + args['data']['save_fullpath'],
+    #                     'url': '/ffmpeg/download/list'}
+    #             socketio.emit("notify", data, namespace='/framework', broadcast=True)
+    #             refresh_type = 'last'
+    #         elif args['status'] == SupportFfmpeg.Status.COMPLETED:
+    #             logger.debug('ffmpeg download completed......')
+    #             entity.download_completed()
+    #             data = {'type': 'success', 'msg': '다운로드가 완료 되었습니다.<br>' + args['data']['save_fullpath'],
+    #                     'url': '/ffmpeg/download/list'}
+    #
+    #
+    #             socketio.emit("notify", data, namespace='/framework', broadcast=True)
+    #             refresh_type = 'last'
+    #         elif args['status'] == SupportFfmpeg.Status.TIME_OVER:
+    #             data = {'type': 'warning', 'msg': '시간초과로 중단 되었습니다.<br>' + args['data']['save_fullpath'],
+    #                     'url': '/ffmpeg/download/list'}
+    #             socketio.emit("notify", data, namespace='/framework', broadcast=True)
+    #             refresh_type = 'last'
+    #         elif args['status'] == SupportFfmpeg.Status.PF_STOP:
+    #             data = {'type': 'warning', 'msg': 'PF초과로 중단 되었습니다.<br>' + args['data']['save_fullpath'],
+    #                     'url': '/ffmpeg/download/list'}
+    #             socketio.emit("notify", data, namespace='/framework', broadcast=True)
+    #             refresh_type = 'last'
+    #         elif args['status'] == SupportFfmpeg.Status.FORCE_STOP:
+    #             data = {'type': 'warning', 'msg': '강제 중단 되었습니다.<br>' + args['data']['save_fullpath'],
+    #                     'url': '/ffmpeg/download/list'}
+    #             socketio.emit("notify", data, namespace='/framework', broadcast=True)
+    #             refresh_type = 'last'
+    #         elif args['status'] == SupportFfmpeg.Status.HTTP_FORBIDDEN:
+    #             data = {'type': 'warning', 'msg': '403에러로 중단 되었습니다.<br>' + args['data']['save_fullpath'],
+    #                     'url': '/ffmpeg/download/list'}
+    #             socketio.emit("notify", data, namespace='/framework', broadcast=True)
+    #             refresh_type = 'last'
+    #         elif args['status'] == SupportFfmpeg.Status.ALREADY_DOWNLOADING:
+    #             data = {'type': 'warning', 'msg': '임시파일폴더에 파일이 있습니다.<br>' + args['data']['temp_fullpath'],
+    #                     'url': '/ffmpeg/download/list'}
+    #             socketio.emit("notify", data, namespace='/framework', broadcast=True)
+    #             refresh_type = 'last'
+    #     elif args['type'] == 'normal':
+    #         if args['status'] == SupportFfmpeg.Status.DOWNLOADING:
+    #             refresh_type = 'status'
+    #     # P.logger.info(refresh_type)
+    #     # Todo:
+    #     self.socketio_callback(refresh_type, args['data'])
 
-class ModelOhli24Item(db.Model):
+
+class ModelOhli24Item(ModelBase):
+    P = P
     __tablename__ = "{package_name}_ohli24_item".format(package_name=P.package_name)
     __table_args__ = {"mysql_collate": "utf8_general_ci"}
     __bind_key__ = P.package_name
@@ -1238,16 +1385,32 @@ class ModelOhli24Item(db.Model):
         return ret
 
     def save(self):
-        db.session.add(self)
-        db.session.commit()
+        try:
+            with F.app.app_context():
+                F.db.session.add(self)
+                F.db.session.commit()
+                return self
+        except Exception as e:
+            self.P.logger.error(f"Exception:{str(e)}")
+            self.P.logger.error(traceback.format_exc())
 
     @classmethod
-    def get_by_id(cls, idx):
-        return db.session.query(cls).filter_by(id=idx).first()
+    def get_by_id(cls, id):
+        try:
+            with F.app.app_context():
+                return F.db.session.query(cls).filter_by(id=int(id)).first()
+        except Exception as e:
+            cls.P.logger.error(f"Exception:{str(e)}")
+            cls.P.logger.error(traceback.format_exc())
 
     @classmethod
     def get_by_ohli24_id(cls, ohli24_id):
-        return db.session.query(cls).filter_by(ohli24_id=ohli24_id).first()
+        try:
+            with F.app.app_context():
+                return F.db.session.query(cls).filter_by(ohli24_id=ohli24_id).first()
+        except Exception as e:
+            cls.P.logger.error(f"Exception:{str(e)}")
+            cls.P.logger.error(traceback.format_exc())
 
     @classmethod
     def delete_by_id(cls, idx):
@@ -1269,7 +1432,7 @@ class ModelOhli24Item(db.Model):
         query = query.limit(page_size).offset((page - 1) * page_size)
         lists = query.all()
         ret["list"] = [item.as_dict() for item in lists]
-        ret["paging"] = Util.get_paging_info(count, page, page_size)
+        ret["paging"] = cls.get_paging_info(count, page, page_size)
         return ret
 
     @classmethod
@@ -1327,8 +1490,8 @@ class ModelOhli24Item(db.Model):
 
 class ModelOhli24Program(ModelBase):
     P = P
-    __tablename__ = f'{P.package_name}_{name}_program'
-    __table_args__ = {'mysql_collate': 'utf8_general_ci'}
+    __tablename__ = f"{P.package_name}_{name}_program"
+    __table_args__ = {"mysql_collate": "utf8_general_ci"}
     __bind_key__ = P.package_name
 
     id = db.Column(db.Integer, primary_key=True)
@@ -1342,7 +1505,7 @@ class ModelOhli24Program(ModelBase):
     call = db.Column(db.String)
     queue_list = []
 
-    def __init__(self, clip_id, info, call='user'):
+    def __init__(self, clip_id, info, call="user"):
         self.clip_id = clip_id
         self.info = info
         self.completed = False
@@ -1357,29 +1520,34 @@ class ModelOhli24Program(ModelBase):
     @classmethod
     def get(cls, clip_id):
         with F.app.app_context():
-            return db.session.query(cls).filter_by(
-                clip_id=clip_id,
-            ).order_by(desc(cls.id)).first()
+            return (
+                db.session.query(cls)
+                .filter_by(
+                    clip_id=clip_id,
+                )
+                .order_by(desc(cls.id))
+                .first()
+            )
 
     @classmethod
     def is_duplicate(cls, clip_id):
-        return (cls.get(clip_id) != None)
+        return cls.get(clip_id) != None
 
     # 오버라이딩
     @classmethod
-    def make_query(cls, req, order='desc', search='', option1='all', option2='all'):
+    def make_query(cls, req, order="desc", search="", option1="all", option2="all"):
         with F.app.app_context():
             query = F.db.session.query(cls)
             # query = cls.make_query_search(query, search, cls.program_title)
-            query = query.filter(cls.info['channel_name'].like('%' + search + '%'))
-            if option1 == 'completed':
+            query = query.filter(cls.info["channel_name"].like("%" + search + "%"))
+            if option1 == "completed":
                 query = query.filter_by(completed=True)
-            elif option1 == 'incompleted':
+            elif option1 == "incompleted":
                 query = query.filter_by(completed=False)
-            elif option1 == 'auto':
+            elif option1 == "auto":
                 query = query.filter_by(call="user")
 
-            if order == 'desc':
+            if order == "desc":
                 query = query.order_by(desc(cls.id))
             else:
                 query = query.order_by(cls.id)
@@ -1395,9 +1563,7 @@ class ModelOhli24Program(ModelBase):
     @classmethod
     def get_failed(cls):
         with F.app.app_context():
-            return db.session.query(cls).filter_by(
-                completed=False
-            ).all()
+            return db.session.query(cls).filter_by(completed=False).all()
 
     ### only for queue
     @classmethod
@@ -1405,4 +1571,5 @@ class ModelOhli24Program(ModelBase):
         for _ in cls.queue_list:
             if _.id == int(id):
                 return _
+
     ### only for queue END

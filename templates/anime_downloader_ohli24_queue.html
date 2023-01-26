@@ -17,6 +17,8 @@
         <div id="download_list_div"></div>
     </div> <!--전체-->
 
+
+        <script src="{{ url_for('.static', filename='js/sjva_ui14.js') }}"></script>
     <script type="text/javascript">
         var package_name = "{{arg['package_name'] }}";
         var sub = "{{arg['sub'] }}";
@@ -41,7 +43,7 @@
             });
 
             socket.on('status', function (data) {
-                console.log(data);
+                // console.log(data);
                 on_status(data)
             });
 
@@ -57,6 +59,7 @@
                 data: {},
                 dataType: "json",
                 success: function (data) {
+                    console.log("on_start():: ", data)
                     make_download_list(data)
                 }
             });
@@ -64,11 +67,12 @@
 
 
         function on_status(data) {
-            //console.log(data)
-            tmp = document.getElementById("progress_" + data.entity_id)
+            console.log(data)
+            console.log(data.percent)
+            tmp = document.getElementById("progress_" + data.idx)
             if (tmp != null) {
-                document.getElementById("progress_" + data.entity_id).style.width = data.ffmpeg_percent + '%';
-                document.getElementById("progress_" + data.entity_id + "_label").innerHTML = data.ffmpeg_status_kor + "(" + data.ffmpeg_percent + "%)" + ' ' + ((data.ffmpeg_arg != null) ? data.ffmpeg_arg.data.current_speed : '')
+                document.getElementById("progress_" + data.idx).style.width = data.percent + '%';
+                document.getElementById("progress_" + data.idx + "_label").innerHTML = data.status_kor + "(" + data.percent + "%)" + ' ' + ((data.current_speed != null) ? data.current_speed : '')
             }
         }
 
@@ -138,4 +142,10 @@
         });
 
     </script>
+    <style>
+    #progress_1_label {
+        color: #966f93;
+        font-weight: 700;
+    }
+    </style>
 {% endblock %}

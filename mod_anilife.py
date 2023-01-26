@@ -66,6 +66,7 @@ T = TypeVar("T")
 from .setup import *
 
 logger = P.logger
+name = 'anilife'
 
 class LogicAniLife(PluginModuleBase):
     db_default = {
@@ -653,7 +654,7 @@ class LogicAniLife(PluginModuleBase):
 
     def plugin_load(self):
         self.queue = FfmpegQueue(
-            P, P.ModelSetting.get_int("anilife_max_ffmpeg_process_count")
+            P, P.ModelSetting.get_int("anilife_max_ffmpeg_process_count"), name
         )
         self.current_data = None
         self.queue.queue_start()
