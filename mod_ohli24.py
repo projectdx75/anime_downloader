@@ -481,6 +481,7 @@ class LogicOhli24(PluginModuleBase):
 
     def get_series_info(self, code, wr_id, bo_table):
         code_type = "c"
+        code = urllib.parse.quote(code)
 
         try:
             if (
@@ -584,7 +585,7 @@ class LogicOhli24(PluginModuleBase):
                     + li.xpath('.//a[@class="item-subject"]/@href')[0]
                 )
                 # logger.debug(f"link:: {link}")
-                date = li.xpath('.//div[@class="wr-date"]/text()')[0]
+                _date = li.xpath('.//div[@class="wr-date"]/text()')[0]
                 m = hashlib.md5(title.encode("utf-8"))
                 # _vi = hashlib.md5(title.encode('utf-8').hexdigest())
                 # logger.info(m.hexdigest())
@@ -594,8 +595,8 @@ class LogicOhli24(PluginModuleBase):
                         "title": title,
                         "link": link,
                         "thumbnail": image,
-                        "date": date,
-                        "day": date,
+                        "date": _date,
+                        "day": _date,
                         "_id": title,
                         "va": link,
                         "_vi": _vi,
@@ -850,12 +851,27 @@ class LogicOhli24(PluginModuleBase):
             if LogicOhli24.session is None:
                 LogicOhli24.session = requests.session()
 
+            LogicOhli24.session.verify = False
             # logger.debug('get_html :%s', url)
-            headers["Referer"] = "" if referer is None else referer
+            # LogicOhli24.headers["Referer"] = "" if referer is None else referer
+            # logger.debug(f"referer:: {referer}")
+            if referer:
+                LogicOhli24.headers["Referer"] = referer
+
+            # logger.info(headers)
+            # logger.debug(f"LogicOhli24.headers:: {LogicOhli24.headers}")
+
+            proxies = {
+                "http": "http://192.168.0.2:3138",
+                "https": "http://192.168.0.2:3138",
+            }
+
             page_content = LogicOhli24.session.get(
-                url, headers=headers, timeout=timeout
+                url, headers=LogicOhli24.headers, timeout=timeout, proxies=proxies
             )
-            data = page_content.text
+            response_data = page_content.text
+            # logger.debug(response_data)
+            return response_data
         except Exception as e:
             logger.error("Exception:%s", e)
             logger.error(traceback.format_exc())
@@ -1170,7 +1186,8 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
                 "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36"
                 "Mozilla/5.0 (Macintosh; Intel "
-                "Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 "
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/116.0.0.0 Safari/537.36"
                 "Whale/3.12.129.46 Safari/537.36",
                 "X-Requested-With": "XMLHttpRequest",
             }
@@ -1202,6 +1219,12 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
             }
 
             self.url = stream_info[1].strip()
+            logger.info(self.url)
+            if "anibeast.com" in self.url:
+                self.headers["Referer"] = iframe_src
+            if "crazypatutu.com" in self.url:
+                self.headers["Referer"] = iframe_src
+
             match = re.compile(r'NAME="(?P<quality>.*?)"').search(stream_info[0])
             self.quality = "720P"
             if match is not None:
