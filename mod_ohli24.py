@@ -837,7 +837,9 @@ class LogicOhli24(PluginModuleBase):
         return True
 
     @staticmethod
-    def get_html(url, headers=None, referer=None, stream=False, timeout=5):
+    def get_html(
+        url, headers=None, referer=None, stream=False, timeout=10, stealth=False
+    ):
         data = ""
         if headers is None:
             headers = {
@@ -883,7 +885,7 @@ class LogicOhli24(PluginModuleBase):
         except Exception as e:
             logger.error("Exception:%s", e)
             logger.error(traceback.format_exc())
-        return data
+        return response_data
 
     #########################################################
     def add(self, episode_info):
@@ -1133,17 +1135,23 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
             print(base_url)
             print(iframe_url)
             # exit()
+            iframe_src = f'{P.ModelSetting.get("ohli24_url")}{iframe_url}'
 
-            # resp = requests.get(iframe_url, headers=headers, timeout=20).text
-            # soup2 = BeautifulSoup(resp, "lxml")
-            # iframe_src = soup2.find("iframe")["src"]
-            iframe_src = iframe_url
-            # print(resp1)
+            iframe_html = LogicOhli24.get_html(iframe_src, headers=headers, timeout=600)
+
+            # print(iframe_html)
+            pattern = r"<iframe src=\"(.*?)\" allowfullscreen>"
+
+            match = re.search(pattern, iframe_html)
+            if match:
+                iframe_src = match.group(1)
+                print(iframe_src)
 
             logger.debug(f"iframe_src:::> {iframe_src}")
 
-            resp1 = requests.get(iframe_src, headers=headers, timeout=600).text
-            # logger.info('resp1::>> %s', resp1)
+            # resp1 = requests.get(iframe_src, headers=headers, timeout=600).text
+            resp1 = LogicOhli24.get_html(iframe_src, headers=headers, timeout=600)
+            # logger.info("resp1::>> %s", resp1)
             soup3 = BeautifulSoup(resp1, "lxml")
             # packed_pattern = re.compile(r'\\{*(eval.+)*\\}', re.MULTILINE | re.DOTALL)
             s_pattern = re.compile(r"(eval.+)", re.MULTILINE | re.DOTALL)
@@ -1152,20 +1160,17 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
             )
             packed_script = soup3.find("script", text=s_pattern)
             # packed_script = soup3.find('script')
-            logger.info("packed_script>>> %s", packed_script.text)
+            # logger.info("packed_script>>> %s", packed_script.text)
             unpack_script = None
             if packed_script is not None:
                 # logger.debug('zzzzzzzzzzzz')
-                # match = packed_pattern.search(packed_script.text)
+                match = packed_pattern.search(packed_script.text)
                 # match = re.search(packed_pattern, packed_script.text)
                 # logger.debug("match::: %s", match.group())
                 # unpack_script = jsbeautifier.beautify(match.group(3))
-                unpack_script = jsbeautifier.beautify(packed_script.text)
 
-                # logger.info('match groups:: %s', match.groups())
-                # logger.info('match group3:: %s', match.group(3))
-                # print('packed_script==>', packed_script)
-                # logger.debug(unpack_script)
+                logger.debug(type(packed_script))
+                unpack_script = jsbeautifier.beautify(str(packed_script))
 
             p1 = re.compile(r"(\"tracks\".*\])\,\"captions\"", re.MULTILINE | re.DOTALL)
             m2 = re.search(
@@ -1198,8 +1203,9 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
                 "Chrome/116.0.0.0 Safari/537.36"
                 "Whale/3.12.129.46 Safari/537.36",
                 "X-Requested-With": "XMLHttpRequest",
+                "Cookie": "PHPSESSID=b6hnl2crfvtg36sm6rjjkso4p0; 2a0d2363701f23f8a75028924a3af643=MTgwLjY2LjIyMi4xODk%3D; _ga=GA1.1.586565509.1695135593; __gads=ID=60e47defb3337e02-227f0fc9e3e3009a:T=1695135593:RT=1695135593:S=ALNI_MagY46XGCbx9E4Et2DRzfUHdTAKsg; __gpi=UID=00000c4bb3d077c8:T=1695135593:RT=1695135593:S=ALNI_MYvj_8OjdhtGPEGoXhPsQWq1qye8Q; _ga_MWWDFMDJR0=GS1.1.1695135593.1.1.1695135599.0.0.0",
             }
-            # print(headers)
+
             payload = {
                 "hash": video_hash[-1],
             }
@@ -1290,7 +1296,7 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
             if not os.path.exists(self.savepath):
                 os.makedirs(self.savepath)
 
-            # from .lib.util import write_file, convert_vtt_to_srt
+            from framework.common.util import write_file, convert_vtt_to_srt
 
             srt_filepath = os.path.join(
                 self.savepath, self.filename.replace(".mp4", ".ko.srt")
@@ -1299,7 +1305,7 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
             if (
                 self.srt_url is not None
                 and not os.path.exists(srt_filepath)
-                and not self.srt_url.split("/")[-1] == "thumbnails.vtt"
+                and not ("thumbnails.vtt" in self.srt_url)
             ):
                 if requests.get(self.srt_url, headers=headers).status_code == 200:
                     srt_data = requests.get(self.srt_url, headers=headers).text
