@@ -72,6 +72,10 @@ name = "ohli24"
 class LogicOhli24(PluginModuleBase):
     current_headers = None
     current_data = None
+    referer = None
+    origin_url = None
+    episode_url = None
+    cookies = None
 
     session = requests.Session()
 
@@ -848,6 +852,10 @@ class LogicOhli24(PluginModuleBase):
 
         try:
 
+            print("cloudflare protection bypass ==================P")
+            response_date = ""
+            if headers is not None:
+                LogicOhli24.headers = headers
             if LogicOhli24.session is None:
                 LogicOhli24.session = requests.session()
 
