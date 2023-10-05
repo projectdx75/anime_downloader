@@ -17,12 +17,15 @@ import urllib
 from urllib.parse import urlparse
 
 import PIL.Image
+
 # third-party
 import requests
 from bs4 import BeautifulSoup
+
 # third-party
 from flask import jsonify, render_template, request
 from flaskfarm.lib.support.expand.ffmpeg import SupportFfmpeg
+
 # sjva 공용
 from framework import db, path_data, scheduler
 from lxml import html
@@ -51,6 +54,7 @@ for package in packages:
 
 from anime_downloader.lib.ffmpeg_queue_v1 import FfmpegQueueEntity, FfmpegQueue
 from anime_downloader.lib.util import Util
+
 # 패키지
 # from .plugin import P
 from anime_downloader.setup import *
@@ -63,7 +67,7 @@ from anime_downloader.setup import *
 
 
 logger = P.logger
-name = 'linkkf'
+name = "linkkf"
 
 
 class LogicLinkkf(PluginModuleBase):
@@ -79,14 +83,14 @@ class LogicLinkkf(PluginModuleBase):
     session = requests.Session()
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
-                      "Chrome/71.0.3578.98 Safari/537.36",
+        "Chrome/71.0.3578.98 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
         "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
         "Referer": "",
     }
     useragent = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, "
-                      "like Gecko) Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36"
+        "like Gecko) Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36"
     }
 
     def __init__(self, P):
@@ -117,7 +121,7 @@ class LogicLinkkf(PluginModuleBase):
             "linkkf_discord_notify": "True",
         }
         # default_route_socketio(P, self)
-        default_route_socketio_module(self, attach='/setting')
+        default_route_socketio_module(self, attach="/setting")
         self.current_data = None
 
     def process_menu(self, sub, req):
@@ -195,7 +199,7 @@ class LogicLinkkf(PluginModuleBase):
                     }
                 )
             elif sub == "add_queue":
-                logger.debug(f"anilife add_queue routine ===============")
+                logger.debug(f"linkkf add_queue routine ===============")
                 ret = {}
                 info = json.loads(request.form["data"])
                 logger.info(f"info:: {info}")
@@ -223,7 +227,7 @@ class LogicLinkkf(PluginModuleBase):
 
         try:
             if LogicLinkkf.referer is None:
-                LogicLinkkf.referer = "https://linkkf.app/"
+                LogicLinkkf.referer = f"{ModelSetting.get('linkkf_url')}"
 
             # return LogicLinkkfYommi.get_html_requests(url)
             return LogicLinkkf.get_html_cloudflare(url)
@@ -284,6 +288,66 @@ class LogicLinkkf(PluginModuleBase):
         ).content.decode("utf8", errors="replace")
 
     @staticmethod
+    def add_whitelist(*args):
+        ret = {}
+
+        logger.debug(f"args: {args}")
+        try:
+
+            if len(args) == 0:
+                code = str(LogicLinkkf.current_data["code"])
+            else:
+                code = str(args[0])
+
+            print(code)
+
+            whitelist_program = P.ModelSetting.get("linkkf_auto_code_list")
+            # whitelist_programs = [
+            #     str(x.strip().replace(" ", ""))
+            #     for x in whitelist_program.replace("\n", "|").split("|")
+            # ]
+            whitelist_programs = [
+                str(x.strip()) for x in whitelist_program.replace("\n", "|").split("|")
+            ]
+
+            if code not in whitelist_programs:
+                whitelist_programs.append(code)
+                whitelist_programs = filter(
+                    lambda x: x != "", whitelist_programs
+                )  # remove blank code
+                whitelist_program = "|".join(whitelist_programs)
+                entity = (
+                    db.session.query(P.ModelSetting)
+                    .filter_by(key="linkkf_auto_code_list")
+                    .with_for_update()
+                    .first()
+                )
+                entity.value = whitelist_program
+                db.session.commit()
+                ret["ret"] = True
+                ret["code"] = code
+                if len(args) == 0:
+                    return LogicLinkkf.current_data
+                else:
+                    return ret
+            else:
+                ret["ret"] = False
+                ret["log"] = "이미 추가되어 있습니다."
+        except Exception as e:
+            logger.error("Exception:%s", e)
+            logger.error(traceback.format_exc())
+            ret["ret"] = False
+            ret["log"] = str(e)
+        return ret
+
+    def setting_save_after(self):
+        if self.queue.get_max_ffmpeg_count() != P.ModelSetting.get_int(
+            "linkkf_max_ffmpeg_process_count"
+        ):
+            self.queue.set_max_ffmpeg_count(
+                P.ModelSetting.get_int("linkkf_max_ffmpeg_process_count")
+            )
+
     def get_video_url_from_url(url, url2):
         video_url = None
         referer_url = None
@@ -355,11 +419,19 @@ class LogicLinkkf(PluginModuleBase):
                     # x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3554.0 Safari/537.36"'.format(ref,
                     # video_url)
 
-                match = re.compile(
-                    r"<track.+src=\"(?P<vtt_url>.*?.vtt)", re.MULTILINE
-                ).search(data)
+                # @k45734
+                vtt_url = None
+                try:
+                    _match1 = re.compile(
+                        r"<track.+src=\"(?P<vtt_url>.*?.vtt)", re.MULTILINE
+                    ).search(data)
+                    vtt_url = _match1.group("vtt_url")
+                except:
+                    _match2 = re.compile(
+                        r"url: \'(?P<vtt_url>.*?.vtt)", re.MULTILINE
+                    ).search(data)
+                    vtt_url = _match2.group("vtt_url")
 
-                vtt_url = match.group("vtt_url")
                 logger.info("vtt_url: %s", vtt_url)
 
                 referer_url = url2
@@ -612,7 +684,7 @@ class LogicLinkkf(PluginModuleBase):
 
             logger.info("url:::> %s", url)
             logger.info("test..........................")
-            logger.info("test..........................")
+            # logger.info("test..........................")
             if self.referer is None:
                 self.referer = "https://linkkf.app"
 
@@ -657,9 +729,9 @@ class LogicLinkkf(PluginModuleBase):
         try:
             # 이전 데이터가 있다면, 리턴 (# If you have previous data, return)
             if (
-                    LogicLinkkf.current_data is not None
-                    and LogicLinkkf.current_data["code"] == code
-                    and LogicLinkkf.current_data["ret"]
+                LogicLinkkf.current_data is not None
+                and LogicLinkkf.current_data["code"] == code
+                and LogicLinkkf.current_data["ret"]
             ):
                 return LogicLinkkf.current_data
             url = "%s/%s" % (P.ModelSetting.get("linkkf_url"), code)
@@ -670,7 +742,7 @@ class LogicLinkkf(PluginModuleBase):
             # html_content = LogicLinkkf.get_html_playwright(url)
             # html_content = LogicLinkkf.get_html_cloudflare(url, cached=False)
 
-            sys.setrecursionlimit(10 ** 7)
+            sys.setrecursionlimit(10**7)
             # logger.info(html_content)
             tree = html.fromstring(html_content)
             # tree = etree.fromstring(
@@ -723,9 +795,11 @@ class LogicLinkkf(PluginModuleBase):
                 if len(tree.xpath('//div[@class="myui-content__detail"]/text()')) > 3:
                     data["detail"] = [
                         {
-                            "info": str(tree.xpath(
-                                "//div[@class='myui-content__detail']/text()"
-                            )[3])
+                            "info": str(
+                                tree.xpath(
+                                    "//div[@class='myui-content__detail']/text()"
+                                )[3]
+                            )
                         }
                     ]
                 else:
@@ -913,15 +987,21 @@ class LogicLinkkf(PluginModuleBase):
             logger.error(traceback.format_exc())
 
     @staticmethod
-    def get_html(url: str, referer: str = None, cached: bool = False, stream: bool = False, timeout: int = 5):
+    def get_html(
+        url: str,
+        referer: str = None,
+        cached: bool = False,
+        stream: bool = False,
+        timeout: int = 5,
+    ):
         data = ""
         headers = {
             "referer": f"https://linkkf.app",
             "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) "
-                          "Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36"
-                          "Mozilla/5.0 (Macintosh; Intel "
-                          "Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 "
-                          "Whale/3.12.129.46 Safari/537.36",
+            "Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36"
+            "Mozilla/5.0 (Macintosh; Intel "
+            "Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 "
+            "Whale/3.12.129.46 Safari/537.36",
             "X-Requested-With": "XMLHttpRequest",
         }
         try:
@@ -1003,7 +1083,7 @@ class LogicLinkkf(PluginModuleBase):
 
     def add(self, episode_info):
         if self.is_exist(episode_info):
-            return "queue_exits"
+            return "queue_exist"
         else:
 
             db_entity = ModelLinkkfItem.get_by_linkkf_id(episode_info["_id"])
@@ -1039,11 +1119,17 @@ class LogicLinkkf(PluginModuleBase):
                 # P.logger.debug(self.headers)
 
                 filename = os.path.basename(entity.filepath)
-                ffmpeg = SupportFfmpeg(entity.url, entity.filename, callback_function=self.callback_function,
-                                       max_pf_count=0, save_path=entity.savepath, timeout_minute=60,
-                                       headers=self.headers)
-                ret = {'ret': 'success'}
-                ret['json'] = ffmpeg.start()
+                ffmpeg = SupportFfmpeg(
+                    entity.url,
+                    entity.filename,
+                    callback_function=self.callback_function,
+                    max_pf_count=0,
+                    save_path=entity.savepath,
+                    timeout_minute=60,
+                    headers=self.headers,
+                )
+                ret = {"ret": "success"}
+                ret["json"] = ffmpeg.start()
 
                 # self.queue.add_queue(entity)
                 return "enqueue_db_exist"
@@ -1067,7 +1153,7 @@ class LogicLinkkf(PluginModuleBase):
             logger.debug("%s plugin_load", P.package_name)
             # old version
             self.queue = FfmpegQueue(
-                P, P.ModelSetting.get_int("ohli24_max_ffmpeg_process_count")
+                P, P.ModelSetting.get_int("linkkf_max_ffmpeg_process_count")
             )
             self.current_data = None
             self.queue.queue_start()
@@ -1093,7 +1179,9 @@ class LogicLinkkf(PluginModuleBase):
             try:
                 while True:
                     logger.debug(self.current_download_count)
-                    if self.current_download_count < P.ModelSetting.get_int(f"{self.name}_max_download_count"):
+                    if self.current_download_count < P.ModelSetting.get_int(
+                        f"{self.name}_max_download_count"
+                    ):
                         break
                     time.sleep(5)
 
@@ -1105,9 +1193,8 @@ class LogicLinkkf(PluginModuleBase):
                     self.download_queue.task_done()
                     continue
 
-
             except Exception as e:
-                logger.error(f'Exception: {str(e)}')
+                logger.error(f"Exception: {str(e)}")
                 logger.error(traceback.format_exc())
 
 
@@ -1214,8 +1301,6 @@ class LinkkfQueueEntity(FfmpegQueueEntity):
 
             video_url = None
             referer_url = None  # dx
-
-
 
         except Exception as e:
             logger.error(f"Exception: {str(e)}")

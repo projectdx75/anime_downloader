@@ -455,7 +455,7 @@ class LogicOhli24(PluginModuleBase):
                 # ret_data = LogicOhli24.get_auto_anime_info(self, url=url)
                 content_info = self.get_series_info(item, "", "")
 
-                logger.debug(content_info)
+                # logger.debug(content_info)
 
                 for episode_info in content_info["episode"]:
                     add_ret = self.add(episode_info)
@@ -687,9 +687,21 @@ class LogicOhli24(PluginModuleBase):
                 entity["title"] = item.xpath(".//div[@class='post-title']/text()")[
                     0
                 ].strip()
-                entity["image_link"] = item.xpath(".//div[@class='img-item']/img/@src")[
-                    0
-                ].replace("..", P.ModelSetting.get("ohli24_url"))
+                # logger.debug(item.xpath(".//div[@class='img-item']/img/@src")[0])
+                # logger.debug(item.xpath(".//div[@class='img-item']/img/@data-ezsrc")[0])
+                # entity["image_link"] = item.xpath(".//div[@class='img-item']/img/@src")[
+                #     0
+                # ].replace("..", P.ModelSetting.get("ohli24_url"))
+
+                if len(item.xpath(".//div[@class='img-item']/img/@src")) > 0:
+                    entity["image_link"] = item.xpath(
+                        ".//div[@class='img-item']/img/@src"
+                    )[0].replace("..", P.ModelSetting.get("ohli24_url"))
+                else:
+                    entity["image_link"] = item.xpath(
+                        ".//div[@class='img-item']/img/@data-ezsrc"
+                    )[0]
+
                 data["ret"] = "success"
                 data["anime_list"].append(entity)
 
@@ -820,17 +832,19 @@ class LogicOhli24(PluginModuleBase):
         return True
 
     @staticmethod
-    def get_html(url, referer=None, stream=False, timeout=5):
+    def get_html(url, headers=None, referer=None, stream=False, timeout=5):
         data = ""
-        headers = {
-            "referer": f"https://ohli24.org",
-            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36"
-            "Mozilla/5.0 (Macintosh; Intel "
-            "Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 "
-            "Whale/3.12.129.46 Safari/537.36",
-            "X-Requested-With": "XMLHttpRequest",
-        }
+        if headers is None:
+            headers = {
+                "referer": f"https://ohli24.org",
+                "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36"
+                "Mozilla/5.0 (Macintosh; Intel "
+                "Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 "
+                "Whale/3.12.129.46 Safari/537.36",
+                "X-Requested-With": "XMLHttpRequest",
+            }
+
         try:
 
             if LogicOhli24.session is None:
