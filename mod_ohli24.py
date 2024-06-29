@@ -553,6 +553,7 @@ class LogicOhli24(PluginModuleBase):
                 "_total_chapter",
                 "_show_time",
                 "_release_year",
+                "_drawing",
             ]
             description_dict = {
                 "원제": "_otit",
@@ -573,6 +574,7 @@ class LogicOhli24(PluginModuleBase):
                 "개봉년도": "_release_year",
                 "개봉일": "_opening_date",
                 "런타임": "_run_time",
+                "작화": "_drawing",
             }
 
             list_body_li = tree.xpath('//ul[@class="list-body"]/li')
@@ -637,7 +639,7 @@ class LogicOhli24(PluginModuleBase):
                 "episode": episodes,
             }
 
-            if P.ModelSetting.get_bool("ohli24_order_desc"):
+            if not P.ModelSetting.get_bool("ohli24_order_desc"):
                 data["episode"] = list(reversed(data["episode"]))
                 data["list_order"] = "desc"
 
@@ -1092,11 +1094,10 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
             db_entity.save()
 
     # Get episode info from OHLI24 site
-
     def make_episode_info(self):
         try:
-            # url = 'https://ohli24.org/e/' + self.info['va']
-            base_url = "https://ohli24.org"
+            base_url = "https://a21.ohli24.com"
+            base_url = P.ModelSetting.get("ohli24_url")
             iframe_url = ""
 
             # https://ohli24.org/e/%EB%85%B9%EC%9D%84%20%EB%A8%B9%EB%8A%94%20%EB%B9%84%EC%8A%A4%EC%BD%94%206%ED%99%94
@@ -1109,6 +1110,7 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36",
             }
+            logger.debug(headers)
             logger.debug("make_episode_info()::url==> %s", url)
             logger.info(f"self.info:::> {self.info}")
 
@@ -1127,10 +1129,10 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
                     iframe_url = match.group(1)
                     logger.info("iframe_url::> %s", iframe_url)
 
-            logger.debug(soup1.find("iframe"))
+            # logger.debug(soup1.find("iframe"))
 
-            iframe_url = soup1.find("iframe")["src"]
-            logger.info("iframe_url::> %s", iframe_url)
+            # iframe_url = soup1.find("iframe")["src"]
+            # logger.info("iframe_url::> %s", iframe_url)
 
             print(base_url)
             print(iframe_url)
@@ -1190,6 +1192,8 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
             video_hash = iframe_src.split("/")
             video_hashcode = re.sub(r"index\.php\?data=", "", video_hash[-1])
             self._vi = video_hashcode
+
+            logger.debug(f"video_hash::> {video_hash}")
             video_info_url = f"{video_hash[0]}//{video_hash[2]}/player/index.php?data={video_hashcode}&do=getVideo"
             # print('hash:::', video_hash)
             logger.debug(f"video_info_url::: {video_info_url}")

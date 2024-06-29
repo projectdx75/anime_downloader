@@ -178,7 +178,7 @@
                 // {#tmp += '<button id="code_button" data-code="' + data.episode[i].code + '" type="button" class="btn btn-primary code-button bootstrap-tooltip" data-toggle="button" data-tooltip="true" aria-pressed="true" autocomplete="off" data-placement="top">' +#}
                 //  {#    '<span data-tooltip-text="'+data.episode[i].title+'">' + data.episode[i].code + '</span></button></div>';#}
                 tmp += '<h5 class="card-title">' + data.anime_list[i].title + '</h5>';
-                tmp += '<p class="card-text">' + data.anime_list[i].code + '<button id="add_whitelist" name="add_whitelist" class="btn btn-sm btn-favorite mb-1" data-code="' +
+                tmp += '<p class="card-text"><button id="add_whitelist" name="add_whitelist" class="btn btn-sm btn-favorite mb-1" data-code="' +
                     data.anime_list[i].code +
                     '"><i class="bi bi-heart-fill"></i></button></p>';
                 tmp += '<a href="./request?code=' + data.anime_list[i].code + '" class="btn btn-primary cut-text">' + data.anime_list[i].title + '</a>';
@@ -706,6 +706,7 @@
 
         button.btn-favorite {
             background-color: #e0ff42;
+            color: #2a7aaf;
         }
 
         /*.card-columns {*/
