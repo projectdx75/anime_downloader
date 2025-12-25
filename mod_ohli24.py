@@ -34,9 +34,7 @@ for pkg in pkgs:
         importlib.import_module(pkg)
     # except ImportError:
     except ImportError:
-        subprocess.check_call(
-            [sys.executable, "-m", "pip", "install", "--upgrade", "pip"]
-        )
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", "pip"])
         # main(["install", pkg])
         subprocess.check_call([sys.executable, "-m", "pip", "install", pkg])
         importlib.import_module(pkg)
@@ -175,18 +173,14 @@ class LogicOhli24(PluginModuleBase):
             elif sub == "anime_list":
 
                 data = self.get_anime_info(cate, page)
-                return jsonify(
-                    {"ret": "success", "cate": cate, "page": page, "data": data}
-                )
+                return jsonify({"ret": "success", "cate": cate, "page": page, "data": data})
             elif sub == "complete_list":
 
                 logger.debug("cate:: %s", cate)
                 page = request.form["page"]
 
                 data = self.get_anime_info(cate, page)
-                return jsonify(
-                    {"ret": "success", "cate": cate, "page": page, "data": data}
-                )
+                return jsonify({"ret": "success", "cate": cate, "page": page, "data": data})
             elif sub == "search":
 
                 query = request.form["query"]
@@ -230,9 +224,7 @@ class LogicOhli24(PluginModuleBase):
                 print(sub)
                 return {"test"}
             elif sub == "queue_command":
-                ret = self.queue.command(
-                    req.form["command"], int(req.form["entity_id"])
-                )
+                ret = self.queue.command(req.form["command"], int(req.form["entity_id"]))
                 return jsonify(ret)
             elif sub == "add_queue_checked_list":
                 data = json.loads(request.form["data"])
@@ -248,9 +240,7 @@ class LogicOhli24(PluginModuleBase):
                         "type": "success",
                         "msg": "%s 개의 에피소드를 큐에 추가 하였습니다." % count,
                     }
-                    socketio.emit(
-                        "notify", notify, namespace="/framework", broadcast=True
-                    )
+                    socketio.emit("notify", notify, namespace="/framework", broadcast=True)
 
                 thread = threading.Thread(target=func, args=())
                 thread.daemon = True
@@ -304,27 +294,25 @@ class LogicOhli24(PluginModuleBase):
 
         if command == "queue_list":
             logger.debug("queue_list")
-            logger.debug(
-                f"self.queue.get_entity_list():: {self.queue.get_entity_list()}"
-            )
+            logger.debug(f"self.queue.get_entity_list():: {self.queue.get_entity_list()}")
             ret = [x for x in self.queue.get_entity_list()]
 
             return ret
         elif command == "download_program":
             _pass = arg2
             db_item = ModelOhli24Program.get(arg1)
-            if _pass == "false" and db_item != None:
+            if _pass == "false" and db_item is not None:
                 ret["ret"] = "warning"
                 ret["msg"] = "이미 DB에 있는 항목 입니다."
             elif (
                 _pass == "true"
-                and db_item != None
-                and ModelOhli24Program.get_by_id_in_queue(db_item.id) != None
+                and db_item is not None
+                and ModelOhli24Program.get_by_id_in_queue(db_item.id) is not None
             ):
                 ret["ret"] = "warning"
                 ret["msg"] = "이미 큐에 있는 항목 입니다."
             else:
-                if db_item == None:
+                if db_item is None:
                     db_item = ModelOhli24Program(arg1, self.get_episode(arg1))
                     db_item.save()
                 db_item.init_for_queue()
@@ -370,21 +358,14 @@ class LogicOhli24(PluginModuleBase):
             #     str(x.strip().replace(" ", ""))
             #     for x in whitelist_program.replace("\n", "|").split("|")
             # ]
-            whitelist_programs = [
-                str(x.strip()) for x in whitelist_program.replace("\n", "|").split("|")
-            ]
+            whitelist_programs = [str(x.strip()) for x in whitelist_program.replace("\n", "|").split("|")]
 
             if code not in whitelist_programs:
                 whitelist_programs.append(code)
-                whitelist_programs = filter(
-                    lambda x: x != "", whitelist_programs
-                )  # remove blank code
+                whitelist_programs = filter(lambda x: x != "", whitelist_programs)  # remove blank code
                 whitelist_program = "|".join(whitelist_programs)
                 entity = (
-                    db.session.query(P.ModelSetting)
-                    .filter_by(key="ohli24_auto_code_list")
-                    .with_for_update()
-                    .first()
+                    db.session.query(P.ModelSetting).filter_by(key="ohli24_auto_code_list").with_for_update().first()
                 )
                 entity.value = whitelist_program
                 db.session.commit()
@@ -405,12 +386,8 @@ class LogicOhli24(PluginModuleBase):
         return ret
 
     def setting_save_after(self, change_list):
-        if self.queue.get_max_ffmpeg_count() != P.ModelSetting.get_int(
-            "ohli24_max_ffmpeg_process_count"
-        ):
-            self.queue.set_max_ffmpeg_count(
-                P.ModelSetting.get_int("ohli24_max_ffmpeg_process_count")
-            )
+        if self.queue.get_max_ffmpeg_count() != P.ModelSetting.get_int("ohli24_max_ffmpeg_process_count"):
+            self.queue.set_max_ffmpeg_count(P.ModelSetting.get_int("ohli24_max_ffmpeg_process_count"))
 
     def scheduler_function(self):
         # Todo: 스케쥴링 함수 미구현
@@ -488,11 +465,7 @@ class LogicOhli24(PluginModuleBase):
         code = urllib.parse.quote(code)
 
         try:
-            if (
-                self.current_data is not None
-                and "code" in self.current_data
-                and self.current_data["code"] == code
-            ):
+            if self.current_data is not None and "code" in self.current_data and self.current_data["code"] == code:
                 return self.current_data
 
             if code.startswith("http"):
@@ -522,13 +495,7 @@ class LogicOhli24(PluginModuleBase):
             if wr_id is not None:
                 # print(len(wr_id))
                 if len(wr_id) > 0:
-                    url = (
-                        P.ModelSetting.get("ohli24_url")
-                        + "/bbs/board.php?bo_table="
-                        + bo_table
-                        + "&wr_id="
-                        + wr_id
-                    )
+                    url = P.ModelSetting.get("ohli24_url") + "/bbs/board.php?bo_table=" + bo_table + "&wr_id=" + wr_id
                 else:
                     pass
 
@@ -586,10 +553,7 @@ class LogicOhli24(PluginModuleBase):
                 title = li.xpath(".//a/text()")[0].strip()
                 thumbnail = image
                 # logger.info(li.xpath('//a[@class="item-subject"]/@href'))
-                link = (
-                    P.ModelSetting.get("ohli24_url")
-                    + li.xpath('.//a[@class="item-subject"]/@href')[0]
-                )
+                link = P.ModelSetting.get("ohli24_url") + li.xpath('.//a[@class="item-subject"]/@href')[0]
                 # logger.debug(f"link:: {link}")
                 _date = li.xpath('.//div[@class="wr-date"]/text()')[0]
                 m = hashlib.md5(title.encode("utf-8"))
@@ -626,9 +590,7 @@ class LogicOhli24(PluginModuleBase):
             # logger.info("images:: %s", image)
             logger.info("title:: %s", title)
 
-            ser_description = tree.xpath(
-                '//div[@class="view-stocon"]/div[@class="c"]/text()'
-            )
+            ser_description = tree.xpath('//div[@class="view-stocon"]/div[@class="c"]/text()')
 
             data = {
                 "title": title,
@@ -655,29 +617,11 @@ class LogicOhli24(PluginModuleBase):
         print(cate, page)
         try:
             if cate == "ing":
-                url = (
-                    P.ModelSetting.get("ohli24_url")
-                    + "/bbs/board.php?bo_table="
-                    + cate
-                    + "&page="
-                    + page
-                )
+                url = P.ModelSetting.get("ohli24_url") + "/bbs/board.php?bo_table=" + cate + "&page=" + page
             elif cate == "movie":
-                url = (
-                    P.ModelSetting.get("ohli24_url")
-                    + "/bbs/board.php?bo_table="
-                    + cate
-                    + "&page="
-                    + page
-                )
+                url = P.ModelSetting.get("ohli24_url") + "/bbs/board.php?bo_table=" + cate + "&page=" + page
             else:
-                url = (
-                    P.ModelSetting.get("ohli24_url")
-                    + "/bbs/board.php?bo_table="
-                    + cate
-                    + "&page="
-                    + page
-                )
+                url = P.ModelSetting.get("ohli24_url") + "/bbs/board.php?bo_table=" + cate + "&page=" + page
                 # cate == "complete":
             logger.info("url:::> %s", url)
             data = {}
@@ -691,9 +635,7 @@ class LogicOhli24(PluginModuleBase):
                 entity = {}
                 entity["link"] = item.xpath(".//a/@href")[0]
                 entity["code"] = entity["link"].split("/")[-1]
-                entity["title"] = item.xpath(".//div[@class='post-title']/text()")[
-                    0
-                ].strip()
+                entity["title"] = item.xpath(".//div[@class='post-title']/text()")[0].strip()
                 # logger.debug(item.xpath(".//div[@class='img-item']/img/@src")[0])
                 # logger.debug(item.xpath(".//div[@class='img-item']/img/@data-ezsrc")[0])
                 # entity["image_link"] = item.xpath(".//div[@class='img-item']/img/@src")[
@@ -701,13 +643,11 @@ class LogicOhli24(PluginModuleBase):
                 # ].replace("..", P.ModelSetting.get("ohli24_url"))
 
                 if len(item.xpath(".//div[@class='img-item']/img/@src")) > 0:
-                    entity["image_link"] = item.xpath(
-                        ".//div[@class='img-item']/img/@src"
-                    )[0].replace("..", P.ModelSetting.get("ohli24_url"))
+                    entity["image_link"] = item.xpath(".//div[@class='img-item']/img/@src")[0].replace(
+                        "..", P.ModelSetting.get("ohli24_url")
+                    )
                 else:
-                    entity["image_link"] = item.xpath(
-                        ".//div[@class='img-item']/img/@data-ezsrc"
-                    )[0]
+                    entity["image_link"] = item.xpath(".//div[@class='img-item']/img/@data-ezsrc")[0]
 
                 data["ret"] = "success"
                 data["anime_list"].append(entity)
@@ -733,12 +673,10 @@ class LogicOhli24(PluginModuleBase):
                 entity = {}
                 entity["link"] = item.xpath(".//a/@href")[0]
                 entity["code"] = entity["link"].split("/")[-1]
-                entity["title"] = item.xpath(".//div[@class='post-title']/text()")[
-                    0
-                ].strip()
-                entity["image_link"] = item.xpath(".//div[@class='img-item']/img/@src")[
-                    0
-                ].replace("..", P.ModelSetting.get("ohli24_url"))
+                entity["title"] = item.xpath(".//div[@class='post-title']/text()")[0].strip()
+                entity["image_link"] = item.xpath(".//div[@class='img-item']/img/@src")[0].replace(
+                    "..", P.ModelSetting.get("ohli24_url")
+                )
                 data["ret"] = "success"
                 data["anime_list"].append(entity)
 
@@ -774,12 +712,10 @@ class LogicOhli24(PluginModuleBase):
                 # entity["code"] = entity["link"].split("/")[-1]
                 entity["wr_id"] = entity["link"].split("=")[-1]
                 # logger.debug(item.xpath(".//div[@class='post-title']/text()").join())
-                entity["title"] = "".join(
-                    item.xpath(".//div[@class='post-title']/text()")
-                ).strip()
-                entity["image_link"] = item.xpath(".//div[@class='img-item']/img/@src")[
-                    0
-                ].replace("..", P.ModelSetting.get("ohli24_url"))
+                entity["title"] = "".join(item.xpath(".//div[@class='post-title']/text()")).strip()
+                entity["image_link"] = item.xpath(".//div[@class='img-item']/img/@src")[0].replace(
+                    "..", P.ModelSetting.get("ohli24_url")
+                )
 
                 entity["code"] = item.xpath(".//div[@class='img-item']/img/@alt")[0]
 
@@ -839,9 +775,7 @@ class LogicOhli24(PluginModuleBase):
         return True
 
     @staticmethod
-    def get_html(
-        url, headers=None, referer=None, stream=False, timeout=10, stealth=False
-    ):
+    def get_html(url, headers=None, referer=None, stream=False, timeout=10, stealth=False):
         data = ""
         if headers is None:
             headers = {
@@ -878,9 +812,7 @@ class LogicOhli24(PluginModuleBase):
                 "https": "http://192.168.0.2:3138",
             }
 
-            page_content = LogicOhli24.session.get(
-                url, headers=LogicOhli24.headers, timeout=timeout, proxies=proxies
-            )
+            page_content = LogicOhli24.session.get(url, headers=LogicOhli24.headers, timeout=timeout, proxies=proxies)
             response_data = page_content.text
             # logger.debug(response_data)
             return response_data
@@ -977,10 +909,7 @@ class LogicOhli24(PluginModuleBase):
                 }
                 socketio.emit("notify", data, namespace="/framework", broadcast=True)
                 refresh_type = "add"
-            elif (
-                args["status"] == SupportFfmpeg.Status.ERROR
-                or args["status"] == SupportFfmpeg.Status.EXCEPTION
-            ):
+            elif args["status"] == SupportFfmpeg.Status.ERROR or args["status"] == SupportFfmpeg.Status.EXCEPTION:
                 data = {
                     "type": "warning",
                     "msg": "다운로드 시작 실패.<br>" + args["data"]["save_fullpath"],
@@ -1115,9 +1044,7 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
             logger.info(f"self.info:::> {self.info}")
 
             # text = requests.get(url, headers=headers).text
-            text = LogicOhli24.get_html(
-                url, headers=headers, referer=f"{ourls.scheme}://{ourls.netloc}"
-            )
+            text = LogicOhli24.get_html(url, headers=headers, referer=f"{ourls.scheme}://{ourls.netloc}")
             # logger.debug(text)
             soup1 = BeautifulSoup(text, "lxml")
             pattern = re.compile(r"url : \"\.\.(.*)\"")
@@ -1157,9 +1084,7 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
             soup3 = BeautifulSoup(resp1, "lxml")
             # packed_pattern = re.compile(r'\\{*(eval.+)*\\}', re.MULTILINE | re.DOTALL)
             s_pattern = re.compile(r"(eval.+)", re.MULTILINE | re.DOTALL)
-            packed_pattern = re.compile(
-                r"if?.([^{}]+)\{.*(eval.+)\}.+else?.{.(eval.+)\}", re.DOTALL
-            )
+            packed_pattern = re.compile(r"if?.([^{}]+)\{.*(eval.+)\}.+else?.{.(eval.+)\}", re.DOTALL)
             packed_script = soup3.find("script", text=s_pattern)
             # packed_script = soup3.find('script')
             # logger.info("packed_script>>> %s", packed_script.text)
@@ -1213,9 +1138,7 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
             payload = {
                 "hash": video_hash[-1],
             }
-            resp2 = requests.post(
-                video_info_url, headers=headers, data=payload, timeout=20
-            ).json()
+            resp2 = requests.post(video_info_url, headers=headers, data=payload, timeout=20).json()
 
             logger.debug("resp2::> %s", resp2)
 
@@ -1249,10 +1172,9 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
                 self.quality = match.group("quality")
                 logger.info(self.quality)
 
-            match = re.compile(
-                r"(?P<title>.*?)\s*((?P<season>\d+)%s)?\s*((?P<epi_no>\d+)%s)"
-                % ("기", "화")
-            ).search(self.info["title"])
+            match = re.compile(r"(?P<title>.*?)\s*((?P<season>\d+)%s)?\s*((?P<epi_no>\d+)%s)" % ("기", "화")).search(
+                self.info["title"]
+            )
 
             # epi_no 초기값
             epi_no = 1
@@ -1293,24 +1215,16 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
                 folder_name = Util.change_text_for_use_filename(folder_name.strip())
                 self.savepath = os.path.join(self.savepath, folder_name)
                 if P.ModelSetting.get_bool("ohli24_auto_make_season_folder"):
-                    self.savepath = os.path.join(
-                        self.savepath, "Season %s" % int(self.season)
-                    )
+                    self.savepath = os.path.join(self.savepath, "Season %s" % int(self.season))
             self.filepath = os.path.join(self.savepath, self.filename)
             if not os.path.exists(self.savepath):
                 os.makedirs(self.savepath)
 
             from framework.common.util import write_file, convert_vtt_to_srt
 
-            srt_filepath = os.path.join(
-                self.savepath, self.filename.replace(".mp4", ".ko.srt")
-            )
+            srt_filepath = os.path.join(self.savepath, self.filename.replace(".mp4", ".ko.srt"))
 
-            if (
-                self.srt_url is not None
-                and not os.path.exists(srt_filepath)
-                and not ("thumbnails.vtt" in self.srt_url)
-            ):
+            if self.srt_url is not None and not os.path.exists(srt_filepath) and not ("thumbnails.vtt" in self.srt_url):
                 if requests.get(self.srt_url, headers=headers).status_code == 200:
                     srt_data = requests.get(self.srt_url, headers=headers).text
                     Util.write_file(srt_data, srt_filepath)
@@ -1433,9 +1347,7 @@ class ModelOhli24Item(ModelBase):
         ret = {x.name: getattr(self, x.name) for x in self.__table__.columns}
         ret["created_time"] = self.created_time.strftime("%Y-%m-%d %H:%M:%S")
         ret["completed_time"] = (
-            self.completed_time.strftime("%Y-%m-%d %H:%M:%S")
-            if self.completed_time is not None
-            else None
+            self.completed_time.strftime("%Y-%m-%d %H:%M:%S") if self.completed_time is not None else None
         )
         return ret
 
@@ -1511,9 +1423,7 @@ class ModelOhli24Item(ModelBase):
         if option == "completed":
             query = query.filter(cls.status == "completed")
 
-        query = (
-            query.order_by(desc(cls.id)) if order == "desc" else query.order_by(cls.id)
-        )
+        query = query.order_by(desc(cls.id)) if order == "desc" else query.order_by(cls.id)
         return query
 
     @classmethod
@@ -1586,7 +1496,7 @@ class ModelOhli24Program(ModelBase):
 
     @classmethod
     def is_duplicate(cls, clip_id):
-        return cls.get(clip_id) != None
+        return cls.get(clip_id) is not None
 
     # 오버라이딩
     @classmethod
@@ -1620,11 +1530,12 @@ class ModelOhli24Program(ModelBase):
         with F.app.app_context():
             return db.session.query(cls).filter_by(completed=False).all()
 
-    ### only for queue
+    # only for queue
+
     @classmethod
     def get_by_id_in_queue(cls, id):
         for _ in cls.queue_list:
             if _.id == int(id):
                 return _
 
-    ### only for queue END
+    # only for queue END

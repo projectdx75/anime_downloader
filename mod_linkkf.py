@@ -164,9 +164,7 @@ class LogicLinkkf(PluginModuleBase):
 
                 data = self.get_anime_info(cate, page)
                 # self.current_data = data
-                return jsonify(
-                    {"ret": "success", "cate": cate, "page": page, "data": data}
-                )
+                return jsonify({"ret": "success", "cate": cate, "page": page, "data": data})
             elif sub == "screen_movie_list":
                 try:
                     logger.debug("request:::> %s", request.form["page"])
@@ -306,21 +304,14 @@ class LogicLinkkf(PluginModuleBase):
             #     str(x.strip().replace(" ", ""))
             #     for x in whitelist_program.replace("\n", "|").split("|")
             # ]
-            whitelist_programs = [
-                str(x.strip()) for x in whitelist_program.replace("\n", "|").split("|")
-            ]
+            whitelist_programs = [str(x.strip()) for x in whitelist_program.replace("\n", "|").split("|")]
 
             if code not in whitelist_programs:
                 whitelist_programs.append(code)
-                whitelist_programs = filter(
-                    lambda x: x != "", whitelist_programs
-                )  # remove blank code
+                whitelist_programs = filter(lambda x: x != "", whitelist_programs)  # remove blank code
                 whitelist_program = "|".join(whitelist_programs)
                 entity = (
-                    db.session.query(P.ModelSetting)
-                    .filter_by(key="linkkf_auto_code_list")
-                    .with_for_update()
-                    .first()
+                    db.session.query(P.ModelSetting).filter_by(key="linkkf_auto_code_list").with_for_update().first()
                 )
                 entity.value = whitelist_program
                 db.session.commit()
@@ -341,12 +332,8 @@ class LogicLinkkf(PluginModuleBase):
         return ret
 
     def setting_save_after(self):
-        if self.queue.get_max_ffmpeg_count() != P.ModelSetting.get_int(
-            "linkkf_max_ffmpeg_process_count"
-        ):
-            self.queue.set_max_ffmpeg_count(
-                P.ModelSetting.get_int("linkkf_max_ffmpeg_process_count")
-            )
+        if self.queue.get_max_ffmpeg_count() != P.ModelSetting.get_int("linkkf_max_ffmpeg_process_count"):
+            self.queue.set_max_ffmpeg_count(P.ModelSetting.get_int("linkkf_max_ffmpeg_process_count"))
 
     def get_video_url_from_url(url, url2):
         video_url = None
@@ -391,9 +378,7 @@ class LogicLinkkf(PluginModuleBase):
 
                 # print(vtt_elem)
 
-                match = re.compile(
-                    r"<track.+src=\"(?P<vtt_url>.*?.vtt)\"", re.MULTILINE
-                ).search(data)
+                match = re.compile(r"<track.+src=\"(?P<vtt_url>.*?.vtt)\"", re.MULTILINE).search(data)
 
                 vtt_url = match.group("vtt_url")
 
@@ -422,14 +407,10 @@ class LogicLinkkf(PluginModuleBase):
                 # @k45734
                 vtt_url = None
                 try:
-                    _match1 = re.compile(
-                        r"<track.+src=\"(?P<vtt_url>.*?.vtt)", re.MULTILINE
-                    ).search(data)
+                    _match1 = re.compile(r"<track.+src=\"(?P<vtt_url>.*?.vtt)", re.MULTILINE).search(data)
                     vtt_url = _match1.group("vtt_url")
                 except:
-                    _match2 = re.compile(
-                        r"url: \'(?P<vtt_url>.*?.vtt)", re.MULTILINE
-                    ).search(data)
+                    _match2 = re.compile(r"url: \'(?P<vtt_url>.*?.vtt)", re.MULTILINE).search(data)
                     vtt_url = _match2.group("vtt_url")
 
                 logger.info("vtt_url: %s", vtt_url)
@@ -505,15 +486,11 @@ class LogicLinkkf(PluginModuleBase):
             elif "kakao" in url2:
                 # kakao 계열 처리, 외부 API 이용
                 payload = {"inputUrl": url2}
-                kakao_url = (
-                    "http://webtool.cusis.net/wp-pages/download-kakaotv-video/video.php"
-                )
+                kakao_url = "http://webtool.cusis.net/wp-pages/download-kakaotv-video/video.php"
                 data2 = requests.post(
                     kakao_url,
                     json=payload,
-                    headers={
-                        "referer": "http://webtool.cusis.net/download-kakaotv-video/"
-                    },
+                    headers={"referer": "http://webtool.cusis.net/download-kakaotv-video/"},
                 ).content
                 time.sleep(3)  # 서버 부하 방지를 위해 단시간에 너무 많은 URL전송을 하면 IP를 차단합니다.
                 url3 = json.loads(data2)
@@ -647,9 +624,7 @@ class LogicLinkkf(PluginModuleBase):
                 if pattern.match(js_script.text_content()):
                     # logger.debug("match::::")
                     match_data = pattern.match(js_script.text_content())
-                    iframe_info = json.loads(
-                        match_data.groups()[0].replace("path:", '"path":')
-                    )
+                    iframe_info = json.loads(match_data.groups()[0].replace("path:", '"path":'))
                     # logger.debug(f"iframe_info:: {iframe_info}")
 
                 index += 1
@@ -665,9 +640,13 @@ class LogicLinkkf(PluginModuleBase):
 
     def get_anime_info(self, cate, page):
         try:
+            items_xpath = '//div[@class="ext-json-item"]'
+            title_xpath = ""
+
             if cate == "ing":
-                url = f"{P.ModelSetting.get('linkkf_url')}/airing/page/{page}"
-                items_xpath = '//div[@class="myui-vodlist__box"]'
+                # url = f"{P.ModelSetting.get('linkkf_url')}/airing/page/{page}"
+                url = "https://linkkf.5imgdarr.top/api/singlefilter.php?categorytagid=1970&page=1&limit=20"
+                items_xpath = '//div[@class="ext-json-item"]'
                 title_xpath = './/a[@class="text-fff"]//text()'
             elif cate == "movie":
                 url = f"{P.ModelSetting.get('linkkf_url')}/ani/page/{page}"
@@ -679,19 +658,39 @@ class LogicLinkkf(PluginModuleBase):
                 title_xpath = './/a[@class="text-fff"]//text()'
             elif cate == "top_view":
                 url = f"{P.ModelSetting.get('linkkf_url')}/topview/page/{page}"
-                items_xpath = '//div[@class="myui-vodlist__box"]'
+                items_xpath = '//div[@class="ext-json-item"]'
                 title_xpath = './/a[@class="text-fff"]//text()'
+            else:
+                url = "https://linkkf.5imgdarr.top/api/singlefilter.php?categorytagid=1970&page=1&limit=20"
 
             logger.info("url:::> %s", url)
             logger.info("test..........................")
             # logger.info("test..........................")
             if self.referer is None:
-                self.referer = "https://linkkf.app"
+                self.referer = "https://linkkf.live"
 
             data = {"ret": "success", "page": page}
             response_data = LogicLinkkf.get_html(url, timeout=10)
             # P.logger.debug(response_data)
             P.logger.debug("debug.....................")
+            # P.logger.debug(response_data)
+
+            # JSON 응답인지 확인
+            try:
+                json_data = json.loads(response_data)
+                P.logger.debug("Response is JSON format")
+                P.logger.debug(json_data)
+                # JSON 데이터를 그대로 반환하거나 필요한 형태로 가공
+                if isinstance(json_data, dict):
+                    return json_data
+                else:
+                    data["episode"] = json_data if isinstance(json_data, list) else []
+                    return data
+            except (json.JSONDecodeError, ValueError):
+                # HTML 응답인 경우
+                P.logger.debug("Response is HTML format, parsing...")
+                pass
+
             tree = html.fromstring(response_data)
             tmp_items = tree.xpath(items_xpath)
 
@@ -709,9 +708,7 @@ class LogicLinkkf(PluginModuleBase):
                 entity["title"] = item.xpath(title_xpath)[0].strip()
                 entity["image_link"] = item.xpath("./a/@data-original")[0]
                 entity["chapter"] = (
-                    item.xpath("./a/span//text()")[0].strip()
-                    if len(item.xpath("./a/span//text()")) > 0
-                    else ""
+                    item.xpath("./a/span//text()")[0].strip() if len(item.xpath("./a/span//text()")) > 0 else ""
                 )
                 # logger.info('entity:::', entity['title'])
                 data["episode"].append(entity)
@@ -721,6 +718,44 @@ class LogicLinkkf(PluginModuleBase):
             return data
         except Exception as e:
             P.logger.error("Exception:%s", e)
+            P.logger.error(traceback.format_exc())
+            return {"ret": "exception", "log": str(e)}
+
+    def get_search_result(self, query, page, cate):
+        try:
+            _query = urllib.parse.quote(query)
+            url = f"{P.ModelSetting.get('linkkf_url')}/search/-------------.html?wd={_query}&page={page}"
+
+            logger.info("get_search_result()::url> %s", url)
+            data = {"ret": "success", "page": page}
+            response_data = LogicLinkkf.get_html(url, timeout=10)
+            tree = html.fromstring(response_data)
+
+            # linkkf 검색 결과는 일반 목록과 동일한 구조
+            tmp_items = tree.xpath('//div[@class="myui-vodlist__box"]')
+
+            data["episode_count"] = len(tmp_items)
+            data["episode"] = []
+
+            if tree.xpath('//div[@id="wp_page"]//text()'):
+                data["total_page"] = tree.xpath('//div[@id="wp_page"]//text()')[-1]
+            else:
+                data["total_page"] = 0
+
+            for item in tmp_items:
+                entity = {}
+                entity["link"] = item.xpath(".//a/@href")[0]
+                entity["code"] = re.search(r"[0-9]+", entity["link"]).group()
+                entity["title"] = item.xpath('.//a[@class="text-fff"]//text()')[0].strip()
+                entity["image_link"] = item.xpath("./a/@data-original")[0]
+                entity["chapter"] = (
+                    item.xpath("./a/span//text()")[0].strip() if len(item.xpath("./a/span//text()")) > 0 else ""
+                )
+                data["episode"].append(entity)
+
+            return data
+        except Exception as e:
+            P.logger.error(f"Exception: {str(e)}")
             P.logger.error(traceback.format_exc())
             return {"ret": "exception", "log": str(e)}
 
@@ -763,11 +798,7 @@ class LogicLinkkf(PluginModuleBase):
             # logger.debug(f"tmp1 size:=> {str(len(tmp))}")
 
             try:
-                tmp = (
-                    tree.xpath('//div[@class="hrecipe"]/article/center/strong')[0]
-                    .text_content()
-                    .strip()
-                )
+                tmp = tree.xpath('//div[@class="hrecipe"]/article/center/strong')[0].text_content().strip()
             except IndexError:
                 tmp = tree.xpath("//article/center/strong")[0].text_content().strip()
 
@@ -781,27 +812,13 @@ class LogicLinkkf(PluginModuleBase):
             data["_id"] = str(code)
             data["title"] = tmp.replace(data["season"] + "기", "").strip()
             data["title"] = data["title"].replace("()", "").strip()
-            data["title"] = (
-                Util.change_text_for_use_filename(data["title"])
-                .replace("OVA", "")
-                .strip()
-            )
+            data["title"] = Util.change_text_for_use_filename(data["title"]).replace("OVA", "").strip()
 
             try:
-                data["poster_url"] = tree.xpath(
-                    '//div[@class="myui-content__thumb"]/a/@data-original'
-                )
+                data["poster_url"] = tree.xpath('//div[@class="myui-content__thumb"]/a/@data-original')
                 # print(tree.xpath('//div[@class="myui-content__detail"]/text()'))
                 if len(tree.xpath('//div[@class="myui-content__detail"]/text()')) > 3:
-                    data["detail"] = [
-                        {
-                            "info": str(
-                                tree.xpath(
-                                    "//div[@class='myui-content__detail']/text()"
-                                )[3]
-                            )
-                        }
-                    ]
+                    data["detail"] = [{"info": str(tree.xpath("//div[@class='myui-content__detail']/text()")[3])}]
                 else:
                     data["detail"] = [{"정보없음": ""}]
             except Exception as e:
@@ -813,11 +830,7 @@ class LogicLinkkf(PluginModuleBase):
 
             tag_score = tree.xpath('//span[@class="taq-score"]')[0].text_content()
             # logger.debug(tag_score)
-            tag_count = (
-                tree.xpath('//span[contains(@class, "taq-count")]')[0]
-                .text_content()
-                .strip()
-            )
+            tag_count = tree.xpath('//span[contains(@class, "taq-count")]')[0].text_content().strip()
             data_rate = tree.xpath('//div[@class="rating"]/div/@data-rate')
 
             tmp2 = soup.select("ul > a")
@@ -860,9 +873,7 @@ class LogicLinkkf(PluginModuleBase):
                     "_id": data["code"],
                     "program_code": data["code"],
                     "program_title": data["title"],
-                    "save_folder": Util.change_text_for_use_filename(
-                        data["save_folder"]
-                    ),
+                    "save_folder": Util.change_text_for_use_filename(data["save_folder"]),
                     "title": t.text.strip(),
                     # "title": t.text_content().strip(),
                 }
@@ -899,15 +910,11 @@ class LogicLinkkf(PluginModuleBase):
                     program_path = os.path.join(tmp_save_path, entity["save_folder"])
                     entity["save_path"] = program_path
                     if P.ModelSetting.get("linkkf_auto_make_season_folder"):
-                        entity["save_path"] = os.path.join(
-                            entity["save_path"], "Season %s" % int(entity["season"])
-                        )
+                        entity["save_path"] = os.path.join(entity["save_path"], "Season %s" % int(entity["season"]))
 
                 entity["image"] = data["poster_url"]
 
-                entity["filename"] = LogicLinkkf.get_filename(
-                    data["save_folder"], data["season"], entity["title"]
-                )
+                entity["filename"] = LogicLinkkf.get_filename(data["save_folder"], data["season"], entity["title"])
                 data["episode"].append(entity)
                 idx = idx + 1
 
@@ -966,11 +973,7 @@ class LogicLinkkf(PluginModuleBase):
                 else:
                     entity["image_link"] = ""
                 # entity["image_link"] = item.xpath("./a/@data-original")[0]
-                entity["chapter"] = (
-                    item.xpath("./a/span//text()")[0]
-                    if len(item.xpath("./a/span//text()")) > 0
-                    else ""
-                )
+                entity["chapter"] = item.xpath("./a/span//text()")[0] if len(item.xpath("./a/span//text()")) > 0 else ""
                 # logger.info('entity:::', entity['title'])
                 data["episode"].append(entity)
 
@@ -1011,9 +1014,7 @@ class LogicLinkkf(PluginModuleBase):
 
             # logger.debug('get_html :%s', url)
             headers["Referer"] = "" if referer is None else referer
-            page_content = LogicOhli24.session.get(
-                url, headers=headers, timeout=timeout
-            )
+            page_content = LogicOhli24.session.get(url, headers=headers, timeout=timeout)
             data = page_content.text
         except Exception as e:
             logger.error("Exception:%s", e)
@@ -1054,9 +1055,7 @@ class LogicLinkkf(PluginModuleBase):
             # logger.debug("get_filename()===")
             # logger.info("title:: %s", title)
             # logger.info("maintitle:: %s", maintitle)
-            match = re.compile(
-                r"(?P<title>.*?)\s?((?P<season>\d+)기)?\s?((?P<epi_no>\d+)화?)"
-            ).search(title)
+            match = re.compile(r"(?P<title>.*?)\s?((?P<season>\d+)기)?\s?((?P<epi_no>\d+)화?)").search(title)
             if match:
                 epi_no = int(match.group("epi_no"))
                 if epi_no < 10:
@@ -1152,9 +1151,7 @@ class LogicLinkkf(PluginModuleBase):
         try:
             logger.debug("%s plugin_load", P.package_name)
             # old version
-            self.queue = FfmpegQueue(
-                P, P.ModelSetting.get_int("linkkf_max_ffmpeg_process_count")
-            )
+            self.queue = FfmpegQueue(P, P.ModelSetting.get_int("linkkf_max_ffmpeg_process_count"))
             self.current_data = None
             self.queue.queue_start()
 
@@ -1179,9 +1176,7 @@ class LogicLinkkf(PluginModuleBase):
             try:
                 while True:
                     logger.debug(self.current_download_count)
-                    if self.current_download_count < P.ModelSetting.get_int(
-                        f"{self.name}_max_download_count"
-                    ):
+                    if self.current_download_count < P.ModelSetting.get_int(f"{self.name}_max_download_count"):
                         break
                     time.sleep(5)
 
@@ -1343,9 +1338,7 @@ class ModelLinkkfItem(db.Model):
         ret = {x.name: getattr(self, x.name) for x in self.__table__.columns}
         ret["created_time"] = self.created_time.strftime("%Y-%m-%d %H:%M:%S")
         ret["completed_time"] = (
-            self.completed_time.strftime("%Y-%m-%d %H:%M:%S")
-            if self.completed_time is not None
-            else None
+            self.completed_time.strftime("%Y-%m-%d %H:%M:%S") if self.completed_time is not None else None
         )
         return ret
 
