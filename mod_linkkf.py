@@ -7,16 +7,14 @@
 # @Software: PyCharm
 import json
 import os
+import random
 import re
 import sys
-import traceback
-from datetime import datetime
-import random
 import time
+import traceback
 import urllib
+from datetime import datetime
 from urllib.parse import urlparse
-
-import PIL.Image
 
 # third-party
 import requests
@@ -52,7 +50,7 @@ for package in packages:
         else:
             os.system(f"pip3 install {package}")
 
-from anime_downloader.lib.ffmpeg_queue_v1 import FfmpegQueueEntity, FfmpegQueue
+from anime_downloader.lib.ffmpeg_queue_v1 import FfmpegQueue, FfmpegQueueEntity
 from anime_downloader.lib.util import Util
 
 # 패키지
@@ -94,12 +92,14 @@ class LogicLinkkf(PluginModuleBase):
     }
 
     def __init__(self, P):
-        super(LogicLinkkf, self).__init__(P, "setting", scheduler_desc="linkkf 자동 다운로드")
+        super(LogicLinkkf, self).__init__(
+            P, "setting", scheduler_desc="linkkf 자동 다운로드"
+        )
         self.queue = None
         self.name = name
         self.db_default = {
             "linkkf_db_version": "1",
-            "linkkf_url": "https://linkkf.app",
+            "linkkf_url": "https://linkkf.live",
             f"{self.name}_recent_code": "",
             "linkkf_download_path": os.path.join(path_data, P.package_name, "linkkf"),
             "linkkf_save_path": os.path.join(path_data, P.package_name, "linkkf"),
@@ -128,8 +128,8 @@ class LogicLinkkf(PluginModuleBase):
         arg = P.ModelSetting.to_dict()
         arg["sub"] = self.name
         if sub in ["setting", "queue", "category", "list", "request", "search"]:
-            if sub == "request" and req.args.get("content_code") is not None:
-                arg["linkkf_current_code"] = req.args.get("content_code")
+            if sub == "request" and req.args.get("code") is not None:
+                arg["linkkf_current_code"] = req.args.get("code")
             if sub == "setting":
                 job_id = "%s_%s" % (self.P.package_name, self.name)
                 arg["scheduler"] = str(scheduler.is_include(job_id))
@@ -164,7 +164,9 @@ class LogicLinkkf(PluginModuleBase):
 
                 data = self.get_anime_info(cate, page)
                 # self.current_data = data
-                return jsonify({"ret": "success", "cate": cate, "page": page, "data": data})
+                return jsonify(
+                    {"ret": "success", "cate": cate, "page": page, "data": data}
+                )
             elif sub == "screen_movie_list":
                 try:
                     logger.debug("request:::> %s", request.form["page"])
@@ -197,7 +199,7 @@ class LogicLinkkf(PluginModuleBase):
                     }
                 )
             elif sub == "add_queue":
-                logger.debug(f"linkkf add_queue routine ===============")
+                logger.debug("linkkf add_queue routine ===============")
                 ret = {}
                 info = json.loads(request.form["data"])
                 logger.info(f"info:: {info}")
@@ -222,7 +224,6 @@ class LogicLinkkf(PluginModuleBase):
 
     @staticmethod
     def get_html(url, cached=False):
-
         try:
             if LogicLinkkf.referer is None:
                 LogicLinkkf.referer = f"{ModelSetting.get('linkkf_url')}"
@@ -291,7 +292,6 @@ class LogicLinkkf(PluginModuleBase):
 
         logger.debug(f"args: {args}")
         try:
-
             if len(args) == 0:
                 code = str(LogicLinkkf.current_data["code"])
             else:
@@ -304,14 +304,21 @@ class LogicLinkkf(PluginModuleBase):
             #     str(x.strip().replace(" ", ""))
             #     for x in whitelist_program.replace("\n", "|").split("|")
             # ]
-            whitelist_programs = [str(x.strip()) for x in whitelist_program.replace("\n", "|").split("|")]
+            whitelist_programs = [
+                str(x.strip()) for x in whitelist_program.replace("\n", "|").split("|")
+            ]
 
             if code not in whitelist_programs:
                 whitelist_programs.append(code)
-                whitelist_programs = filter(lambda x: x != "", whitelist_programs)  # remove blank code
+                whitelist_programs = filter(
+                    lambda x: x != "", whitelist_programs
+                )  # remove blank code
                 whitelist_program = "|".join(whitelist_programs)
                 entity = (
-                    db.session.query(P.ModelSetting).filter_by(key="linkkf_auto_code_list").with_for_update().first()
+                    db.session.query(P.ModelSetting)
+                    .filter_by(key="linkkf_auto_code_list")
+                    .with_for_update()
+                    .first()
                 )
                 entity.value = whitelist_program
                 db.session.commit()
@@ -332,8 +339,12 @@ class LogicLinkkf(PluginModuleBase):
         return ret
 
     def setting_save_after(self):
-        if self.queue.get_max_ffmpeg_count() != P.ModelSetting.get_int("linkkf_max_ffmpeg_process_count"):
-            self.queue.set_max_ffmpeg_count(P.ModelSetting.get_int("linkkf_max_ffmpeg_process_count"))
+        if self.queue.get_max_ffmpeg_count() != P.ModelSetting.get_int(
+            "linkkf_max_ffmpeg_process_count"
+        ):
+            self.queue.set_max_ffmpeg_count(
+                P.ModelSetting.get_int("linkkf_max_ffmpeg_process_count")
+            )
 
     def get_video_url_from_url(url, url2):
         video_url = None
@@ -378,7 +389,9 @@ class LogicLinkkf(PluginModuleBase):
 
                 # print(vtt_elem)
 
-                match = re.compile(r"<track.+src=\"(?P<vtt_url>.*?.vtt)\"", re.MULTILINE).search(data)
+                match = re.compile(
+                    r"<track.+src=\"(?P<vtt_url>.*?.vtt)\"", re.MULTILINE
+                ).search(data)
 
                 vtt_url = match.group("vtt_url")
 
@@ -407,10 +420,14 @@ class LogicLinkkf(PluginModuleBase):
                 # @k45734
                 vtt_url = None
                 try:
-                    _match1 = re.compile(r"<track.+src=\"(?P<vtt_url>.*?.vtt)", re.MULTILINE).search(data)
+                    _match1 = re.compile(
+                        r"<track.+src=\"(?P<vtt_url>.*?.vtt)", re.MULTILINE
+                    ).search(data)
                     vtt_url = _match1.group("vtt_url")
                 except:
-                    _match2 = re.compile(r"url: \'(?P<vtt_url>.*?.vtt)", re.MULTILINE).search(data)
+                    _match2 = re.compile(
+                        r"url: \'(?P<vtt_url>.*?.vtt)", re.MULTILINE
+                    ).search(data)
                     vtt_url = _match2.group("vtt_url")
 
                 logger.info("vtt_url: %s", vtt_url)
@@ -486,13 +503,19 @@ class LogicLinkkf(PluginModuleBase):
             elif "kakao" in url2:
                 # kakao 계열 처리, 외부 API 이용
                 payload = {"inputUrl": url2}
-                kakao_url = "http://webtool.cusis.net/wp-pages/download-kakaotv-video/video.php"
+                kakao_url = (
+                    "http://webtool.cusis.net/wp-pages/download-kakaotv-video/video.php"
+                )
                 data2 = requests.post(
                     kakao_url,
                     json=payload,
-                    headers={"referer": "http://webtool.cusis.net/download-kakaotv-video/"},
+                    headers={
+                        "referer": "http://webtool.cusis.net/download-kakaotv-video/"
+                    },
                 ).content
-                time.sleep(3)  # 서버 부하 방지를 위해 단시간에 너무 많은 URL전송을 하면 IP를 차단합니다.
+                time.sleep(
+                    3
+                )  # 서버 부하 방지를 위해 단시간에 너무 많은 URL전송을 하면 IP를 차단합니다.
                 url3 = json.loads(data2)
                 # logger.info("download url2 : %s , url3 : %s" % (url2, url3))
                 video_url = url3
@@ -619,12 +642,13 @@ class LogicLinkkf(PluginModuleBase):
             index = 0
 
             for js_script in js_scripts:
-
                 # print(f"{index}.. {js_script.text_content()}")
                 if pattern.match(js_script.text_content()):
                     # logger.debug("match::::")
                     match_data = pattern.match(js_script.text_content())
-                    iframe_info = json.loads(match_data.groups()[0].replace("path:", '"path":'))
+                    iframe_info = json.loads(
+                        match_data.groups()[0].replace("path:", '"path":')
+                    )
                     # logger.debug(f"iframe_info:: {iframe_info}")
 
                 index += 1
@@ -633,7 +657,7 @@ class LogicLinkkf(PluginModuleBase):
             # iframe url:: https://s2.ani1c12.top/player/index.php?data='+player_data.url+'
             ####################################################
 
-            url = f'https://s2.ani1c12.top/player/index.php?data={iframe_info["url"]}'
+            url = f"https://s2.ani1c12.top/player/index.php?data={iframe_info['url']}"
             html_data = LogicLinkkf.get_html(url)
 
         return html_data
@@ -708,7 +732,9 @@ class LogicLinkkf(PluginModuleBase):
                 entity["title"] = item.xpath(title_xpath)[0].strip()
                 entity["image_link"] = item.xpath("./a/@data-original")[0]
                 entity["chapter"] = (
-                    item.xpath("./a/span//text()")[0].strip() if len(item.xpath("./a/span//text()")) > 0 else ""
+                    item.xpath("./a/span//text()")[0].strip()
+                    if len(item.xpath("./a/span//text()")) > 0
+                    else ""
                 )
                 # logger.info('entity:::', entity['title'])
                 data["episode"].append(entity)
@@ -746,10 +772,14 @@ class LogicLinkkf(PluginModuleBase):
                 entity = {}
                 entity["link"] = item.xpath(".//a/@href")[0]
                 entity["code"] = re.search(r"[0-9]+", entity["link"]).group()
-                entity["title"] = item.xpath('.//a[@class="text-fff"]//text()')[0].strip()
+                entity["title"] = item.xpath('.//a[@class="text-fff"]//text()')[
+                    0
+                ].strip()
                 entity["image_link"] = item.xpath("./a/@data-original")[0]
                 entity["chapter"] = (
-                    item.xpath("./a/span//text()")[0].strip() if len(item.xpath("./a/span//text()")) > 0 else ""
+                    item.xpath("./a/span//text()")[0].strip()
+                    if len(item.xpath("./a/span//text()")) > 0
+                    else ""
                 )
                 data["episode"].append(entity)
 
@@ -769,168 +799,173 @@ class LogicLinkkf(PluginModuleBase):
                 and LogicLinkkf.current_data["ret"]
             ):
                 return LogicLinkkf.current_data
-            url = "%s/%s" % (P.ModelSetting.get("linkkf_url"), code)
-            logger.info(url)
+            
+            url = "%s/%s/" % (P.ModelSetting.get("linkkf_url"), code)
+            
+            logger.info(f"get_series_info URL: {url}")
 
-            logger.debug(LogicLinkkf.headers)
             html_content = LogicLinkkf.get_html(url, cached=False)
-            # html_content = LogicLinkkf.get_html_playwright(url)
-            # html_content = LogicLinkkf.get_html_cloudflare(url, cached=False)
-
-            sys.setrecursionlimit(10**7)
-            # logger.info(html_content)
-            tree = html.fromstring(html_content)
-            # tree = etree.fromstring(
-            #     html_content, parser=etree.XMLParser(huge_tree=True)
-            # )
-            # tree1 = BeautifulSoup(html_content, "lxml")
+            
+            if not html_content:
+                data["log"] = "Failed to fetch page content"
+                data["ret"] = "error"
+                return data
 
             soup = BeautifulSoup(html_content, "html.parser")
-            # tree = etree.HTML(str(soup))
-            # logger.info(tree)
-
-            tmp2 = soup.select("ul > a")
-            if len(tmp2) == 0:
-                tmp = soup.select("u > a")
+            
+            # === 제목 추출 ===
+            # 방법 1: #anime-details > h3 (가장 정확)
+            title_elem = soup.select_one("#anime-details > h3")
+            if not title_elem:
+                # 방법 2: .anime-tab-content > h3
+                title_elem = soup.select_one(".anime-tab-content > h3")
+            
+            title_text = ""
+            if title_elem:
+                title_text = title_elem.get_text(strip=True)
+                # "11/12 - 너와 넘어 사랑이 된다" 형식에서 제목만 추출
+                if " - " in title_text:
+                    data["title"] = title_text.split(" - ", 1)[1]
+                else:
+                    data["title"] = title_text
             else:
-                tmp = soup.select("ul > a")
-
-            # logger.debug(f"tmp1 size:=> {str(len(tmp))}")
-
-            try:
-                tmp = tree.xpath('//div[@class="hrecipe"]/article/center/strong')[0].text_content().strip()
-            except IndexError:
-                tmp = tree.xpath("//article/center/strong")[0].text_content().strip()
-
-            # logger.info(tmp)
-            match = re.compile(r"(?P<season>\d+)기").search(tmp)
+                # 방법 3: gemini-dark-card__link의 title 속성
+                card_link = soup.select_one("a.gemini-dark-card__link")
+                if card_link and card_link.get("title"):
+                    data["title"] = card_link.get("title")
+                else:
+                    # 방법 4: 포스터 이미지의 alt 속성
+                    poster_img = soup.select_one("img.gemini-dark-card__image")
+                    if poster_img and poster_img.get("alt"):
+                        data["title"] = poster_img.get("alt")
+                    else:
+                        # 방법 5: 페이지 title에서 추출
+                        page_title = soup.select_one("title")
+                        if page_title:
+                            title_text = page_title.get_text(strip=True)
+                            # "제목 자막 / 더빙 / Linkkf" 형식 처리
+                            data["title"] = title_text.split(" 자막")[0].split(" /")[0].strip()
+                        else:
+                            data["title"] = f"Unknown-{code}"
+            
+            # 제목 정리
+            data["title"] = Util.change_text_for_use_filename(data["title"]).strip()
+            data["_id"] = str(code)
+            
+            # === 시즌 추출 ===
+            match = re.compile(r"(?P<season>\d+)기").search(data.get("title", ""))
             if match:
                 data["season"] = match.group("season")
+                data["title"] = data["title"].replace(data["season"] + "기", "").strip()
             else:
                 data["season"] = "1"
-
-            data["_id"] = str(code)
-            data["title"] = tmp.replace(data["season"] + "기", "").strip()
-            data["title"] = data["title"].replace("()", "").strip()
-            data["title"] = Util.change_text_for_use_filename(data["title"]).replace("OVA", "").strip()
-
-            try:
-                data["poster_url"] = tree.xpath('//div[@class="myui-content__thumb"]/a/@data-original')
-                # print(tree.xpath('//div[@class="myui-content__detail"]/text()'))
-                if len(tree.xpath('//div[@class="myui-content__detail"]/text()')) > 3:
-                    data["detail"] = [{"info": str(tree.xpath("//div[@class='myui-content__detail']/text()")[3])}]
+            
+            # === 포스터 이미지 ===
+            poster_elem = soup.select_one("img.gemini-dark-card__image")
+            if poster_elem:
+                # lazy loading 대응: data-lazy-src (사이트에서 사용하는 속성), data-src, src 순서로 확인
+                data["poster_url"] = (
+                    poster_elem.get("data-lazy-src") or 
+                    poster_elem.get("data-src") or 
+                    poster_elem.get("src") or ""
+                )
+                # placeholder SVG 제외
+                if data["poster_url"].startswith("data:image/svg"):
+                    data["poster_url"] = poster_elem.get("data-lazy-src") or poster_elem.get("data-src") or ""
+            else:
+                # 대안 선택자
+                poster_alt = soup.select_one("a.gemini-dark-card__link img")
+                if poster_alt:
+                    data["poster_url"] = (
+                        poster_alt.get("data-lazy-src") or 
+                        poster_alt.get("data-src") or 
+                        poster_alt.get("src") or ""
+                    )
                 else:
-                    data["detail"] = [{"정보없음": ""}]
-            except Exception as e:
-                logger.error(e)
+                    data["poster_url"] = None
+            
+            # === 상세 정보 ===
+            data["detail"] = []
+            info_items = soup.select("li")
+            for item in info_items:
+                text = item.get_text(strip=True)
+                if any(keyword in text for keyword in ["방영일", "제작사", "장르", "분류", "년"]):
+                    data["detail"].append({"info": text})
+            
+            if not data["detail"]:
                 data["detail"] = [{"정보없음": ""}]
-                data["poster_url"] = None
-
-            data["rate"] = tree.xpath('span[@class="tag-score"]')
-
-            tag_score = tree.xpath('//span[@class="taq-score"]')[0].text_content()
-            # logger.debug(tag_score)
-            tag_count = tree.xpath('//span[contains(@class, "taq-count")]')[0].text_content().strip()
-            data_rate = tree.xpath('//div[@class="rating"]/div/@data-rate')
-
-            tmp2 = soup.select("ul > a")
-            if len(tmp) == 0:
-                tmp = soup.select("u > a")
-            else:
-                tmp = soup.select("ul > a")
-
-            if tmp is not None:
-                data["episode_count"] = str(len(tmp))
-            else:
-                data["episode_count"] = "0"
-
+            
+            # === 에피소드 목록 - API에서 가져오기 ===
             data["episode"] = []
-            # tags = tree.xpath(
-            #     '//*[@id="syno-nsc-ext-gen3"]/article/div[1]/article/a')
-            # tags = tree.xpath("//ul/a")
-            tags = soup.select("ul > u > a")
-            if len(tags) > 0:
-                pass
-            else:
-                tags = soup.select("ul > a")
-
-            logger.debug(len(tags))
-
-            # logger.info("tags", tags)
-            # re1 = re.compile(r'\/(?P<code>\d+)')
-            re1 = re.compile(r"\-([^-])+\.")
-
             data["save_folder"] = data["title"]
-            # logger.debug(f"save_folder::> {data['save_folder']}")
-
-            # program = (
-            #     db.session.query(ModelLinkkfProgram).filter_by(programcode=code).first()
-            # )
-
-            idx = 1
-            for t in tags:
-                entity = {
-                    "_id": data["code"],
-                    "program_code": data["code"],
-                    "program_title": data["title"],
-                    "save_folder": Util.change_text_for_use_filename(data["save_folder"]),
-                    "title": t.text.strip(),
-                    # "title": t.text_content().strip(),
-                }
-                # entity['code'] = re1.search(t.attrib['href']).group('code')
-
-                # logger.debug(f"title ::>{entity['title']}")
-
-                # 고유id임을 알수 없는 말도 안됨..
-                # 에피소드 코드가 고유해야 상태값 갱신이 제대로 된 값에 넣어짐
-                p = re.compile(r"([0-9]+)화?")
-                m_obj = p.match(entity["title"])
-                # logger.info(m_obj.group())
-                # entity['code'] = data['code'] + '_' +str(idx)
-
-                episode_code = None
-                # logger.debug(f"m_obj::> {m_obj}")
-                if m_obj is not None:
-                    episode_code = m_obj.group(1)
-                    entity["code"] = data["code"] + episode_code.zfill(4)
-                else:
-                    entity["code"] = data["code"]
-
-                aa = t["href"]
-                if "/player" in aa:
-                    entity["url"] = "https://linkkf.app" + t["href"]
-                else:
-                    entity["url"] = t["href"]
-                entity["season"] = data["season"]
-
-                # 저장 경로 저장
-                # Todo: db
-                tmp_save_path = P.ModelSetting.get(f"linkkf_download_path")
-                if P.ModelSetting.get("linkkf_auto_make_folder") == "True":
-                    program_path = os.path.join(tmp_save_path, entity["save_folder"])
-                    entity["save_path"] = program_path
-                    if P.ModelSetting.get("linkkf_auto_make_season_folder"):
-                        entity["save_path"] = os.path.join(entity["save_path"], "Season %s" % int(entity["season"]))
-
-                entity["image"] = data["poster_url"]
-
-                entity["filename"] = LogicLinkkf.get_filename(data["save_folder"], data["season"], entity["title"])
-                data["episode"].append(entity)
-                idx = idx + 1
-
+            
+            # 에피소드 API 호출
+            episode_api_url = f"https://linkkfep.5imgdarr.top/api2.php?epid={code}"
+            try:
+                episode_response = requests.get(episode_api_url, timeout=10)
+                episode_data = episode_response.json()
+                
+                logger.debug(f"Episode API response: {len(episode_data)} servers found")
+                
+                # 첫 번째 서버 (보통 자막-S)의 에피소드 목록 사용
+                if episode_data and len(episode_data) > 0:
+                    server_data = episode_data[0].get("server_data", [])
+                    # 역순 정렬 (최신 에피소드가 위로)
+                    server_data = list(reversed(server_data))
+                    
+                    for idx, ep_info in enumerate(server_data):
+                        ep_name = ep_info.get("name", str(idx + 1))
+                        ep_slug = ep_info.get("slug", str(idx + 1))
+                        ep_link = ep_info.get("link", "")
+                        
+                        # 화면 표시용 title은 "01화" 형태
+                        ep_title = f"{ep_name}화"
+                        
+                        entity = {
+                            "_id": data["code"],
+                            "program_code": data["code"],
+                            "program_title": data["title"],
+                            "save_folder": Util.change_text_for_use_filename(data["save_folder"]),
+                            "title": ep_title,
+                            "season": data["season"],
+                        }
+                        
+                        # 에피소드 코드 생성
+                        entity["code"] = data["code"] + ep_name.zfill(4)
+                        
+                        # URL 생성: playid/{code}/?server=12&slug={slug} 형태
+                        entity["url"] = f"https://linkkf.live/playid/{code}/?server=12&slug={ep_slug}"
+                        
+                        # 저장 경로 설정
+                        tmp_save_path = P.ModelSetting.get("linkkf_download_path")
+                        if P.ModelSetting.get("linkkf_auto_make_folder") == "True":
+                            program_path = os.path.join(tmp_save_path, entity["save_folder"])
+                            entity["save_path"] = program_path
+                            if P.ModelSetting.get("linkkf_auto_make_season_folder"):
+                                entity["save_path"] = os.path.join(
+                                    entity["save_path"], "Season %s" % int(entity["season"])
+                                )
+                        
+                        entity["image"] = data["poster_url"]
+                        # filename 생성 시 숫자만 전달 ("01화" 아님)
+                        entity["filename"] = LogicLinkkf.get_filename(
+                            data["save_folder"], data["season"], ep_name
+                        )
+                        
+                        data["episode"].append(entity)
+                        
+            except Exception as ep_error:
+                logger.error(f"Episode API error: {ep_error}")
+                logger.error(traceback.format_exc())
+            
+            data["episode_count"] = str(len(data["episode"]))
             data["ret"] = True
-            # logger.info('data', data)
             self.current_data = data
-
+            
+            logger.info(f"Parsed series: {data['title']}, Episodes: {data['episode_count']}")
             return data
 
         except Exception as e:
-            logger.error("Exception:%s", e)
-            logger.error(traceback.format_exc())
-            data["log"] = str(e)
-            data["ret"] = "error"
-            return data
-        except IndexError as e:
             logger.error("Exception:%s", e)
             logger.error(traceback.format_exc())
             data["log"] = str(e)
@@ -973,7 +1008,11 @@ class LogicLinkkf(PluginModuleBase):
                 else:
                     entity["image_link"] = ""
                 # entity["image_link"] = item.xpath("./a/@data-original")[0]
-                entity["chapter"] = item.xpath("./a/span//text()")[0] if len(item.xpath("./a/span//text()")) > 0 else ""
+                entity["chapter"] = (
+                    item.xpath("./a/span//text()")[0]
+                    if len(item.xpath("./a/span//text()")) > 0
+                    else ""
+                )
                 # logger.info('entity:::', entity['title'])
                 data["episode"].append(entity)
 
@@ -999,7 +1038,7 @@ class LogicLinkkf(PluginModuleBase):
     ):
         data = ""
         headers = {
-            "referer": f"https://linkkf.app",
+            "referer": "https://linkkf.live",
             "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) "
             "Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36"
             "Mozilla/5.0 (Macintosh; Intel "
@@ -1008,13 +1047,14 @@ class LogicLinkkf(PluginModuleBase):
             "X-Requested-With": "XMLHttpRequest",
         }
         try:
-
             if LogicOhli24.session is None:
                 LogicOhli24.session = requests.session()
 
             # logger.debug('get_html :%s', url)
             headers["Referer"] = "" if referer is None else referer
-            page_content = LogicOhli24.session.get(url, headers=headers, timeout=timeout)
+            page_content = LogicOhli24.session.get(
+                url, headers=headers, timeout=timeout
+            )
             data = page_content.text
         except Exception as e:
             logger.error("Exception:%s", e)
@@ -1037,7 +1077,7 @@ class LogicLinkkf(PluginModuleBase):
             else:
                 LogicLinkkf.session = requests.Session()
 
-        LogicLinkkf.referer = "https://linkkf.app"
+        LogicLinkkf.referer = "https://linkkf.live"
 
         LogicLinkkf.headers["Referer"] = LogicLinkkf.referer
 
@@ -1055,7 +1095,9 @@ class LogicLinkkf(PluginModuleBase):
             # logger.debug("get_filename()===")
             # logger.info("title:: %s", title)
             # logger.info("maintitle:: %s", maintitle)
-            match = re.compile(r"(?P<title>.*?)\s?((?P<season>\d+)기)?\s?((?P<epi_no>\d+)화?)").search(title)
+            match = re.compile(
+                r"(?P<title>.*?)\s?((?P<season>\d+)기)?\s?((?P<epi_no>\d+)화?)"
+            ).search(title)
             if match:
                 epi_no = int(match.group("epi_no"))
                 if epi_no < 10:
@@ -1084,7 +1126,6 @@ class LogicLinkkf(PluginModuleBase):
         if self.is_exist(episode_info):
             return "queue_exist"
         else:
-
             db_entity = ModelLinkkfItem.get_by_linkkf_id(episode_info["_id"])
 
             logger.debug("db_entity:::> %s", db_entity)
@@ -1151,7 +1192,9 @@ class LogicLinkkf(PluginModuleBase):
         try:
             logger.debug("%s plugin_load", P.package_name)
             # old version
-            self.queue = FfmpegQueue(P, P.ModelSetting.get_int("linkkf_max_ffmpeg_process_count"))
+            self.queue = FfmpegQueue(
+                P, P.ModelSetting.get_int("linkkf_max_ffmpeg_process_count")
+            )
             self.current_data = None
             self.queue.queue_start()
 
@@ -1176,7 +1219,9 @@ class LogicLinkkf(PluginModuleBase):
             try:
                 while True:
                     logger.debug(self.current_download_count)
-                    if self.current_download_count < P.ModelSetting.get_int(f"{self.name}_max_download_count"):
+                    if self.current_download_count < P.ModelSetting.get_int(
+                        f"{self.name}_max_download_count"
+                    ):
                         break
                     time.sleep(5)
 
@@ -1197,19 +1242,23 @@ class LinkkfQueueEntity(FfmpegQueueEntity):
     def __init__(self, P, module_logic, info):
         super(LinkkfQueueEntity, self).__init__(P, module_logic, info)
         self._vi = None
-        self.url = None
         self.epi_queue = None
-        self.filepath = None
-        self.savepath = None
-        self.quality = None
-        self.filename = None
         self.vtt = None
-        self.season = 1
-        self.content_title = None
         self.srt_url = None
         self.headers = None
-        # Todo::: 임시 주석 처리
-        self.make_episode_info()
+        
+        # info에서 필요한 정보 설정
+        self.url = info.get("url", "")
+        self.filename = info.get("filename", "")
+        self.filepath = info.get("filename", "")
+        self.savepath = info.get("save_path", "")
+        self.quality = info.get("quality", "720p")
+        self.season = info.get("season", "1")
+        self.content_title = info.get("program_title", "")
+        
+        # make_episode_info는 비디오 URL 추출이 필요할 때만 호출
+        # 현재는 바로 다운로드 큐에 추가하므로 주석 처리
+        # self.make_episode_info()
 
     def refresh_status(self):
         self.module_logic.socketio_callback("status", self.as_dict())
@@ -1338,7 +1387,9 @@ class ModelLinkkfItem(db.Model):
         ret = {x.name: getattr(self, x.name) for x in self.__table__.columns}
         ret["created_time"] = self.created_time.strftime("%Y-%m-%d %H:%M:%S")
         ret["completed_time"] = (
-            self.completed_time.strftime("%Y-%m-%d %H:%M:%S") if self.completed_time is not None else None
+            self.completed_time.strftime("%Y-%m-%d %H:%M:%S")
+            if self.completed_time is not None
+            else None
         )
         return ret
 

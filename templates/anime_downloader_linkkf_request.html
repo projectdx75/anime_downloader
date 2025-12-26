@@ -158,7 +158,7 @@
                 str += m_row_start();
                 // tmp = '<img src="' + data.episode[i].image + '" class="img-fluid">'
                 // str += m_col(3, tmp)
-                tmp = "<strong>" + data.episode[i].title + "</strong><span>화. </span>";
+                tmp = "<strong>" + data.episode[i].title + "</strong><span>. </span>";
                 {#tmp += "<br>";#}
                 tmp += data.episode[i].filename + "<br><p></p>";
 
@@ -202,13 +202,13 @@
                 // {#document.getElementById("analysis_btn").click();#}
             }
 
-            if ("{{arg['ohli24_current_code']}}" !== "") {
+            if ("{{arg['linkkf_current_code']}}" !== "") {
                 if (params.code === null) {
                     console.log('params.code === null')
-                    document.getElementById("code").value = "{{arg['ohli24_current_code']}}";
+                    document.getElementById("code").value = "{{arg['linkkf_current_code']}}";
 
                 } else if (params.code === '') {
-                    document.getElementById("code").value = "{{arg['ohli24_current_code']}}";
+                    document.getElementById("code").value = "{{arg['linkkf_current_code']}}";
                 } else {
 
                     console.log('params code exist')
