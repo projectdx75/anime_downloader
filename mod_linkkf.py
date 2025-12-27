@@ -30,25 +30,8 @@ from lxml import html
 from plugin import PluginModuleBase
 from requests_cache import CachedSession
 
-packages = ["beautifulsoup4", "requests-cache", "cloudscraper"]
-
-for package in packages:
-    try:
-        import package
-
-    except ModuleNotFoundError:
-        if package == "playwright":
-            pass
-            # os.system(f"pip3 install playwright")
-            # os.system(f"playwright install")
-    except ImportError:
-        # main(["install", package])
-        if package == "playwright":
-            pass
-            # os.system(f"pip3 install {package}")
-            # os.system(f"playwright install")
-        else:
-            os.system(f"pip3 install {package}")
+# cloudscraper는 lazy import로 처리
+import cloudscraper
 
 from anime_downloader.lib.ffmpeg_queue_v1 import FfmpegQueue, FfmpegQueueEntity
 from anime_downloader.lib.util import Util
@@ -75,6 +58,7 @@ class LogicLinkkf(PluginModuleBase):
     download_queue = None
     download_thread = None
     current_download_count = 0
+    _scraper = None  # cloudscraper 싱글톤
 
     cache_path = os.path.dirname(__file__)
 
@@ -119,6 +103,7 @@ class LogicLinkkf(PluginModuleBase):
             "linkkf_image_url_prefix_series": "",
             "linkkf_image_url_prefix_episode": "",
             "linkkf_discord_notify": "True",
+            "linkkf_download_method": "ffmpeg",  # ffmpeg or ytdlp
         }
         # default_route_socketio(P, self)
         default_route_socketio_module(self, attach="/setting")
@@ -230,7 +215,60 @@ class LogicLinkkf(PluginModuleBase):
                     ret = {"ret": "error", "log": "Queue not initialized"}
                 return jsonify(ret)
             elif sub == "add_queue_checked_list":
-                return jsonify({"ret": "not_implemented"})
+                # 선택된 에피소드 일괄 추가 (백그라운드 스레드로 처리)
+                import threading
+                from flask import current_app
+                
+                logger.info("========= add_queue_checked_list START =========")
+                ret = {"ret": "success", "message": "백그라운드에서 추가 중..."}
+                try:
+                    form_data = request.form.get("data")
+                    if not form_data:
+                        ret["ret"] = "error"
+                        ret["log"] = "No data received"
+                        return jsonify(ret)
+                    
+                    episode_list = json.loads(form_data)
+                    logger.info(f"Received {len(episode_list)} episodes to add in background")
+                    
+                    # Flask app 참조 저장 (스레드에서 사용)
+                    app = current_app._get_current_object()
+                    
+                    # 백그라운드 스레드에서 추가 작업 수행
+                    def add_episodes_background(flask_app, downloader_self, episodes):
+                        added = 0
+                        skipped = 0
+                        with flask_app.app_context():
+                            for episode_info in episodes:
+                                try:
+                                    result = downloader_self.add(episode_info)
+                                    if result in ["enqueue_db_append", "enqueue_db_exist"]:
+                                        added += 1
+                                        logger.debug(f"Added episode {episode_info.get('_id')}")
+                                    else:
+                                        skipped += 1
+                                        logger.debug(f"Skipped episode {episode_info.get('_id')}: {result}")
+                                except Exception as ep_err:
+                                    logger.error(f"Error adding episode: {ep_err}")
+                                    skipped += 1
+                            
+                            logger.info(f"add_queue_checked_list completed: added={added}, skipped={skipped}")
+                    
+                    thread = threading.Thread(
+                        target=add_episodes_background,
+                        args=(app, self, episode_list)
+                    )
+                    thread.daemon = True
+                    thread.start()
+                    
+                    ret["count"] = len(episode_list)
+                    
+                except Exception as e:
+                    logger.error(f"add_queue_checked_list error: {e}")
+                    logger.error(traceback.format_exc())
+                    ret["ret"] = "error"
+                    ret["log"] = str(e)
+                return jsonify(ret)
             elif sub == "web_list":
                 return jsonify({"ret": "not_implemented"})
             elif sub == "db_remove":
@@ -336,67 +374,50 @@ class LogicLinkkf(PluginModuleBase):
             logger.error(f"socketio_callback error: {e}")
 
     @staticmethod
-    def get_html(url, cached=False):
+    def _extract_cat1_urls(html_content):
+        """cat1 = [...] 패턴에서 URL 목록 추출 (중복 코드 제거용 헬퍼)"""
+        regex = r"cat1 = [^\[]*([^\]]*)"
+        cat_match = re.findall(regex, html_content)
+        if not cat_match:
+            return []
+        url_regex = r"\"([^\"]*)\""
+        return re.findall(url_regex, cat_match[0])
+
+    @staticmethod
+    def get_html(url, cached=False, timeout=10):
         try:
             if LogicLinkkf.referer is None:
-                LogicLinkkf.referer = f"{ModelSetting.get('linkkf_url')}"
+                LogicLinkkf.referer = f"{P.ModelSetting.get('linkkf_url')}"
 
-            # return LogicLinkkfYommi.get_html_requests(url)
-            return LogicLinkkf.get_html_cloudflare(url)
+            return LogicLinkkf.get_html_cloudflare(url, timeout=timeout)
 
         except Exception as e:
             logger.error("Exception:%s", e)
             logger.error(traceback.format_exc())
 
     @staticmethod
-    def get_html_cloudflare(url, cached=False):
-        logger.debug(f"cloudflare protection bypass {'=' * 30}")
-
+    def get_html_cloudflare(url, cached=False, timeout=10):
+        """Cloudflare 보호 우회를 위한 HTTP 요청 (싱글톤 패턴)"""
         user_agents_list = [
             "Mozilla/5.0 (iPad; CPU OS 12_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148",
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.83 Safari/537.36",
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36",
         ]
-        # ua = UserAgent(verify_ssl=False)
 
         LogicLinkkf.headers["User-Agent"] = random.choice(user_agents_list)
+        LogicLinkkf.headers["Referer"] = LogicLinkkf.referer or ""
 
-        LogicLinkkf.headers["Referer"] = LogicLinkkf.referer
+        # cloudscraper 싱글톤 패턴 - 매 요청마다 생성하지 않음
+        if LogicLinkkf._scraper is None:
+            LogicLinkkf._scraper = cloudscraper.create_scraper(
+                delay=10,
+                browser={"custom": "linkkf"},
+            )
 
-        # logger.debug(f"headers:: {LogicLinkkfYommi.headers}")
-
-        if LogicLinkkf.session is None:
-            LogicLinkkf.session = requests.Session()
-
-        # LogicLinkkfYommi.session = requests.Session()
-        # re_sess = requests.Session()
-        # logger.debug(LogicLinkkfYommi.session)
-
-        # sess = cloudscraper.create_scraper(
-        #     # browser={"browser": "firefox", "mobile": False},
-        #     browser={"browser": "chrome", "mobile": False},
-        #     debug=True,
-        #     sess=LogicLinkkfYommi.session,
-        #     delay=10,
-        # )
-        # scraper = cloudscraper.create_scraper(sess=re_sess)
-        scraper = cloudscraper.create_scraper(
-            # debug=True,
-            delay=10,
-            sess=LogicLinkkf.session,
-            browser={
-                "custom": "linkkf",
-            },
-        )
-
-        # print(scraper.get(url, headers=LogicLinkkfYommi.headers).content)
-        # print(scraper.get(url).content)
-        # return scraper.get(url, headers=LogicLinkkfYommi.headers).content
-        # logger.debug(LogicLinkkfYommi.headers)
-        return scraper.get(
+        return LogicLinkkf._scraper.get(
             url,
             headers=LogicLinkkf.headers,
-            timeout=10,
+            timeout=timeout,
         ).content.decode("utf8", errors="replace")
 
     @staticmethod
@@ -410,7 +431,7 @@ class LogicLinkkf(PluginModuleBase):
             else:
                 code = str(args[0])
 
-            print(code)
+            logger.debug(f"add_whitelist code: {code}")
 
             whitelist_program = P.ModelSetting.get("linkkf_auto_code_list")
             # whitelist_programs = [
@@ -462,15 +483,19 @@ class LogicLinkkf(PluginModuleBase):
     @staticmethod
     def extract_video_url_from_playid(playid_url):
         """
-        linkkf.live의 playid URL에서 실제 비디오 URL(m3u8)을 추출합니다.
+        linkkf.live의 playid URL에서 실제 비디오 URL(m3u8)과 자막 URL(vtt)을 추출합니다.
         
         예시:
         - playid_url: https://linkkf.live/playid/403116/?server=12&slug=11
         - iframe: https://play.sub3.top/r2/play.php?id=n8&url=403116s11
         - m3u8: https://n8.hlz3.top/403116s11/index.m3u8
+        
+        Returns:
+            (video_url, referer_url, vtt_url)
         """
         video_url = None
         referer_url = None
+        vtt_url = None
         
         try:
             logger.info(f"Extracting video URL from: {playid_url}")
@@ -497,7 +522,7 @@ class LogicLinkkf(PluginModuleBase):
                 iframe_src = iframe.get("src")
                 logger.info(f"Found iframe: {iframe_src}")
                 
-                # Step 2: iframe 페이지에서 m3u8 URL 추출
+                # Step 2: iframe 페이지에서 m3u8 URL과 vtt URL 추출
                 iframe_headers = {
                     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
                     "Referer": playid_url
@@ -522,6 +547,21 @@ class LogicLinkkf(PluginModuleBase):
                         video_url = source_match.group(1)
                         logger.info(f"Found source URL: {video_url}")
                 
+                # VTT 자막 URL 추출
+                # 예: <track src="https://...vtt" kind="subtitles">
+                vtt_pattern = re.compile(r"<track[^>]+src=['\"]([^'\"]*\.vtt)['\"]")
+                vtt_match = vtt_pattern.search(iframe_content)
+                if vtt_match:
+                    vtt_url = vtt_match.group(1)
+                    logger.info(f"Found VTT subtitle URL: {vtt_url}")
+                else:
+                    # 대안 패턴: url: '...vtt'
+                    vtt_pattern2 = re.compile(r"url:\s*['\"]([^'\"]*\.vtt)['\"]")
+                    vtt_match2 = vtt_pattern2.search(iframe_content)
+                    if vtt_match2:
+                        vtt_url = vtt_match2.group(1)
+                        logger.info(f"Found VTT subtitle URL (alt pattern): {vtt_url}")
+                
                 referer_url = iframe_src
             else:
                 logger.warning("No iframe found in playid page")
@@ -530,7 +570,7 @@ class LogicLinkkf(PluginModuleBase):
             logger.error(f"Error extracting video URL: {e}")
             logger.error(traceback.format_exc())
         
-        return video_url, referer_url
+        return video_url, referer_url, vtt_url
 
     def get_video_url_from_url(url, url2):
         video_url = None
@@ -657,7 +697,7 @@ class LogicLinkkf(PluginModuleBase):
                 referer_url = url2
 
             elif "linkkf" in url2:
-                logger.deubg("linkkf routine")
+                logger.debug("linkkf routine")
                 # linkkf 계열 처리 => URL 리스트를 받아오고, 하나 골라 방문 해서 m3u8을 받아온다.
                 referer_url = url2
                 data2 = LogicLinkkf.get_html(url2)
@@ -674,7 +714,7 @@ class LogicLinkkf(PluginModuleBase):
                     return LogicLinkkf.get_video_url_from_url(url2, url3)
                 elif url3.startswith("/"):
                     url3 = urlparse.urljoin(url2, url3)
-                    print("url3 = ", url3)
+                    logger.debug(f"url3 = {url3}")
                     LogicLinkkf.referer = url2
                     data3 = LogicLinkkf.get_html(url3)
                     # logger.info('data3: %s', data3)
@@ -706,7 +746,7 @@ class LogicLinkkf(PluginModuleBase):
                 # logger.info("download url2 : %s , url3 : %s" % (url2, url3))
                 video_url = url3
             elif "#V" in url2:  # V 패턴 추가
-                print("#v routine")
+                logger.debug("#v routine")
 
                 data2 = LogicLinkkf.get_html(url2)
 
@@ -1223,38 +1263,6 @@ class LogicLinkkf(PluginModuleBase):
             logger.error("Exception:%s", e)
             logger.error(traceback.format_exc())
 
-    @staticmethod
-    def get_html(
-        url: str,
-        referer: str = None,
-        cached: bool = False,
-        stream: bool = False,
-        timeout: int = 5,
-    ):
-        data = ""
-        headers = {
-            "referer": "https://linkkf.live",
-            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36"
-            "Mozilla/5.0 (Macintosh; Intel "
-            "Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 "
-            "Whale/3.12.129.46 Safari/537.36",
-            "X-Requested-With": "XMLHttpRequest",
-        }
-        try:
-            if LogicOhli24.session is None:
-                LogicOhli24.session = requests.session()
-
-            # logger.debug('get_html :%s', url)
-            headers["Referer"] = "" if referer is None else referer
-            page_content = LogicOhli24.session.get(
-                url, headers=headers, timeout=timeout
-            )
-            data = page_content.text
-        except Exception as e:
-            logger.error("Exception:%s", e)
-            logger.error(traceback.format_exc())
-        return data
 
     def get_html_requests(self, url, cached=False):
         if LogicLinkkf.session is None:
@@ -1486,9 +1494,9 @@ class LinkkfQueueEntity(FfmpegQueueEntity):
         self.filepath = os.path.join(self.savepath, self.filename) if self.filename else self.savepath
         logger.info(f"[DEBUG] filepath set to: '{self.filepath}'")
         
-        # playid URL에서 실제 비디오 URL 추출
+        # playid URL에서 실제 비디오 URL과 자막 URL 추출
         try:
-            video_url, referer_url = LogicLinkkf.extract_video_url_from_playid(playid_url)
+            video_url, referer_url, vtt_url = LogicLinkkf.extract_video_url_from_playid(playid_url)
             
             if video_url:
                 self.url = video_url
@@ -1498,6 +1506,11 @@ class LinkkfQueueEntity(FfmpegQueueEntity):
                     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
                 }
                 logger.info(f"Video URL extracted: {self.url}")
+                
+                # 자막 URL 저장
+                if vtt_url:
+                    self.vtt = vtt_url
+                    logger.info(f"Subtitle URL saved: {self.vtt}")
             else:
                 # 추출 실패 시 원본 URL 사용 (fallback)
                 self.url = playid_url
@@ -1564,7 +1577,7 @@ class LinkkfQueueEntity(FfmpegQueueEntity):
 
             if len(tree.xpath(xpath_select_query)) > 0:
                 # by k45734
-                print("ok")
+                logger.debug("make_episode_info: select found")
                 xpath_select_query = '//select[@class="switcher"]/option'
                 for tag in tree.xpath(xpath_select_query):
                     url2s2 = tag.attrib["value"]
@@ -1575,7 +1588,7 @@ class LinkkfQueueEntity(FfmpegQueueEntity):
                     else:
                         url2s.append(url2s2)
             else:
-                print(":: else ::")
+                logger.debug("make_episode_info: else branch")
 
                 tt = re.search(r"var player_data=(.*?)<", data, re.S)
                 json_string = tt.group(1)

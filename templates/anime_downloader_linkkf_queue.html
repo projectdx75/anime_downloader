@@ -50,7 +50,6 @@ $(document).ready(function(){
     
     // linkkf_status 이벤트로 다운로드 상태 업데이트 수신
     frameworkSocket.on('linkkf_status', function(data) {
-      console.log('linkkf_status received:', data.percent + '%');
       status_html(data);
     });
   } catch (e) {
@@ -112,10 +111,75 @@ $(document).ready(function(){
     });
   }
 
+  var refreshIntervalId = null;
+  
+  // 로딩 인디케이터 없이 조용히 목록 가져오기
+  function silentFetchList(callback) {
+    $.ajax({
+      url: '/' + PACKAGE_NAME + '/ajax/' + MODULE_NAME + '/command',
+      type: 'POST',
+      cache: false,
+      global: false,  // 로딩 인디케이터 표시 안함
+      data: {command: 'list'},
+      dataType: 'json',
+      success: function(data) {
+        if (callback) callback(data);
+      },
+      error: function(xhr, status, error) {
+        // 에러 무시
+      }
+    });
+  }
+  
+  // 자동 새로고침 (로딩 인디케이터 없음)
+  function autoRefreshList() {
+    silentFetchList(function(data) {
+      // 새 아이템이 추가되었는지 확인
+      if (!current_data || data.length !== current_data.length) {
+        current_data = data;
+        $("#list").html('');
+        console.log('Refreshed list:', data.length, 'items');
+        if (data.length == 0) {
+          str = "<tr><td colspan='10'><h4>작업이 없습니다.</h4><td><tr>";
+        } else {
+          str = ''
+          for(i in data) {
+            str += make_item(data[i]);
+          }
+        }
+        $("#list").html(str);
+      }
+      
+      // 진행 중인 다운로드가 있는지 확인
+      var hasActiveDownload = false;
+      if (data && data.length > 0) {
+        for (var j = 0; j < data.length; j++) {
+          if (data[j].status_str === 'DOWNLOADING' || data[j].status_str === 'WAITING') {
+            hasActiveDownload = true;
+            break;
+          }
+        }
+      }
+      
+      // 모든 다운로드 완료 시 자동 새로고침 중지
+      if (!hasActiveDownload && refreshIntervalId) {
+        console.log('All downloads completed, stopping auto-refresh');
+        clearInterval(refreshIntervalId);
+        refreshIntervalId = null;
+      }
+      
+      // 활성 다운로드가 있고 새로고침이 중지된 경우 재시작
+      if (hasActiveDownload && !refreshIntervalId) {
+        console.log('Active downloads detected, starting auto-refresh');
+        refreshIntervalId = setInterval(autoRefreshList, 3000);
+      }
+    });
+  }
+  
+  // 초기 로드 (로딩 인디케이터 표시)
   globalSendCommand('list', null, null, null, function(data) {
     current_data = data;
     $("#list").html('');
-    console.log(data)
     if (data.length == 0) {
       str = "<tr><td colspan='10'><h4>작업이 없습니다.</h4><td><tr>";
     } else {
@@ -126,6 +190,9 @@ $(document).ready(function(){
     }
     $("#list").html(str);
   });
+  
+  // 3초마다 자동 새로고침 (로딩 인디케이터 없음)
+  refreshIntervalId = setInterval(autoRefreshList, 3000);
 });
 
 
@@ -216,14 +283,27 @@ function button_html(data) {
 
 function status_html(data) {
   var progress = document.getElementById("progress_" + data.idx);
+  if (!progress) {
+    return;
+  }
   progress.style.width = data.percent+ '%';
   progress.innerHTML = data.percent+ '%';
   progress.style.visibility = 'visible';
-  document.getElementById("status_" + data.idx).innerHTML = data.status_kor;
-  document.getElementById("current_pf_count_" + data.idx).innerHTML = data.current_pf_count;
-  document.getElementById("current_speed_" + data.idx).innerHTML = data.current_speed;
-  document.getElementById("download_time_" + data.idx).innerHTML = data.download_time;
-  document.getElementById("detail_" + data.idx).innerHTML = get_detail(data);
+  
+  var statusEl = document.getElementById("status_" + data.idx);
+  if (statusEl) statusEl.innerHTML = data.status_kor;
+  
+  var pfEl = document.getElementById("current_pf_count_" + data.idx);
+  if (pfEl) pfEl.innerHTML = data.current_pf_count;
+  
+  var speedEl = document.getElementById("current_speed_" + data.idx);
+  if (speedEl) speedEl.innerHTML = data.current_speed;
+  
+  var timeEl = document.getElementById("download_time_" + data.idx);
+  if (timeEl) timeEl.innerHTML = data.download_time;
+  
+  var detailEl = document.getElementById("detail_" + data.idx);
+  if (detailEl) detailEl.innerHTML = get_detail(data);
 }
 
 </script>

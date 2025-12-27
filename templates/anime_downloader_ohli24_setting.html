@@ -17,6 +17,7 @@
     {{ macros.setting_input_text_and_buttons('ohli24_url', 'ohli24 URL', [['go_btn', 'GO']], value=arg['ohli24_url']) }}
     {{ macros.setting_input_text('ohli24_download_path', '저장 폴더', value=arg['ohli24_download_path'], desc='정상적으로 다운 완료 된 파일이 이동할 폴더 입니다. ') }}
     {{ macros.setting_input_int('ohli24_max_ffmpeg_process_count', '동시 다운로드 수', value=arg['ohli24_max_ffmpeg_process_count'], desc='동시에 다운로드 할 에피소드 갯수입니다.') }}
+    {{ macros.setting_select('ohli24_download_method', '다운로드 방법', [['ffmpeg', 'ffmpeg (기본)'], ['ytdlp', 'yt-dlp']], value=arg.get('ohli24_download_method', 'ffmpeg'), desc='m3u8 다운로드에 사용할 도구를 선택합니다.') }}
     {{ macros.setting_checkbox('ohli24_order_desc', '요청 화면 최신순 정렬', value=arg['ohli24_order_desc'], desc='On : 최신화부터, Off : 1화부터') }}
     {{ macros.setting_checkbox('ohli24_auto_make_folder', '제목 폴더 생성', value=arg['ohli24_auto_make_folder'], desc='제목으로 폴더를 생성하고 폴더 안에 다운로드합니다.') }}
     <div id="ohli24_auto_make_folder_div" class="collapse">

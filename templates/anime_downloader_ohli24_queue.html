@@ -47,9 +47,53 @@
                 on_status(data)
             });
 
-
+            // 초기 목록 로드
+            on_start();
+            
+            // 3초마다 자동 새로고침 시작
+            var refreshIntervalId = setInterval(silentRefresh, 3000);
         });
 
+        var current_list_length = 0;
+        var refreshIntervalId = null;
+
+        // 로딩 인디케이터 없이 조용히 목록 가져오기
+        function silentRefresh() {
+            $.ajax({
+                url: '/' + package_name + '/ajax/' + sub + '/entity_list',
+                type: "POST",
+                cache: false,
+                global: false,  // 로딩 인디케이터 표시 안함
+                data: {},
+                dataType: "json",
+                success: function (data) {
+                    // 목록이 변경된 경우에만 갱신
+                    if (data.length !== current_list_length) {
+                        current_list_length = data.length;
+                        make_download_list(data);
+                    }
+                    
+                    // 활성 다운로드 확인
+                    var hasActive = false;
+                    for (var i = 0; i < data.length; i++) {
+                        if (data[i].ffmpeg_status_kor === '다운로드중' || data[i].ffmpeg_status_kor === '대기') {
+                            hasActive = true;
+                            break;
+                        }
+                    }
+                    
+                    // 모든 다운로드 완료 시 새로고침 중지
+                    if (!hasActive && refreshIntervalId) {
+                        clearInterval(refreshIntervalId);
+                        refreshIntervalId = null;
+                    }
+                    // 활성 다운로드 있고 새로고침 중지된 경우 재시작
+                    if (hasActive && !refreshIntervalId) {
+                        refreshIntervalId = setInterval(silentRefresh, 3000);
+                    }
+                }
+            });
+        }
 
         function on_start() {
             $.ajax({
@@ -60,6 +104,7 @@
                 dataType: "json",
                 success: function (data) {
                     console.log("on_start():: ", data)
+                    current_list_length = data.length;
                     make_download_list(data)
                 }
             });

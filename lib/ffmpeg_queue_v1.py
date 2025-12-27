@@ -205,6 +205,10 @@ class FfmpegQueue(object):
                 logger.info(f"save_path: {dirname}, filename: {filename}")
                 logger.info(f"headers: {_headers}")
                 
+                # 자막 URL 로그
+                vtt_url = getattr(entity, 'vtt', None)
+                logger.info(f"Subtitle URL (vtt): {vtt_url}")
+                
                 # 터미널에서 수동 테스트용 ffmpeg 명령어
                 output_file = os.path.join(dirname, filename)
                 referer = _headers.get("Referer", "") if _headers else ""
@@ -214,33 +218,51 @@ class FfmpegQueue(object):
                 logger.info(ffmpeg_cmd)
                 logger.info(f"=== END COMMAND ===")
 
-                # m3u8 URL인 경우 커스텀 HLS 다운로더 사용 (ffmpeg 8.0 .jpg 확장자 문제 우회)
+                # m3u8 URL인 경우 다운로드 방법 설정에 따라 분기
                 if video_url.endswith('.m3u8'):
-                    logger.info("Using custom HLS downloader for m3u8 URL...")
-                    from .hls_downloader import HlsDownloader
+                    # 다운로드 방법 설정 확인
+                    download_method = P.ModelSetting.get(f"{self.name}_download_method")
+                    logger.info(f"Download method: {download_method}")
                     
                     # 다운로드 시작 전 카운트 증가
                     self.current_ffmpeg_count += 1
                     logger.info(f"Download started, current_ffmpeg_count: {self.current_ffmpeg_count}/{self.max_ffmpeg_count}")
                     
                     # 별도 스레드에서 다운로드 실행 (동시 다운로드 지원)
-                    def run_hls_download(downloader_self, entity_ref, output_file_ref, headers_ref):
+                    def run_download(downloader_self, entity_ref, output_file_ref, headers_ref, method):
                         def progress_callback(percent, current, total, speed="", elapsed=""):
                             entity_ref.ffmpeg_status = 5  # DOWNLOADING
-                            entity_ref.ffmpeg_status_kor = f"다운로드중 ({current}/{total})"
+                            if method == "ytdlp":
+                                entity_ref.ffmpeg_status_kor = f"다운로드중 (yt-dlp) {percent}%"
+                            else:
+                                entity_ref.ffmpeg_status_kor = f"다운로드중 ({current}/{total})"
                             entity_ref.ffmpeg_percent = percent
                             entity_ref.current_speed = speed
                             entity_ref.download_time = elapsed
                             entity_ref.refresh_status()
                         
-                        hls_downloader = HlsDownloader(
-                            m3u8_url=video_url,
-                            output_path=output_file_ref,
-                            headers=headers_ref,
-                            callback=progress_callback
-                        )
+                        if method == "ytdlp":
+                            # yt-dlp 사용
+                            from .ytdlp_downloader import YtdlpDownloader
+                            logger.info("Using yt-dlp downloader...")
+                            downloader = YtdlpDownloader(
+                                url=video_url,
+                                output_path=output_file_ref,
+                                headers=headers_ref,
+                                callback=progress_callback
+                            )
+                        else:
+                            # 기본: HLS 다운로더 사용
+                            from .hls_downloader import HlsDownloader
+                            logger.info("Using custom HLS downloader for m3u8 URL...")
+                            downloader = HlsDownloader(
+                                m3u8_url=video_url,
+                                output_path=output_file_ref,
+                                headers=headers_ref,
+                                callback=progress_callback
+                            )
                         
-                        success, message = hls_downloader.download()
+                        success, message = downloader.download()
                         
                         # 다운로드 완료 후 카운트 감소
                         downloader_self.current_ffmpeg_count -= 1
@@ -252,17 +274,75 @@ class FfmpegQueue(object):
                             entity_ref.ffmpeg_percent = 100
                             entity_ref.download_completed()
                             entity_ref.refresh_status()
-                            logger.info(f"HLS download completed: {output_file_ref}")
+                            logger.info(f"Download completed: {output_file_ref}")
+                            
+                            # 자막 파일 다운로드 (vtt_url이 있는 경우)
+                            vtt_url = getattr(entity_ref, 'vtt', None)
+                            if vtt_url:
+                                try:
+                                    import requests
+                                    # 자막 파일 경로 생성 (비디오 파일명.srt)
+                                    video_basename = os.path.splitext(output_file_ref)[0]
+                                    srt_path = video_basename + ".srt"
+                                    
+                                    logger.info(f"Downloading subtitle from: {vtt_url}")
+                                    sub_response = requests.get(vtt_url, headers=headers_ref, timeout=30)
+                                    
+                                    if sub_response.status_code == 200:
+                                        vtt_content = sub_response.text
+                                        
+                                        # VTT를 SRT로 변환 (간단한 변환)
+                                        srt_content = vtt_content
+                                        if vtt_content.startswith("WEBVTT"):
+                                            # WEBVTT 헤더 제거
+                                            lines = vtt_content.split("\n")
+                                            srt_lines = []
+                                            cue_index = 1
+                                            i = 0
+                                            while i < len(lines):
+                                                line = lines[i].strip()
+                                                # WEBVTT, NOTE, STYLE 등 메타데이터 스킵
+                                                if line.startswith("WEBVTT") or line.startswith("NOTE") or line.startswith("STYLE"):
+                                                    i += 1
+                                                    continue
+                                                # 빈 줄 스킵
+                                                if not line:
+                                                    i += 1
+                                                    continue
+                                                # 타임코드 라인 (00:00:00.000 --> 00:00:00.000)
+                                                if "-->" in line:
+                                                    # VTT 타임코드를 SRT 형식으로 변환 (. -> ,)
+                                                    srt_timecode = line.replace(".", ",")
+                                                    srt_lines.append(str(cue_index))
+                                                    srt_lines.append(srt_timecode)
+                                                    cue_index += 1
+                                                    i += 1
+                                                    # 자막 텍스트 읽기
+                                                    while i < len(lines) and lines[i].strip():
+                                                        srt_lines.append(lines[i].rstrip())
+                                                        i += 1
+                                                    srt_lines.append("")
+                                                else:
+                                                    i += 1
+                                            srt_content = "\n".join(srt_lines)
+                                        
+                                        with open(srt_path, "w", encoding="utf-8") as f:
+                                            f.write(srt_content)
+                                        logger.info(f"Subtitle saved: {srt_path}")
+                                    else:
+                                        logger.warning(f"Subtitle download failed: HTTP {sub_response.status_code}")
+                                except Exception as sub_err:
+                                    logger.error(f"Subtitle download error: {sub_err}")
                         else:
                             entity_ref.ffmpeg_status = -1
                             entity_ref.ffmpeg_status_kor = f"실패: {message}"
                             entity_ref.refresh_status()
-                            logger.error(f"HLS download failed: {message}")
+                            logger.error(f"Download failed: {message}")
                     
                     # 스레드 시작
                     download_thread = threading.Thread(
-                        target=run_hls_download,
-                        args=(self, entity, output_file, _headers)
+                        target=run_download,
+                        args=(self, entity, output_file, _headers, download_method)
                     )
                     download_thread.daemon = True
                     download_thread.start()
@@ -443,14 +523,20 @@ class FfmpegQueue(object):
 
     def add_queue(self, entity):
         try:
-            # entity = QueueEntity.create(info)
-            # if entity is not None:
-            #    LogicQueue.download_queue.put(entity)
-            #    return True
             entity.entity_id = self.static_index
             self.static_index += 1
             self.entity_list.append(entity)
             self.download_queue.put(entity)
+            
+            # 소켓IO로 추가 이벤트 전송
+            try:
+                from framework import socketio
+                namespace = f"/{self.P.package_name}/{self.name}/queue"
+                socketio.emit("add", entity.as_dict(), namespace=namespace)
+                logger.debug(f"Emitted 'add' event for entity {entity.entity_id}")
+            except Exception as e:
+                logger.debug(f"Socket emit error (non-critical): {e}")
+            
             return True
         except Exception as exception:
             self.P.logger.error("Exception:%s", exception)
@@ -528,7 +614,7 @@ class FfmpegQueue(object):
 
     def get_entity_list(self):
         ret = []
-        P.logger.debug(self)
+        #P.logger.debug(self)
         for x in self.entity_list:
             tmp = x.as_dict()
             ret.append(tmp)

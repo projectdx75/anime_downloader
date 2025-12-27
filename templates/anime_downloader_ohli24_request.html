@@ -121,17 +121,18 @@
                 tmp = '<img src="' + data.image + '" class="img-fluid" />';
             str += m_col(3, tmp)
             tmp = ''
-            tmp += m_row_start(2) + m_col(3, '제목', 'right') + m_col(9, data.title) + m_row_end();
-            tmp += m_row_start(2) + m_col(3, '원제', 'right') + m_col(9, data.des._otit) + m_row_end();
-            tmp += m_row_start(2) + m_col(3, '감독', 'right') + m_col(9, data.des._dir) + m_row_end();
-            tmp += m_row_start(2) + m_col(3, '제작사', 'right') + m_col(9, data.des._pub) + m_row_end();
-            tmp += m_row_start(2) + m_col(3, '장르', 'right') + m_col(9, data.des._tag) + m_row_end();
-            tmp += m_row_start(2) + m_col(3, '분류', 'right') + m_col(9, data.des._classifi) + m_row_end();
-            tmp += m_row_start(2) + m_col(3, '방영일', 'right') + m_col(9, data.date + '(' + data.day + ')') + m_row_end();
-            tmp += m_row_start(2) + m_col(3, '등급', 'right') + m_col(9, data.des._grade) + m_row_end();
-            tmp += m_row_start(2) + m_col(3, '총화수', 'right') + m_col(9, data.des._total_chapter ? data.des._total_chapter : '') + m_row_end();
-            tmp += m_row_start(2) + m_col(3, '상영시간', 'right') + m_col(9, data.des._show_time ? data.des._show_time : '') + m_row_end();
-            tmp += m_row_start(2) + m_col(3, '줄거리', 'right') + m_col(9, data.ser_description) + m_row_end();
+            var des = data.des || {};
+            tmp += m_row_start(2) + m_col(3, '제목', 'right') + m_col(9, data.title || '') + m_row_end();
+            tmp += m_row_start(2) + m_col(3, '원제', 'right') + m_col(9, des._otit || '') + m_row_end();
+            tmp += m_row_start(2) + m_col(3, '감독', 'right') + m_col(9, des._dir || '') + m_row_end();
+            tmp += m_row_start(2) + m_col(3, '제작사', 'right') + m_col(9, des._pub || '') + m_row_end();
+            tmp += m_row_start(2) + m_col(3, '장르', 'right') + m_col(9, des._tag || '') + m_row_end();
+            tmp += m_row_start(2) + m_col(3, '분류', 'right') + m_col(9, des._classifi || '') + m_row_end();
+            tmp += m_row_start(2) + m_col(3, '방영일', 'right') + m_col(9, (data.date || '') + '(' + (data.day || '') + ')') + m_row_end();
+            tmp += m_row_start(2) + m_col(3, '등급', 'right') + m_col(9, des._grade || '') + m_row_end();
+            tmp += m_row_start(2) + m_col(3, '총화수', 'right') + m_col(9, des._total_chapter || '') + m_row_end();
+            tmp += m_row_start(2) + m_col(3, '상영시간', 'right') + m_col(9, des._show_time || '') + m_row_end();
+            tmp += m_row_start(2) + m_col(3, '줄거리', 'right') + m_col(9, data.ser_description || '') + m_row_end();
             str += m_col(9, tmp)
             str += m_row_end();
 

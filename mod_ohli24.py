@@ -28,16 +28,8 @@ from flask import request, render_template, jsonify
 from lxml import html
 from sqlalchemy import or_, desc
 
-pkgs = ["bs4", "jsbeautifier", "aiohttp", "lxml", "loguru"]
-for pkg in pkgs:
-    try:
-        importlib.import_module(pkg)
-    # except ImportError:
-    except ImportError:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", "pip"])
-        # main(["install", pkg])
-        subprocess.check_call([sys.executable, "-m", "pip", "install", pkg])
-        importlib.import_module(pkg)
+# third-party
+import requests
 
 # third party package
 import aiohttp
@@ -101,13 +93,14 @@ class LogicOhli24(PluginModuleBase):
 
         self.db_default = {
             "ohli24_db_version": "1",
-            "ohli24_url": "https://ohli24.org",
+            "ohli24_url": "https://ani.ohli24.com",
             "ohli24_download_path": os.path.join(path_data, P.package_name, "ohli24"),
             "ohli24_auto_make_folder": "True",
             f"{self.name}_recent_code": "",
             "ohli24_auto_make_season_folder": "True",
             "ohli24_finished_insert": "[완결]",
             "ohli24_max_ffmpeg_process_count": "1",
+            f"{self.name}_download_method": "ffmpeg",  # ffmpeg or ytdlp
             "ohli24_order_desc": "False",
             "ohli24_auto_start": "False",
             "ohli24_interval": "* 5 * * *",
@@ -469,13 +462,6 @@ class LogicOhli24(PluginModuleBase):
                 return self.current_data
 
             if code.startswith("http"):
-
-                # if code.split('c/')[1] is not None:
-                #     code = code.split('c/')[1]
-                #     code_type = 'c'
-                # elif code.split('e/')[1] is not None:
-                #     code_type = 'e'
-                #     code = code.split('e/')[1]
                 if "/c/" in code:
                     code = code.split("c/")[1]
                     code_type = "c"
@@ -485,43 +471,84 @@ class LogicOhli24(PluginModuleBase):
 
                 logger.info(f"code:::: {code}")
 
+            base_url = P.ModelSetting.get("ohli24_url").rstrip("/")  # 뒤에 슬래시 제거
+            
             if code_type == "c":
-                url = P.ModelSetting.get("ohli24_url") + "/c/" + code
+                url = base_url + "/c/" + code
             elif code_type == "e":
-                url = P.ModelSetting.get("ohli24_url") + "/e/" + code
+                url = base_url + "/e/" + code
             else:
-                url = P.ModelSetting.get("ohli24_url") + "/e/" + code
+                url = base_url + "/e/" + code
 
             if wr_id is not None:
-                # print(len(wr_id))
                 if len(wr_id) > 0:
-                    url = P.ModelSetting.get("ohli24_url") + "/bbs/board.php?bo_table=" + bo_table + "&wr_id=" + wr_id
-                else:
-                    pass
+                    url = base_url + "/bbs/board.php?bo_table=" + bo_table + "&wr_id=" + wr_id
 
             logger.debug("url:::> %s", url)
 
             response_data = LogicOhli24.get_html(url, timeout=10)
+            logger.debug(f"HTML length: {len(response_data)}")
+            # 디버깅: HTML 일부 출력
+            if len(response_data) < 1000:
+                logger.warning(f"Short HTML response: {response_data[:500]}")
+            else:
+                # item-subject 있는지 확인
+                if "item-subject" in response_data:
+                    logger.info("Found item-subject in HTML")
+                else:
+                    logger.warning("item-subject NOT found in HTML")
+                if "itemprop=\"image\"" in response_data:
+                    logger.info("Found itemprop=image in HTML")
+                else:
+                    logger.warning("itemprop=image NOT found in HTML")
+            
             tree = html.fromstring(response_data)
-            title = tree.xpath('//div[@class="view-title"]/h1/text()')[0]
-            # image = tree.xpath('//div[@class="view-info"]/div[@class="image"]/div/img')[0]['src']
-            image = tree.xpath('//div[@class="image"]/div/img/@src')[0]
-            image = image.replace("..", P.ModelSetting.get("ohli24_url"))
-            des_items = tree.xpath('//div[@class="list"]/p')
-            des = {}
-            des_key = [
-                "_otit",
-                "_dir",
-                "_pub",
-                "_tag",
-                "_classifi",
-                "_country",
-                "_grade",
-                "_total_chapter",
-                "_show_time",
-                "_release_year",
-                "_drawing",
+            
+            # 제목 추출 - h1[itemprop="headline"] 또는 기타 h1
+            title = ""
+            title_xpaths = [
+                '//h1[@itemprop="headline"]/text()',
+                '//h1[@itemprop="headline"]//text()',
+                '//div[@class="view-wrap"]//h1/text()',
+                '//h1/text()',
             ]
+            for xpath in title_xpaths:
+                result = tree.xpath(xpath)
+                if result:
+                    title = "".join(result).strip()
+                    if title and title != "OHLI24":
+                        break
+            
+            if not title or "OHLI24" in title:
+                title = urllib.parse.unquote(code)
+            
+            logger.info(f"title:: {title}")
+            
+            # 이미지 추출 - img[itemprop="image"] 또는 img.img-tag
+            image = ""
+            image_xpaths = [
+                '//img[@itemprop="image"]/@src',
+                '//img[@class="img-tag"]/@src',
+                '//div[@class="view-wrap"]//img/@src',
+                '//div[contains(@class, "view-img")]//img/@src',
+            ]
+            for xpath in image_xpaths:
+                result = tree.xpath(xpath)
+                if result:
+                    image = result[0]
+                    if image and not "logo" in image.lower():
+                        break
+            
+            if image:
+                if image.startswith(".."):
+                    image = image.replace("..", P.ModelSetting.get("ohli24_url"))
+                elif not image.startswith("http"):
+                    image = P.ModelSetting.get("ohli24_url") + image
+            
+            logger.info(f"image:: {image}")
+            
+            # 설명 정보 추출
+            des = {}
             description_dict = {
                 "원제": "_otit",
                 "원작": "_org",
@@ -543,70 +570,88 @@ class LogicOhli24(PluginModuleBase):
                 "런타임": "_run_time",
                 "작화": "_drawing",
             }
+            
+            # view-fields에서 메타데이터 추출 시도
+            des_items = tree.xpath('//div[@class="list"]/p')
+            if not des_items:
+                des_items = tree.xpath('//div[contains(@class, "view-field")]')
+            
+            for item in des_items:
+                try:
+                    span = item.xpath(".//span//text()")
+                    if span and span[0] in description_dict:
+                        key = description_dict[span[0]]
+                        value = item.xpath(".//span/text()")
+                        des[key] = value[1] if len(value) > 1 else ""
+                except Exception:
+                    pass
 
-            list_body_li = tree.xpath('//ul[@class="list-body"]/li')
-            # logger.debug(f"list_body_li:: {list_body_li}")
+            # 에피소드 목록 추출 - a.item-subject
             episodes = []
-            vi = None
-            for li in list_body_li:
-                # logger.debug(li)
-                title = li.xpath(".//a/text()")[0].strip()
-                thumbnail = image
-                # logger.info(li.xpath('//a[@class="item-subject"]/@href'))
-                link = P.ModelSetting.get("ohli24_url") + li.xpath('.//a[@class="item-subject"]/@href')[0]
-                # logger.debug(f"link:: {link}")
-                _date = li.xpath('.//div[@class="wr-date"]/text()')[0]
-                m = hashlib.md5(title.encode("utf-8"))
-                # _vi = hashlib.md5(title.encode('utf-8').hexdigest())
-                # logger.info(m.hexdigest())
-                _vi = m.hexdigest()
-                episodes.append(
-                    {
-                        "title": title,
-                        "link": link,
+            episode_links = tree.xpath('//a[@class="item-subject"]')
+            
+            for a_elem in episode_links:
+                try:
+                    ep_title = "".join(a_elem.xpath(".//text()")).strip()
+                    href = a_elem.get("href", "")
+                    
+                    if not href.startswith("http"):
+                        href = P.ModelSetting.get("ohli24_url").rstrip("/") + href
+                    
+                    # 부모에서 날짜 찾기
+                    parent = a_elem.getparent()
+                    _date = ""
+                    if parent is not None:
+                        grandparent = parent.getparent()
+                        if grandparent is not None:
+                            date_result = grandparent.xpath('.//div[@class="wr-date"]/text()')
+                            if not date_result:
+                                date_result = grandparent.xpath('.//*[contains(@class, "date")]/text()')
+                            _date = date_result[0].strip() if date_result else ""
+                    
+                    m = hashlib.md5(ep_title.encode("utf-8"))
+                    _vi = m.hexdigest()
+                    
+                    episodes.append({
+                        "title": ep_title,
+                        "link": href,
                         "thumbnail": image,
                         "date": _date,
                         "day": _date,
-                        "_id": title,
-                        "va": link,
+                        "_id": ep_title,
+                        "va": href,
                         "_vi": _vi,
                         "content_code": code,
-                    }
-                )
+                    })
+                except Exception as ep_err:
+                    logger.warning(f"Episode parse error: {ep_err}")
+                    continue
+            
+            logger.info(f"Found {len(episodes)} episodes")
 
-            # logger.info("des_items length:: %s", len(des_items))
-            for idx, item in enumerate(des_items):
-                # key = des_key[idx]
-                span = item.xpath(".//span//text()")
-                # logger.info(span)
-                key = description_dict[span[0]]
-                try:
-                    des[key] = item.xpath(".//span/text()")[1]
-                except IndexError:
-                    des[key] = ""
-
-            # logger.info(f"des::>> {des}")
-            image = image.replace("..", P.ModelSetting.get("ohli24_url"))
-            # logger.info("images:: %s", image)
-            logger.info("title:: %s", title)
-
-            ser_description = tree.xpath('//div[@class="view-stocon"]/div[@class="c"]/text()')
+            # 줄거리 추출
+            ser_description_result = tree.xpath('//div[@class="view-stocon"]/div[@class="c"]/text()')
+            if not ser_description_result:
+                ser_description_result = tree.xpath('//div[contains(@class, "view-story")]//text()')
+            ser_description = ser_description_result if ser_description_result else []
 
             data = {
                 "title": title,
                 "image": image,
-                "date": "2022.01.11 00:30 (화)",
+                "date": "",
+                "day": "",
                 "ser_description": ser_description,
                 "des": des,
                 "episode": episodes,
+                "code": code,
             }
 
             if not P.ModelSetting.get_bool("ohli24_order_desc"):
                 data["episode"] = list(reversed(data["episode"]))
                 data["list_order"] = "desc"
 
+            self.current_data = data
             return data
-            # logger.info(response_text)
 
         except Exception as e:
             P.logger.error("Exception:%s", e)
@@ -775,50 +820,88 @@ class LogicOhli24(PluginModuleBase):
         return True
 
     @staticmethod
-    def get_html(url, headers=None, referer=None, stream=False, timeout=10, stealth=False):
-        data = ""
-        if headers is None:
-            headers = {
-                "referer": f"https://ohli24.org",
-                "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36"
-                "Mozilla/5.0 (Macintosh; Intel "
-                "Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 "
-                "Whale/3.12.129.46 Safari/537.36",
-                "X-Requested-With": "XMLHttpRequest",
-            }
+    def get_html(url, headers=None, referer=None, stream=False, timeout=60, stealth=False, data=None, method='GET'):
+        """별도 스레드에서 cloudscraper 실행하여 gevent SSL 충돌 및 Cloudflare 우회"""
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+        import time
+        from urllib import parse
+        
+        # URL 인코딩 (한글 주소 대응)
+        if '://' in url:
+            try:
+                scheme, netloc, path, params, query, fragment = parse.urlparse(url)
+                # 이미 인코딩된 경우를 대비해 unquote 후 다시 quote
+                path = parse.quote(parse.unquote(path), safe='/')
+                query = parse.quote(parse.unquote(query), safe='=&%')
+                url = parse.urlunparse((scheme, netloc, path, params, query, fragment))
+            except:
+                pass
 
-        try:
-
-            print("cloudflare protection bypass ==================P")
-            response_date = ""
-            if headers is not None:
-                LogicOhli24.headers = headers
-            if LogicOhli24.session is None:
-                LogicOhli24.session = requests.session()
-
-            LogicOhli24.session.verify = False
-            # logger.debug('get_html :%s', url)
-            # LogicOhli24.headers["Referer"] = "" if referer is None else referer
-            # logger.debug(f"referer:: {referer}")
-            if referer:
-                LogicOhli24.headers["Referer"] = referer
-
-            # logger.info(headers)
-            # logger.debug(f"LogicOhli24.headers:: {LogicOhli24.headers}")
-
+        def fetch_url_with_cloudscraper(url, headers, timeout, data, method):
+            """별도 스레드에서 cloudscraper로 실행"""
+            import cloudscraper
+            scraper = cloudscraper.create_scraper(
+                browser={'browser': 'chrome', 'platform': 'darwin', 'mobile': False},
+                delay=10
+            )
+            # 프록시 설정 (필요시 사용)
             proxies = {
                 "http": "http://192.168.0.2:3138",
                 "https": "http://192.168.0.2:3138",
             }
-
-            page_content = LogicOhli24.session.get(url, headers=LogicOhli24.headers, timeout=timeout, proxies=proxies)
-            response_data = page_content.text
-            # logger.debug(response_data)
-            return response_data
-        except Exception as e:
-            logger.error("Exception:%s", e)
-            logger.error(traceback.format_exc())
+            if method.upper() == 'POST':
+                response = scraper.post(url, headers=headers, data=data, timeout=timeout, proxies=proxies)
+            else:
+                response = scraper.get(url, headers=headers, timeout=timeout, proxies=proxies)
+            return response.text
+        
+        response_data = ""
+        
+        if headers is None:
+            headers = {
+                "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                "accept-language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+            }
+        
+        if referer:
+            # Referer 인코딩
+            if '://' in referer:
+                try:
+                    scheme, netloc, path, params, query, fragment = parse.urlparse(referer)
+                    path = parse.quote(parse.unquote(path), safe='/')
+                    query = parse.quote(parse.unquote(query), safe='=&%')
+                    referer = parse.urlunparse((scheme, netloc, path, params, query, fragment))
+                except:
+                    pass
+            headers["referer"] = referer
+        elif "referer" not in headers:
+            headers["referer"] = "https://ani.ohli24.com"
+        
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                logger.debug(f"get_html (cloudscraper in thread) {method} attempt {attempt + 1}: {url}")
+                
+                # ThreadPoolExecutor로 별도 스레드에서 cloudscraper 실행
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(fetch_url_with_cloudscraper, url, headers, timeout, data, method)
+                    response_data = future.result(timeout=timeout + 10)
+                
+                if response_data and (len(response_data) > 10 or method.upper() == 'POST'):
+                    logger.debug(f"get_html success, length: {len(response_data)}")
+                    return response_data
+                else:
+                    logger.warning(f"Short response (len={len(response_data) if response_data else 0})")
+                
+            except FuturesTimeoutError:
+                logger.warning(f"get_html attempt {attempt + 1} timed out")
+            except Exception as e:
+                logger.warning(f"get_html attempt {attempt + 1} failed: {e}")
+            
+            if attempt < max_retries - 1:
+                time.sleep(3)
+        
         return response_data
 
     #########################################################
@@ -1025,166 +1108,97 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
     # Get episode info from OHLI24 site
     def make_episode_info(self):
         try:
-            base_url = "https://a21.ohli24.com"
             base_url = P.ModelSetting.get("ohli24_url")
-            iframe_url = ""
-
-            # https://ohli24.org/e/%EB%85%B9%EC%9D%84%20%EB%A8%B9%EB%8A%94%20%EB%B9%84%EC%8A%A4%EC%BD%94%206%ED%99%94
+            
+            # 에피소드 페이지 URL (예: https://ani.ohli24.com/e/원펀맨 3기 1화)
             url = self.info["va"]
-
+            if "//e/" in url:
+                url = url.replace("//e/", "/e/")
+            
             ourls = parse.urlparse(url)
-
+            
             headers = {
                 "Referer": f"{ourls.scheme}://{ourls.netloc}",
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36",
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             }
-            logger.debug(headers)
-            logger.debug("make_episode_info()::url==> %s", url)
+            logger.debug(f"make_episode_info()::url==> {url}")
             logger.info(f"self.info:::> {self.info}")
-
-            # text = requests.get(url, headers=headers).text
+            
+            # Step 1: 에피소드 페이지에서 cdndania.com iframe 찾기
             text = LogicOhli24.get_html(url, headers=headers, referer=f"{ourls.scheme}://{ourls.netloc}")
-            # logger.debug(text)
-            soup1 = BeautifulSoup(text, "lxml")
-            pattern = re.compile(r"url : \"\.\.(.*)\"")
-            script = soup1.find("script", text=pattern)
-
-            if script:
-                match = pattern.search(script.text)
-                if match:
-                    iframe_url = match.group(1)
-                    logger.info("iframe_url::> %s", iframe_url)
-
-            # logger.debug(soup1.find("iframe"))
-
-            # iframe_url = soup1.find("iframe")["src"]
-            # logger.info("iframe_url::> %s", iframe_url)
-
-            print(base_url)
-            print(iframe_url)
-            # exit()
-            iframe_src = f'{P.ModelSetting.get("ohli24_url")}{iframe_url}'
-
-            iframe_html = LogicOhli24.get_html(iframe_src, headers=headers, timeout=600)
-
-            # print(iframe_html)
-            pattern = r"<iframe src=\"(.*?)\" allowfullscreen>"
-
-            match = re.search(pattern, iframe_html)
-            if match:
-                iframe_src = match.group(1)
-                print(iframe_src)
-
-            logger.debug(f"iframe_src:::> {iframe_src}")
-
-            # resp1 = requests.get(iframe_src, headers=headers, timeout=600).text
-            resp1 = LogicOhli24.get_html(iframe_src, headers=headers, timeout=600)
-            # logger.info("resp1::>> %s", resp1)
-            soup3 = BeautifulSoup(resp1, "lxml")
-            # packed_pattern = re.compile(r'\\{*(eval.+)*\\}', re.MULTILINE | re.DOTALL)
-            s_pattern = re.compile(r"(eval.+)", re.MULTILINE | re.DOTALL)
-            packed_pattern = re.compile(r"if?.([^{}]+)\{.*(eval.+)\}.+else?.{.(eval.+)\}", re.DOTALL)
-            packed_script = soup3.find("script", text=s_pattern)
-            # packed_script = soup3.find('script')
-            # logger.info("packed_script>>> %s", packed_script.text)
-            unpack_script = None
-            if packed_script is not None:
-                # logger.debug('zzzzzzzzzzzz')
-                match = packed_pattern.search(packed_script.text)
-                # match = re.search(packed_pattern, packed_script.text)
-                # logger.debug("match::: %s", match.group())
-                # unpack_script = jsbeautifier.beautify(match.group(3))
-
-                logger.debug(type(packed_script))
-                unpack_script = jsbeautifier.beautify(str(packed_script))
-
-            p1 = re.compile(r"(\"tracks\".*\])\,\"captions\"", re.MULTILINE | re.DOTALL)
-            m2 = re.search(
-                r"(\"tracks\".*\]).*\"captions\"",
-                unpack_script,
-                flags=re.MULTILINE | re.DOTALL,
-            )
-            # print(m2.group(1))
-            dict_string = "{" + m2.group(1) + "}"
-
-            logger.info(f"dict_string::> {dict_string}")
-            tracks = json.loads(dict_string)
-            self.srt_url = tracks["tracks"][0]["file"]
-
-            logger.debug(f'srt_url::: {tracks["tracks"][0]["file"]}')
-
-            video_hash = iframe_src.split("/")
-            video_hashcode = re.sub(r"index\.php\?data=", "", video_hash[-1])
-            self._vi = video_hashcode
-
-            logger.debug(f"video_hash::> {video_hash}")
-            video_info_url = f"{video_hash[0]}//{video_hash[2]}/player/index.php?data={video_hashcode}&do=getVideo"
-            # print('hash:::', video_hash)
-            logger.debug(f"video_info_url::: {video_info_url}")
-
-            headers = {
-                "referer": f"{iframe_src}",
-                "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36"
-                "Mozilla/5.0 (Macintosh; Intel "
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/116.0.0.0 Safari/537.36"
-                "Whale/3.12.129.46 Safari/537.36",
-                "X-Requested-With": "XMLHttpRequest",
-                "Cookie": "PHPSESSID=b6hnl2crfvtg36sm6rjjkso4p0; 2a0d2363701f23f8a75028924a3af643=MTgwLjY2LjIyMi4xODk%3D; _ga=GA1.1.586565509.1695135593; __gads=ID=60e47defb3337e02-227f0fc9e3e3009a:T=1695135593:RT=1695135593:S=ALNI_MagY46XGCbx9E4Et2DRzfUHdTAKsg; __gpi=UID=00000c4bb3d077c8:T=1695135593:RT=1695135593:S=ALNI_MYvj_8OjdhtGPEGoXhPsQWq1qye8Q; _ga_MWWDFMDJR0=GS1.1.1695135593.1.1.1695135599.0.0.0",
-            }
-
-            payload = {
-                "hash": video_hash[-1],
-            }
-            resp2 = requests.post(video_info_url, headers=headers, data=payload, timeout=20).json()
-
-            logger.debug("resp2::> %s", resp2)
-
-            hls_url = resp2["videoSource"]
-            logger.debug(f"video_url::> {hls_url}")
-
-            resp3 = requests.get(hls_url, headers=headers).text
-            # logger.debug(resp3)
-
-            # stream_url = hls_url.split('\n')[-1].strip()
-            stream_info = resp3.split("\n")[-2:]
-            # logger.debug('stream_url:: %s', stream_url)
-            logger.debug(f"stream_info:: {stream_info}")
+            
+            # 디버깅: HTML에 cdndania 있는지 확인
+            if "cdndania" in text:
+                logger.info("cdndania found in HTML")
+            else:
+                logger.warning("cdndania NOT found in HTML - page may be dynamically loaded")
+                logger.debug(f"HTML snippet: {text[:1000]}")
+            
+            soup = BeautifulSoup(text, "lxml")
+            
+            # mcpalyer 클래스 내의 iframe 찾기
+            player_div = soup.find("div", class_="mcpalyer")
+            logger.debug(f"player_div (mcpalyer): {player_div is not None}")
+            
+            if not player_div:
+                player_div = soup.find("div", class_="embed-responsive")
+                logger.debug(f"player_div (embed-responsive): {player_div is not None}")
+            
+            iframe = None
+            if player_div:
+                iframe = player_div.find("iframe")
+                logger.debug(f"iframe in player_div: {iframe is not None}")
+            if not iframe:
+                iframe = soup.find("iframe", src=re.compile(r"cdndania\.com"))
+                logger.debug(f"iframe with cdndania src: {iframe is not None}")
+            if not iframe:
+                # 모든 iframe 찾기
+                all_iframes = soup.find_all("iframe")
+                logger.debug(f"Total iframes found: {len(all_iframes)}")
+                for i, f in enumerate(all_iframes):
+                    logger.debug(f"iframe {i}: src={f.get('src', 'no src')}")
+                if all_iframes:
+                    iframe = all_iframes[0]
+            
+            if not iframe or not iframe.get("src"):
+                logger.error("No iframe found on episode page")
+                return
+            
+            iframe_src = iframe.get("src")
+            logger.info(f"Found cdndania iframe: {iframe_src}")
+            
+            # Step 2: cdndania.com 페이지에서 m3u8 URL 추출
+            video_url, vtt_url = self.extract_video_from_cdndania(iframe_src, url)
+            
+            if not video_url:
+                logger.error("Failed to extract video URL from cdndania")
+                return
+            
+            self.url = video_url
+            self.srt_url = vtt_url
+            logger.info(f"Video URL: {self.url}")
+            if self.srt_url:
+                logger.info(f"Subtitle URL: {self.srt_url}")
+            
+            # 헤더 설정
             self.headers = {
-                "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/71.0.3554.0 Safari/537.36Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3554.0 Safari/537.36",
-                "Referer": "https://ndoodle.xyz/video/03a3655fff3e9bdea48de9f49e938e32",
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Referer": iframe_src,
             }
-
-            self.url = stream_info[1].strip()
-            logger.info(self.url)
-            if "anibeast.com" in self.url:
-                self.headers["Referer"] = iframe_src
-            if "crazypatutu.com" in self.url:
-                self.headers["Referer"] = iframe_src
-
-            match = re.compile(r'NAME="(?P<quality>.*?)"').search(stream_info[0])
-            self.quality = "720P"
-            if match is not None:
-                self.quality = match.group("quality")
-                logger.info(self.quality)
-
+            
+            # 파일명 생성
             match = re.compile(r"(?P<title>.*?)\s*((?P<season>\d+)%s)?\s*((?P<epi_no>\d+)%s)" % ("기", "화")).search(
                 self.info["title"]
             )
-
-            # epi_no 초기값
+            
             epi_no = 1
-
+            self.quality = "720P"
+            
             if match:
                 self.content_title = match.group("title").strip()
                 if "season" in match.groupdict() and match.group("season") is not None:
                     self.season = int(match.group("season"))
-
-                # epi_no = 1
+                
                 epi_no = int(match.group("epi_no"))
                 ret = "%s.S%sE%s.%s-OHNI24.mp4" % (
                     self.content_title,
@@ -1194,16 +1208,15 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
                 )
             else:
                 self.content_title = self.info["title"]
-                P.logger.debug("NOT MATCH")
+                logger.debug("NOT MATCH")
                 ret = "%s.720p-OHNI24.mp4" % self.info["title"]
-
-            # logger.info('self.content_title:: %s', self.content_title)
+            
             self.epi_queue = epi_no
             self.filename = Util.change_text_for_use_filename(ret)
             logger.info(f"self.filename::> {self.filename}")
             self.savepath = P.ModelSetting.get("ohli24_download_path")
             logger.info(f"self.savepath::> {self.savepath}")
-
+            
             if P.ModelSetting.get_bool("ohli24_auto_make_folder"):
                 if self.info["day"].find("완결") != -1:
                     folder_name = "%s %s" % (
@@ -1219,19 +1232,112 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
             self.filepath = os.path.join(self.savepath, self.filename)
             if not os.path.exists(self.savepath):
                 os.makedirs(self.savepath)
-
-            from framework.common.util import write_file, convert_vtt_to_srt
-
-            srt_filepath = os.path.join(self.savepath, self.filename.replace(".mp4", ".ko.srt"))
-
-            if self.srt_url is not None and not os.path.exists(srt_filepath) and not ("thumbnails.vtt" in self.srt_url):
-                if requests.get(self.srt_url, headers=headers).status_code == 200:
-                    srt_data = requests.get(self.srt_url, headers=headers).text
-                    Util.write_file(srt_data, srt_filepath)
-
+            
+            # 자막 다운로드
+            if self.srt_url and "thumbnails.vtt" not in self.srt_url:
+                try:
+                    srt_filepath = os.path.join(self.savepath, self.filename.replace(".mp4", ".ko.srt"))
+                    if not os.path.exists(srt_filepath):
+                        srt_resp = requests.get(self.srt_url, headers=self.headers, timeout=30)
+                        if srt_resp.status_code == 200:
+                            Util.write_file(srt_resp.text, srt_filepath)
+                            logger.info(f"Subtitle saved: {srt_filepath}")
+                except Exception as srt_err:
+                    logger.warning(f"Subtitle download failed: {srt_err}")
+            
         except Exception as e:
             P.logger.error("Exception:%s", e)
             P.logger.error(traceback.format_exc())
+    
+    def extract_video_from_cdndania(self, iframe_src, referer_url):
+        """cdndania.com 플레이어에서 API 호출을 통해 비디오(m3u8) 및 자막(vtt) URL 추출"""
+        video_url = None
+        vtt_url = None
+        
+        try:
+            logger.debug(f"Extracting from cdndania: {iframe_src}")
+            
+            # iframe URL에서 비디오 ID(hash) 추출
+            video_id = ""
+            if "/video/" in iframe_src:
+                video_id = iframe_src.split("/video/")[1].split("?")[0].split("&")[0]
+            elif "/v/" in iframe_src:
+                video_id = iframe_src.split("/v/")[1].split("?")[0].split("&")[0]
+            
+            if not video_id:
+                logger.error(f"Could not find video ID in iframe URL: {iframe_src}")
+                return video_url, vtt_url
+            
+            # getVideo API 호출
+            api_url = f"https://cdndania.com/player/index.php?data={video_id}&do=getVideo"
+            headers = {
+                "x-requested-with": "XMLHttpRequest",
+                "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+                "referer": iframe_src
+            }
+            # Referer는 메인 사이트 도메인만 보내는 것이 더 안정적일 수 있음
+            post_data = {
+                "hash": video_id,
+                "r": "https://ani.ohli24.com/"
+            }
+            
+            logger.debug(f"Calling video API: {api_url}")
+            json_text = LogicOhli24.get_html(api_url, headers=headers, data=post_data, method='POST', timeout=30)
+            
+            if json_text:
+                try:
+                    import json
+                    data = json.loads(json_text)
+                    video_url = data.get("videoSource")
+                    if not video_url:
+                        video_url = data.get("securedLink")
+                    
+                    if video_url:
+                        logger.info(f"Found video URL via API: {video_url}")
+                        
+                        # VTT 자막 확인 (있는 경우)
+                        vtt_url = data.get("videoSubtitle")
+                        if vtt_url:
+                            logger.info(f"Found subtitle URL via API: {vtt_url}")
+                except Exception as json_err:
+                    logger.warning(f"Failed to parse API JSON: {json_err}")
+            
+            # API 실패 시 기존 방식(정규식)으로 폴백
+            if not video_url:
+                logger.info("API extraction failed, falling back to regex")
+                html_content = LogicOhli24.get_html(iframe_src, referer=referer_url, timeout=30)
+                if html_content:
+                    # m3u8 URL 패턴 찾기
+                    m3u8_patterns = [
+                        re.compile(r"file:\s*['\"]([^'\"]*(?:\.m3u8|master\.txt)[^'\"]*)['\"]"),
+                        re.compile(r"['\"]([^'\"]*(?:\.m3u8|master\.txt)[^'\"]*)['\"]"),
+                    ]
+                    for pattern in m3u8_patterns:
+                        match = pattern.search(html_content)
+                        if match:
+                            tmp_url = match.group(1)
+                            if tmp_url.startswith("//"): tmp_url = "https:" + tmp_url
+                            elif tmp_url.startswith("/"):
+                                parsed = parse.urlparse(iframe_src)
+                                tmp_url = f"{parsed.scheme}://{parsed.netloc}{tmp_url}"
+                            video_url = tmp_url
+                            logger.info(f"Found video URL via regex: {video_url}")
+                            break
+                    
+                    if not vtt_url:
+                        vtt_match = re.search(r"['\"]([^'\"]*\.vtt[^'\"]*)['\"]", html_content)
+                        if vtt_match:
+                            vtt_url = vtt_match.group(1)
+                            if vtt_url.startswith("//"): vtt_url = "https:" + vtt_url
+                            elif vtt_url.startswith("/"):
+                                parsed = parse.urlparse(iframe_src)
+                                vtt_url = f"{parsed.scheme}://{parsed.netloc}{vtt_url}"
+
+        except Exception as e:
+            logger.error(f"Error in extract_video_from_cdndania: {e}")
+            logger.error(traceback.format_exc())
+        
+        return video_url, vtt_url
 
     # def callback_function(self, **args):
     #     refresh_type = None
