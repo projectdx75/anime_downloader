@@ -24,38 +24,93 @@
 <script type="text/javascript">
 
 $(document).ready(function(){
-  var socket = io.connect(window.location.href);
+  console.log('Queue page loaded, connecting to sockets...');
+  
+  var protocol = location.protocol;
+  var socketUrl = protocol + "//" + document.domain + ":" + location.port;
+  
+  // Queue 페이지 전용 namespace 연결
+  var queueSocket = null;
+  try {
+    queueSocket = io.connect(socketUrl + '/anime_downloader/linkkf/queue');
+    console.log('Queue socket connecting to:', socketUrl + '/anime_downloader/linkkf/queue');
+  } catch (e) {
+    console.error('Queue socket connect error:', e);
+  }
+  
+  // /framework namespace 연결 (FlaskFarm 기본 알림용)
+  var frameworkSocket = null;
+  try {
+    frameworkSocket = io.connect(socketUrl + '/framework');
+    console.log('Framework socket connecting to:', socketUrl + '/framework');
+    
+    frameworkSocket.on('connect', function() {
+      console.log('Framework socket connected!');
+    });
+    
+    // linkkf_status 이벤트로 다운로드 상태 업데이트 수신
+    frameworkSocket.on('linkkf_status', function(data) {
+      console.log('linkkf_status received:', data.percent + '%');
+      status_html(data);
+    });
+  } catch (e) {
+    console.error('Framework socket connect error:', e);
+  }
+  
+  // Queue socket으로 직접 이벤트 받기
+  var socket = queueSocket;
+  
+  if (socket) {
+    socket.on('connect', function() {
+      console.log('Socket connected! socket.id:', socket.id);
+    });
+  
+    socket.on('disconnect', function() {
+      console.log('Socket disconnected!');
+    });
+  
+    socket.on('connect_error', function(err) {
+      console.log('Socket connect error:', err);
+    });
+  
+    // 모든 이벤트 수신 테스트
+    socket.onAny(function(event, ...args) {
+      console.log('Socket event received:', event, args);
+    });
 
-  socket.on('on_start', function(data){
-    document.getElementById("log").innerHTML += data.data;
-    document.getElementById("log").scrollTop = document.getElementById("log").scrollHeight;
-    document.getElementById("log").style.visibility = 'visible';
-    $('#loading').hide();
-  });
+    socket.on('on_start', function(data){
+      console.log('on_start received:', data);
+      document.getElementById("log").innerHTML += data.data;
+      document.getElementById("log").scrollTop = document.getElementById("log").scrollHeight;
+      document.getElementById("log").style.visibility = 'visible';
+      $('#loading').hide();
+    });
 
-  socket.on('add', function(data){
-    str = make_item(data);
-    if (current_data == null || current_data.length == 0) {
-      current_data = Array();
-      $("#list").html(str);
-    } else {
-      $("#list").html($("#list").html() + str);
-    }
-    current_data.push(data);
-  });
+    socket.on('add', function(data){
+      str = make_item(data);
+      if (current_data == null || current_data.length == 0) {
+        current_data = Array();
+        $("#list").html(str);
+      } else {
+        $("#list").html($("#list").html() + str);
+      }
+      current_data.push(data);
+    });
 
-  socket.on('status_change', function(data) {
-    button_html(data);
-  });
+    socket.on('status_change', function(data) {
+      button_html(data);
+    });
 
-  socket.on('status', function(data){
-    status_html(data);
-  });
+    socket.on('status', function(data){
+      console.log('status received:', data);
+      status_html(data);
+    });
 
-  socket.on('last', function(data){
-    status_html(data);
-    button_html(data);
-  });
+    socket.on('last', function(data){
+      status_html(data);
+      button_html(data);
+    });
+  }
 
   globalSendCommand('list', null, null, null, function(data) {
     current_data = data;

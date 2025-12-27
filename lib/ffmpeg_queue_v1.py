@@ -43,6 +43,8 @@ class FfmpegQueueEntity(abc.ABCMeta("ABC", (object,), {"__slots__": ()})):
         self.filepath = None
         self.quality = None
         self.headers = None
+        self.current_speed = ""  # 다운로드 속도
+        self.download_time = ""  # 경과 시간
         # FfmpegQueueEntity.static_index += 1
         # FfmpegQueueEntity.entity_list.append(self)
 
@@ -194,24 +196,99 @@ class FfmpegQueue(object):
 
                 # SupportFfmpeg 초기화
                 self.support_init()
+                # entity.headers가 있으면 우선 사용, 없으면 caller.headers 사용
                 _headers = entity.headers
-                if self.caller is not None:
+                if _headers is None and self.caller is not None:
                     _headers = self.caller.headers
+                
+                logger.info(f"Starting ffmpeg download - video_url: {video_url}")
+                logger.info(f"save_path: {dirname}, filename: {filename}")
+                logger.info(f"headers: {_headers}")
+                
+                # 터미널에서 수동 테스트용 ffmpeg 명령어
+                output_file = os.path.join(dirname, filename)
+                referer = _headers.get("Referer", "") if _headers else ""
+                user_agent = _headers.get("User-Agent", "") if _headers else ""
+                ffmpeg_cmd = f'ffmpeg -headers "Referer: {referer}\\r\\nUser-Agent: {user_agent}\\r\\n" -i "{video_url}" -c copy "{output_file}"'
+                logger.info(f"=== MANUAL TEST COMMAND ===")
+                logger.info(ffmpeg_cmd)
+                logger.info(f"=== END COMMAND ===")
 
-                ffmpeg = SupportFfmpeg(
-                    url=video_url,
-                    filename=filename,
-                    callback_function=self.callback_function,
-                    headers=_headers,
-                    max_pf_count=0,
-                    save_path=ToolUtil.make_path(dirname),
-                    timeout_minute=60,
-                )
-                #
-                # todo: 임시로 start() 중지
-                ffmpeg.start()
-                self.current_ffmpeg_count += 1
-                self.download_queue.task_done()
+                # m3u8 URL인 경우 커스텀 HLS 다운로더 사용 (ffmpeg 8.0 .jpg 확장자 문제 우회)
+                if video_url.endswith('.m3u8'):
+                    logger.info("Using custom HLS downloader for m3u8 URL...")
+                    from .hls_downloader import HlsDownloader
+                    
+                    # 다운로드 시작 전 카운트 증가
+                    self.current_ffmpeg_count += 1
+                    logger.info(f"Download started, current_ffmpeg_count: {self.current_ffmpeg_count}/{self.max_ffmpeg_count}")
+                    
+                    # 별도 스레드에서 다운로드 실행 (동시 다운로드 지원)
+                    def run_hls_download(downloader_self, entity_ref, output_file_ref, headers_ref):
+                        def progress_callback(percent, current, total, speed="", elapsed=""):
+                            entity_ref.ffmpeg_status = 5  # DOWNLOADING
+                            entity_ref.ffmpeg_status_kor = f"다운로드중 ({current}/{total})"
+                            entity_ref.ffmpeg_percent = percent
+                            entity_ref.current_speed = speed
+                            entity_ref.download_time = elapsed
+                            entity_ref.refresh_status()
+                        
+                        hls_downloader = HlsDownloader(
+                            m3u8_url=video_url,
+                            output_path=output_file_ref,
+                            headers=headers_ref,
+                            callback=progress_callback
+                        )
+                        
+                        success, message = hls_downloader.download()
+                        
+                        # 다운로드 완료 후 카운트 감소
+                        downloader_self.current_ffmpeg_count -= 1
+                        logger.info(f"Download finished, current_ffmpeg_count: {downloader_self.current_ffmpeg_count}/{downloader_self.max_ffmpeg_count}")
+                        
+                        if success:
+                            entity_ref.ffmpeg_status = 7  # COMPLETED
+                            entity_ref.ffmpeg_status_kor = "완료"
+                            entity_ref.ffmpeg_percent = 100
+                            entity_ref.download_completed()
+                            entity_ref.refresh_status()
+                            logger.info(f"HLS download completed: {output_file_ref}")
+                        else:
+                            entity_ref.ffmpeg_status = -1
+                            entity_ref.ffmpeg_status_kor = f"실패: {message}"
+                            entity_ref.refresh_status()
+                            logger.error(f"HLS download failed: {message}")
+                    
+                    # 스레드 시작
+                    download_thread = threading.Thread(
+                        target=run_hls_download,
+                        args=(self, entity, output_file, _headers)
+                    )
+                    download_thread.daemon = True
+                    download_thread.start()
+                    
+                    self.download_queue.task_done()
+                else:
+                    # 일반 URL은 기존 SupportFfmpeg 사용 (비동기 방식)
+                    self.current_ffmpeg_count += 1
+                    
+                    ffmpeg = SupportFfmpeg(
+                        url=video_url,
+                        filename=filename,
+                        callback_function=self.callback_function,
+                        headers=_headers,
+                        max_pf_count=0,
+                        save_path=ToolUtil.make_path(dirname),
+                        timeout_minute=60,
+                    )
+                    #
+                    # todo: 임시로 start() 중지
+                    logger.info("Calling ffmpeg.start()...")
+                    ffmpeg.start()
+                    logger.info("ffmpeg.start() returned")
+                    
+                    self.download_queue.task_done()
+
 
             except Exception as exception:
                 self.P.logger.error("Exception:%s", exception)
@@ -236,19 +313,19 @@ class FfmpegQueue(object):
                     + args["data"]["save_fullpath"],
                     "url": "/ffmpeg/download/list",
                 }
-                socketio.emit("notify", data, namespace="/framework", broadcast=True)
+                socketio.emit("notify", data, namespace="/framework")
                 refresh_type = "add"
         elif args["type"] == "last":
             if args["status"] == SupportFfmpeg.Status.WRONG_URL:
                 data = {"type": "warning", "msg": "잘못된 URL입니다"}
-                socketio.emit("notify", data, namespace="/framework", broadcast=True)
+                socketio.emit("notify", data, namespace="/framework")
                 refresh_type = "add"
             elif args["status"] == SupportFfmpeg.Status.WRONG_DIRECTORY:
                 data = {
                     "type": "warning",
                     "msg": "잘못된 디렉토리입니다.<br>" + args["data"]["save_fullpath"],
                 }
-                socketio.emit("notify", data, namespace="/framework", broadcast=True)
+                socketio.emit("notify", data, namespace="/framework")
                 refresh_type = "add"
             elif (
                 args["status"] == SupportFfmpeg.Status.ERROR
@@ -258,7 +335,7 @@ class FfmpegQueue(object):
                     "type": "warning",
                     "msg": "다운로드 시작 실패.<br>" + args["data"]["save_fullpath"],
                 }
-                socketio.emit("notify", data, namespace="/framework", broadcast=True)
+                socketio.emit("notify", data, namespace="/framework")
                 refresh_type = "add"
             elif args["status"] == SupportFfmpeg.Status.USER_STOP:
                 data = {
@@ -266,7 +343,7 @@ class FfmpegQueue(object):
                     "msg": "다운로드가 중지 되었습니다.<br>" + args["data"]["save_fullpath"],
                     "url": "/ffmpeg/download/list",
                 }
-                socketio.emit("notify", data, namespace="/framework", broadcast=True)
+                socketio.emit("notify", data, namespace="/framework")
                 refresh_type = "last"
             elif args["status"] == SupportFfmpeg.Status.COMPLETED:
                 print("print():: ffmpeg download completed..")
@@ -278,7 +355,7 @@ class FfmpegQueue(object):
                     "url": "/ffmpeg/download/list",
                 }
 
-                socketio.emit("notify", data, namespace="/framework", broadcast=True)
+                socketio.emit("notify", data, namespace="/framework")
                 refresh_type = "last"
             elif args["status"] == SupportFfmpeg.Status.TIME_OVER:
                 data = {
@@ -286,7 +363,7 @@ class FfmpegQueue(object):
                     "msg": "시간초과로 중단 되었습니다.<br>" + args["data"]["save_fullpath"],
                     "url": "/ffmpeg/download/list",
                 }
-                socketio.emit("notify", data, namespace="/framework", broadcast=True)
+                socketio.emit("notify", data, namespace="/framework")
                 refresh_type = "last"
             elif args["status"] == SupportFfmpeg.Status.PF_STOP:
                 data = {
@@ -294,7 +371,7 @@ class FfmpegQueue(object):
                     "msg": "PF초과로 중단 되었습니다.<br>" + args["data"]["save_fullpath"],
                     "url": "/ffmpeg/download/list",
                 }
-                socketio.emit("notify", data, namespace="/framework", broadcast=True)
+                socketio.emit("notify", data, namespace="/framework")
                 refresh_type = "last"
             elif args["status"] == SupportFfmpeg.Status.FORCE_STOP:
                 data = {
@@ -302,7 +379,7 @@ class FfmpegQueue(object):
                     "msg": "강제 중단 되었습니다.<br>" + args["data"]["save_fullpath"],
                     "url": "/ffmpeg/download/list",
                 }
-                socketio.emit("notify", data, namespace="/framework", broadcast=True)
+                socketio.emit("notify", data, namespace="/framework")
                 refresh_type = "last"
             elif args["status"] == SupportFfmpeg.Status.HTTP_FORBIDDEN:
                 data = {
@@ -310,7 +387,7 @@ class FfmpegQueue(object):
                     "msg": "403에러로 중단 되었습니다.<br>" + args["data"]["save_fullpath"],
                     "url": "/ffmpeg/download/list",
                 }
-                socketio.emit("notify", data, namespace="/framework", broadcast=True)
+                socketio.emit("notify", data, namespace="/framework")
                 refresh_type = "last"
             elif args["status"] == SupportFfmpeg.Status.ALREADY_DOWNLOADING:
                 data = {
@@ -318,14 +395,17 @@ class FfmpegQueue(object):
                     "msg": "임시파일폴더에 파일이 있습니다.<br>" + args["data"]["temp_fullpath"],
                     "url": "/ffmpeg/download/list",
                 }
-                socketio.emit("notify", data, namespace="/framework", broadcast=True)
+                socketio.emit("notify", data, namespace="/framework")
                 refresh_type = "last"
         elif args["type"] == "normal":
             if args["status"] == SupportFfmpeg.Status.DOWNLOADING:
                 refresh_type = "status"
         # P.logger.info(refresh_type)
         # Todo:
-        self.caller.socketio_callback(refresh_type, args["data"])
+        if self.caller is not None:
+            self.caller.socketio_callback(refresh_type, args["data"])
+        else:
+            logger.warning("caller is None, cannot send socketio_callback")
 
     # def ffmpeg_listener(self, **arg):
     #     import ffmpeg

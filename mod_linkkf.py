@@ -199,28 +199,141 @@ class LogicLinkkf(PluginModuleBase):
                     }
                 )
             elif sub == "add_queue":
+                logger.info("========= add_queue START =========")
                 logger.debug("linkkf add_queue routine ===============")
                 ret = {}
-                info = json.loads(request.form["data"])
-                logger.info(f"info:: {info}")
-                ret["ret"] = self.add(info)
+                try:
+                    form_data = request.form.get("data")
+                    if not form_data:
+                        logger.error(f"No data in form. Form keys: {list(request.form.keys())}")
+                        ret["ret"] = "error"
+                        ret["log"] = "No data received"
+                        return jsonify(ret)
+                    info = json.loads(form_data)
+                    logger.info(f"info:: {info}")
+                    ret["ret"] = self.add(info)
+                except Exception as e:
+                    logger.error(f"add_queue error: {e}")
+                    logger.error(traceback.format_exc())
+                    ret["ret"] = "error"
+                    ret["log"] = str(e)
                 return jsonify(ret)
             elif sub == "entity_list":
-                pass
+                ret = {"list": self.queue.get_entity_list() if self.queue else []}
+                return jsonify(ret)
             elif sub == "queue_command":
-                pass
+                cmd = request.form.get("cmd", "")
+                entity_id = request.form.get("entity_id", "")
+                if self.queue:
+                    ret = self.queue.command(cmd, int(entity_id) if entity_id else 0)
+                else:
+                    ret = {"ret": "error", "log": "Queue not initialized"}
+                return jsonify(ret)
             elif sub == "add_queue_checked_list":
-                pass
+                return jsonify({"ret": "not_implemented"})
             elif sub == "web_list":
-                pass
+                return jsonify({"ret": "not_implemented"})
             elif sub == "db_remove":
-                pass
+                return jsonify({"ret": "not_implemented"})
             elif sub == "add_whitelist":
-                pass
+                return jsonify({"ret": "not_implemented"})
+            elif sub == "command":
+                # command = queue_command와 동일
+                cmd = request.form.get("cmd", "")
+                entity_id = request.form.get("entity_id", "")
+                
+                logger.debug(f"command endpoint - cmd: {cmd}, entity_id: {entity_id}")
+                
+                # list 명령 처리
+                if cmd == "list":
+                    if self.queue:
+                        return jsonify(self.queue.get_entity_list())
+                    else:
+                        return jsonify([])
+                
+                # 기타 명령 처리
+                if self.queue:
+                    ret = self.queue.command(cmd, int(entity_id) if entity_id else 0)
+                    if ret is None:
+                        ret = {"ret": "success"}
+                else:
+                    ret = {"ret": "error", "log": "Queue not initialized"}
+                return jsonify(ret)
+            
+            # 매치되는 sub가 없는 경우 기본 응답
+            return jsonify({"ret": "error", "log": f"Unknown sub: {sub}"})
 
         except Exception as e:
             P.logger.error(f"Exception: {str(e)}")
             P.logger.error(traceback.format_exc())
+            return jsonify({"ret": "error", "log": str(e)})
+
+    def process_command(self, command, arg1, arg2, arg3, req):
+        """
+        FlaskFarm 프레임워크가 /command 엔드포인트에서 호출하는 함수
+        queue 페이지에서 list, stop 등의 명령을 처리
+        """
+        ret = {"ret": "success"}
+        logger.debug(f"process_command - command: {command}, arg1: {arg1}")
+        
+        if command == "list":
+            # 큐 목록 반환
+            if self.queue:
+                ret = [x for x in self.queue.get_entity_list()]
+            else:
+                ret = []
+            return jsonify(ret)
+        
+        elif command == "stop":
+            # 다운로드 중지
+            if self.queue and arg1:
+                try:
+                    entity_id = int(arg1)
+                    result = self.queue.command("stop", entity_id)
+                    if result:
+                        ret = result
+                except Exception as e:
+                    ret = {"ret": "error", "log": str(e)}
+            return jsonify(ret)
+        
+        elif command == "queue_list":
+            # 대기 큐 목록
+            if self.queue:
+                ret = [x for x in self.queue.get_entity_list()]
+            else:
+                ret = []
+            return jsonify(ret)
+        
+        # 기본 응답
+        return jsonify(ret)
+
+    def socketio_callback(self, refresh_type, data):
+        """
+        socketio를 통해 클라이언트에 상태 업데이트 전송
+        refresh_type: 'add', 'status', 'last' 등
+        data: entity.as_dict() 데이터
+        """
+        logger.info(f">>> socketio_callback called: {refresh_type}, {data.get('percent', 'N/A')}%")
+        try:
+            from flaskfarm.lib.framework.init_main import socketio
+            
+            # FlaskFarm의 기존 패턴: /framework namespace로 emit
+            # queue 페이지의 소켓이 이 메시지를 받아서 처리
+            namespace = f"/{P.package_name}/{self.name}/queue"
+            
+            # 먼저 queue에 직접 emit (기존 방식)
+            socketio.emit(refresh_type, data, namespace=namespace)
+            
+            # /framework namespace로도 notify 이벤트 전송
+            notify_data = {
+                "type": "success",
+                "msg": f"다운로드중 {data.get('percent', 0)}% - {data.get('filename', '')}",
+            }
+            socketio.emit("notify", notify_data, namespace="/framework")
+            logger.info(f">>> socketio.emit completed to /framework")
+                
+        except Exception as e:
+            logger.error(f"socketio_callback error: {e}")
 
     @staticmethod
     def get_html(url, cached=False):
@@ -338,13 +451,86 @@ class LogicLinkkf(PluginModuleBase):
             ret["log"] = str(e)
         return ret
 
-    def setting_save_after(self):
+    def setting_save_after(self, change_list=None):
         if self.queue.get_max_ffmpeg_count() != P.ModelSetting.get_int(
             "linkkf_max_ffmpeg_process_count"
         ):
             self.queue.set_max_ffmpeg_count(
                 P.ModelSetting.get_int("linkkf_max_ffmpeg_process_count")
             )
+
+    @staticmethod
+    def extract_video_url_from_playid(playid_url):
+        """
+        linkkf.live의 playid URL에서 실제 비디오 URL(m3u8)을 추출합니다.
+        
+        예시:
+        - playid_url: https://linkkf.live/playid/403116/?server=12&slug=11
+        - iframe: https://play.sub3.top/r2/play.php?id=n8&url=403116s11
+        - m3u8: https://n8.hlz3.top/403116s11/index.m3u8
+        """
+        video_url = None
+        referer_url = None
+        
+        try:
+            logger.info(f"Extracting video URL from: {playid_url}")
+            
+            # Step 1: playid 페이지에서 iframe src 추출
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+                "Referer": "https://linkkf.live/"
+            }
+            
+            response = requests.get(playid_url, headers=headers, timeout=15)
+            html_content = response.text
+            
+            soup = BeautifulSoup(html_content, "html.parser")
+            
+            # iframe 찾기 (id="video-player-iframe" 또는 play.sub3.top 포함)
+            iframe = soup.select_one("iframe#video-player-iframe")
+            if not iframe:
+                iframe = soup.select_one("iframe[src*='play.sub']")
+            if not iframe:
+                iframe = soup.select_one("iframe")
+            
+            if iframe and iframe.get("src"):
+                iframe_src = iframe.get("src")
+                logger.info(f"Found iframe: {iframe_src}")
+                
+                # Step 2: iframe 페이지에서 m3u8 URL 추출
+                iframe_headers = {
+                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+                    "Referer": playid_url
+                }
+                
+                iframe_response = requests.get(iframe_src, headers=iframe_headers, timeout=15)
+                iframe_content = iframe_response.text
+                
+                # m3u8 URL 패턴 찾기
+                # 예: url: 'https://n8.hlz3.top/403116s11/index.m3u8'
+                m3u8_pattern = re.compile(r"url:\s*['\"]([^'\"]*\.m3u8)['\"]")
+                m3u8_match = m3u8_pattern.search(iframe_content)
+                
+                if m3u8_match:
+                    video_url = m3u8_match.group(1)
+                    logger.info(f"Found m3u8 URL: {video_url}")
+                else:
+                    # 대안 패턴: source src
+                    source_pattern = re.compile(r"<source[^>]+src=['\"]([^'\"]+)['\"]")
+                    source_match = source_pattern.search(iframe_content)
+                    if source_match:
+                        video_url = source_match.group(1)
+                        logger.info(f"Found source URL: {video_url}")
+                
+                referer_url = iframe_src
+            else:
+                logger.warning("No iframe found in playid page")
+                
+        except Exception as e:
+            logger.error(f"Error extracting video URL: {e}")
+            logger.error(traceback.format_exc())
+        
+        return video_url, referer_url
 
     def get_video_url_from_url(url, url2):
         video_url = None
@@ -921,8 +1107,11 @@ class LogicLinkkf(PluginModuleBase):
                         # 화면 표시용 title은 "01화" 형태
                         ep_title = f"{ep_name}화"
                         
+                        # 에피소드별 고유 ID 생성 (프로그램코드 + 에피소드번호)
+                        episode_unique_id = data["code"] + ep_name.zfill(4)
+                        
                         entity = {
-                            "_id": data["code"],
+                            "_id": episode_unique_id,  # 에피소드별 고유 ID
                             "program_code": data["code"],
                             "program_title": data["title"],
                             "save_folder": Util.change_text_for_use_filename(data["save_folder"]),
@@ -930,14 +1119,17 @@ class LogicLinkkf(PluginModuleBase):
                             "season": data["season"],
                         }
                         
-                        # 에피소드 코드 생성
-                        entity["code"] = data["code"] + ep_name.zfill(4)
+                        # 에피소드 코드 = _id와 동일
+                        entity["code"] = episode_unique_id
                         
                         # URL 생성: playid/{code}/?server=12&slug={slug} 형태
                         entity["url"] = f"https://linkkf.live/playid/{code}/?server=12&slug={ep_slug}"
                         
                         # 저장 경로 설정
                         tmp_save_path = P.ModelSetting.get("linkkf_download_path")
+                        if not tmp_save_path:
+                            tmp_save_path = "/tmp/anime_downloads"
+                            
                         if P.ModelSetting.get("linkkf_auto_make_folder") == "True":
                             program_path = os.path.join(tmp_save_path, entity["save_folder"])
                             entity["save_path"] = program_path
@@ -945,6 +1137,9 @@ class LogicLinkkf(PluginModuleBase):
                                 entity["save_path"] = os.path.join(
                                     entity["save_path"], "Season %s" % int(entity["season"])
                                 )
+                        else:
+                            # 기본 경로 설정
+                            entity["save_path"] = tmp_save_path
                         
                         entity["image"] = data["poster_url"]
                         # filename 생성 시 숫자만 전달 ("01화" 아님)
@@ -1123,10 +1318,28 @@ class LogicLinkkf(PluginModuleBase):
             logger.error(traceback.format_exc())
 
     def add(self, episode_info):
+        # 큐가 초기화되지 않았으면 초기화
+        if self.queue is None:
+            logger.warning("Queue is None in add(), initializing...")
+            try:
+                self.queue = FfmpegQueue(
+                    P, P.ModelSetting.get_int("linkkf_max_ffmpeg_process_count"), "linkkf", caller=self
+                )
+                self.queue.queue_start()
+            except Exception as e:
+                logger.error(f"Failed to initialize queue: {e}")
+                return "queue_init_error"
+        
+        # 큐 상태 로깅
+        queue_len = len(self.queue.entity_list) if self.queue else 0
+        logger.info(f"add() called - Queue length: {queue_len}, episode _id: {episode_info.get('_id')}")
+        
         if self.is_exist(episode_info):
+            logger.info(f"is_exist returned True for _id: {episode_info.get('_id')}")
             return "queue_exist"
         else:
             db_entity = ModelLinkkfItem.get_by_linkkf_id(episode_info["_id"])
+            logger.info(f"db_entity: {db_entity}")
 
             logger.debug("db_entity:::> %s", db_entity)
             # logger.debug("db_entity.status ::: %s", db_entity.status)
@@ -1150,28 +1363,25 @@ class LogicLinkkf(PluginModuleBase):
                 # ret = {'ret': 'success'}
                 # ret['json'] = ffmpeg.start()
                 return "enqueue_db_append"
-            elif db_entity.status != "completed":
-                entity = LinkkfQueueEntity(P, self, episode_info)
-
-                logger.debug("entity:::> %s", entity.as_dict())
-
-                # P.logger.debug(F.config['path_data'])
-                # P.logger.debug(self.headers)
-
-                filename = os.path.basename(entity.filepath)
-                ffmpeg = SupportFfmpeg(
-                    entity.url,
-                    entity.filename,
-                    callback_function=self.callback_function,
-                    max_pf_count=0,
-                    save_path=entity.savepath,
-                    timeout_minute=60,
-                    headers=self.headers,
-                )
-                ret = {"ret": "success"}
-                ret["json"] = ffmpeg.start()
-
-                # self.queue.add_queue(entity)
+            elif db_entity.get("status") != "completed" if isinstance(db_entity, dict) else db_entity.status != "completed":
+                # DB에 있지만 완료되지 않은 경우도 큐에 추가
+                status = db_entity.get("status") if isinstance(db_entity, dict) else db_entity.status
+                logger.info(f"db_entity status: {status}, adding to queue")
+                
+                try:
+                    logger.info("Creating LinkkfQueueEntity...")
+                    entity = LinkkfQueueEntity(P, self, episode_info)
+                    logger.info(f"LinkkfQueueEntity created, url: {entity.url}, filepath: {entity.filepath}")
+                    logger.debug("entity:::> %s", entity.as_dict())
+                    
+                    logger.info(f"Adding to queue, queue length before: {len(self.queue.entity_list)}")
+                    result = self.queue.add_queue(entity)
+                    logger.info(f"add_queue result: {result}, queue length after: {len(self.queue.entity_list)}")
+                except Exception as e:
+                    logger.error(f"Error creating entity or adding to queue: {e}")
+                    logger.error(traceback.format_exc())
+                    return "entity_creation_error"
+                
                 return "enqueue_db_exist"
             else:
                 return "db_completed"
@@ -1183,6 +1393,9 @@ class LogicLinkkf(PluginModuleBase):
     #             return True
 
     def is_exist(self, info):
+        if self.queue is None:
+            return False
+            
         for _ in self.queue.entity_list:
             if _.info["_id"] == info["_id"]:
                 return True
@@ -1193,7 +1406,7 @@ class LogicLinkkf(PluginModuleBase):
             logger.debug("%s plugin_load", P.package_name)
             # old version
             self.queue = FfmpegQueue(
-                P, P.ModelSetting.get_int("linkkf_max_ffmpeg_process_count")
+                P, P.ModelSetting.get_int("linkkf_max_ffmpeg_process_count"), "linkkf", caller=self
             )
             self.current_data = None
             self.queue.queue_start()
@@ -1248,20 +1461,64 @@ class LinkkfQueueEntity(FfmpegQueueEntity):
         self.headers = None
         
         # info에서 필요한 정보 설정
-        self.url = info.get("url", "")
+        playid_url = info.get("url", "")
         self.filename = info.get("filename", "")
-        self.filepath = info.get("filename", "")
-        self.savepath = info.get("save_path", "")
         self.quality = info.get("quality", "720p")
         self.season = info.get("season", "1")
         self.content_title = info.get("program_title", "")
+        self.savepath = info.get("save_path", "")
         
-        # make_episode_info는 비디오 URL 추출이 필요할 때만 호출
-        # 현재는 바로 다운로드 큐에 추가하므로 주석 처리
-        # self.make_episode_info()
+        # savepath가 비어있으면 기본값 설정
+        if not self.savepath:
+            default_path = P.ModelSetting.get("linkkf_download_path")
+            logger.info(f"[DEBUG] linkkf_download_path from DB: '{default_path}'")
+            logger.info(f"[DEBUG] info save_path: '{info.get('save_path', 'NOT SET')}'")
+            logger.info(f"[DEBUG] info save_folder: '{info.get('save_folder', 'NOT SET')}'")
+            
+            if default_path:
+                save_folder = info.get("save_folder", "Unknown")
+                self.savepath = os.path.join(default_path, save_folder)
+            else:
+                self.savepath = "/tmp/anime_downloads"
+            logger.info(f"[DEBUG] Final savepath set to: '{self.savepath}'")
+        
+        # filepath = savepath + filename (전체 경로)
+        self.filepath = os.path.join(self.savepath, self.filename) if self.filename else self.savepath
+        logger.info(f"[DEBUG] filepath set to: '{self.filepath}'")
+        
+        # playid URL에서 실제 비디오 URL 추출
+        try:
+            video_url, referer_url = LogicLinkkf.extract_video_url_from_playid(playid_url)
+            
+            if video_url:
+                self.url = video_url
+                # HLS 다운로드를 위한 헤더 설정
+                self.headers = {
+                    "Referer": referer_url or "https://linkkf.live/",
+                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+                }
+                logger.info(f"Video URL extracted: {self.url}")
+            else:
+                # 추출 실패 시 원본 URL 사용 (fallback)
+                self.url = playid_url
+                logger.warning(f"Failed to extract video URL, using playid URL: {playid_url}")
+        except Exception as e:
+            logger.error(f"Exception in video URL extraction: {e}")
+            logger.error(traceback.format_exc())
+            self.url = playid_url
 
     def refresh_status(self):
-        self.module_logic.socketio_callback("status", self.as_dict())
+        try:
+            # from framework import socketio (FlaskFarm 표준 방식)
+            from framework import socketio
+            
+            data = self.as_dict()
+            
+            # /framework namespace로 linkkf_status 이벤트 전송
+            socketio.emit("linkkf_status", data, namespace="/framework")
+            
+        except Exception as e:
+            logger.error(f"refresh_status error: {e}")
 
     def info_dict(self, tmp):
         # logger.debug('self.info::> %s', self.info)
@@ -1272,6 +1529,27 @@ class LinkkfQueueEntity(FfmpegQueueEntity):
         tmp["content_title"] = self.content_title
         tmp["linkkf_info"] = self.info
         tmp["epi_queue"] = self.epi_queue
+        
+        # 템플릿이 기대하는 필드들 추가
+        tmp["idx"] = self.entity_id
+        tmp["callback_id"] = f"linkkf_{self.entity_id}"
+        tmp["start_time"] = self.created_time.strftime("%m-%d %H:%M") if hasattr(self, 'created_time') and self.created_time and hasattr(self.created_time, 'strftime') else (self.created_time if self.created_time else "")
+        tmp["status_kor"] = self.ffmpeg_status_kor if self.ffmpeg_status_kor else "대기중"
+        tmp["percent"] = self.ffmpeg_percent if self.ffmpeg_percent else 0
+        tmp["duration_str"] = ""
+        tmp["current_pf_count"] = 0
+        tmp["current_speed"] = self.current_speed if hasattr(self, 'current_speed') and self.current_speed else ""
+        tmp["download_time"] = self.download_time if hasattr(self, 'download_time') and self.download_time else ""
+        tmp["status_str"] = "WAITING" if not self.ffmpeg_status else ("DOWNLOADING" if self.ffmpeg_status == 5 else "COMPLETED" if self.ffmpeg_status == 7 else "WAITING")
+        tmp["temp_fullpath"] = ""
+        tmp["save_fullpath"] = self.filepath if self.filepath else ""
+        tmp["duration"] = ""
+        tmp["current_duration"] = ""
+        tmp["current_bitrate"] = ""
+        tmp["end_time"] = ""
+        tmp["max_pf_count"] = 0
+        tmp["exist"] = False
+        
         return tmp
 
     def make_episode_info(self):
