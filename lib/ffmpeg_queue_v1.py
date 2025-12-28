@@ -246,7 +246,7 @@ class FfmpegQueue(object):
                 logger.info(f"=== END COMMAND ===")
 
                 # m3u8 URL인 경우 다운로드 방법 설정에 따라 분기
-                if video_url.endswith('.m3u8') or 'master.txt' in video_url:
+                if video_url.endswith('.m3u8') or 'master.txt' in video_url or 'gcdn.app' in video_url:
                     # 다운로드 방법 설정 확인
                     download_method = P.ModelSetting.get(f"{self.name}_download_method")
                     

@@ -21,15 +21,17 @@
             </div>
         </div>
     </div>
-    <form id="program_list">
-        {{ macros.setting_input_text_and_buttons('code', '작품 Code',
-        [['analysis_btn', '분석'], ['go_anilife_btn', 'Go 애니라이프']], desc='예)
-        "https://anilife.live/g/l?id=f6e83ec6-bd25-4d6c-9428-c10522687604" 이나 "f6e83ec6-bd25-4d6c-9428-c10522687604"')
-        }}
-    </form>
-    <form id="program_auto_form">
-        <div id="episode_list"></div>
-    </form>
+    <div id="main_content" style="display: none; opacity: 0; transition: opacity 0.3s ease-in;">
+        <form id="program_list">
+            {{ macros.setting_input_text_and_buttons('code', '작품 Code',
+            [['analysis_btn', '분석'], ['go_anilife_btn', 'Go 애니라이프']], desc='예)
+            "https://anilife.live/g/l?id=f6e83ec6-bd25-4d6c-9428-c10522687604" 이나 "f6e83ec6-bd25-4d6c-9428-c10522687604"')
+            }}
+        </form>
+        <form id="program_auto_form">
+            <div id="episode_list"></div>
+        </form>
+    </div>
 </div>
 <!--전체-->
 <script src="{{ url_for('.static', filename='js/sjva_ui14.js') }}"></script>
@@ -123,6 +125,13 @@
     function make_program(data) {
         current_data = data;
         // console.log("current_data::", current_data)
+        
+        // 에피소드 목록을 완전히 숨긴 상태로 시작 (visibility로 레이아웃 시프트 방지)
+        const episodeList = document.getElementById("episode_list");
+        episodeList.style.visibility = 'hidden';
+        episodeList.style.opacity = '0';
+        episodeList.style.transition = 'opacity 0.3s ease-in';
+        
         str = '';
         tmp = '<div class="form-inline">'
         tmp += m_button('check_download_btn', '선택 다운로드 추가', []);
@@ -146,7 +155,7 @@
             if (data.image && data.image.includes('cdn.anilife.live')) {
                 proxyImgSrc = '/' + package_name + '/ajax/' + sub + '/proxy_image?image_url=' + encodeURIComponent(data.image);
             }
-            tmp = '<img src="' + proxyImgSrc + '" class="img-fluid" onerror="this.src=\'../static/img_loader_x200.svg\'">';
+            tmp = '<img src="' + proxyImgSrc + '" class="img-fluid series-main-img" onerror="this.src=\'../static/img_loader_x200.svg\'">';
         }
         str += m_col(3, tmp)
         tmp = ''
@@ -182,7 +191,7 @@
             str += '<div class="episode-card">';
             str += '<div class="episode-thumb">';
             if (epThumbSrc) {
-                str += '<img src="' + epThumbSrc + '" onerror="this.src=\'../static/img_loader_x200.svg\'">';
+                str += '<img src="' + epThumbSrc + '" loading="lazy" onerror="this.src=\'../static/img_loader_x200.svg\'">';
             }
             str += '<span class="episode-num">' + data.episode[i].ep_num + '화</span>';
             str += '</div>';
@@ -199,8 +208,50 @@
             str += '</div>';
         }
         str += '</div>';
-        document.getElementById("episode_list").innerHTML = str;
-        $('input[id^="checkbox_"]').bootstrapToggle()
+        episodeList.innerHTML = str;
+        $('input[id^="checkbox_"]').bootstrapToggle();
+        
+        // 이미지 로딩 완료 후 표시 (최대 2초 대기)
+        const images = episodeList.querySelectorAll('img');
+        let loadedCount = 0;
+        const totalImages = images.length;
+        
+        function showContent() {
+            episodeList.style.visibility = 'visible';
+            episodeList.style.opacity = '1';
+        }
+        
+        if (totalImages === 0) {
+            showContent();
+        } else {
+            // 최대 2초 후 강제 표시
+            const forceShowTimeout = setTimeout(showContent, 2000);
+            
+            images.forEach(img => {
+                if (img.complete) {
+                    loadedCount++;
+                    if (loadedCount >= totalImages) {
+                        clearTimeout(forceShowTimeout);
+                        showContent();
+                    }
+                } else {
+                    img.addEventListener('load', function() {
+                        loadedCount++;
+                        if (loadedCount >= totalImages) {
+                            clearTimeout(forceShowTimeout);
+                            showContent();
+                        }
+                    });
+                    img.addEventListener('error', function() {
+                        loadedCount++;
+                        if (loadedCount >= totalImages) {
+                            clearTimeout(forceShowTimeout);
+                            showContent();
+                        }
+                    });
+                }
+            });
+        }
     }
 
     $(function () {
@@ -240,11 +291,25 @@
     })
 
     $(document).ready(function () {
-        $("#loader").css("display", 'none')
+        // DOM 로딩 완료 후 콘텐츠 표시
+        const mainContent = document.getElementById('main_content');
+        const preloader = document.getElementById('preloader');
+        
+        // 메인 콘텐츠 보이기 (fade-in 효과)
+        mainContent.style.display = 'block';
+        setTimeout(function() {
+            mainContent.style.opacity = '1';
+            // preloader 숨기기
+            if (preloader) {
+                preloader.style.opacity = '0';
+                setTimeout(function() {
+                    preloader.style.display = 'none';
+                }, 300);
+            }
+        }, 100);
+        
+        $("#loader").css("display", 'none');
         console.log({{ arg['code'] }})
-        // console.log('wr_id::', params.wr_id)
-
-
     });
 
     $("#analysis_btn").unbind("click").bind('click', function (e) {

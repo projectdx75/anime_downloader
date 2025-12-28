@@ -135,8 +135,14 @@ class YtdlpDownloader:
                 bufsize=1
             )
 
+            # 여러 진행률 형식 매칭
             # [download]  10.5% of ~100.00MiB at  2.45MiB/s
-            prog_re = re.compile(r'\[download\]\s+(?P<percent>[\d\.]+)%\s+of\s+.*?\s+at\s+(?P<speed>.*?)(\s+ETA|$)')
+            # [download]  10.5% of 100.00MiB at 2.45MiB/s ETA 00:30
+            # [download] 100% of 100.00MiB
+            prog_patterns = [
+                re.compile(r'\[download\]\s+(?P<percent>[\d\.]+)%\s+of\s+.*?(?:\s+at\s+(?P<speed>[\d\.]+\s*\w+/s))?'),
+                re.compile(r'\[download\]\s+(?P<percent>[\d\.]+)%'),
+            ]
 
             for line in self.process.stdout:
                 if self.cancelled:
@@ -146,18 +152,27 @@ class YtdlpDownloader:
                 line = line.strip()
                 if not line: continue
                 
-                match = prog_re.search(line)
-                if match:
-                    try:
-                        self.percent = float(match.group('percent'))
-                        self.current_speed = match.group('speed').strip()
-                        if self.start_time:
-                            elapsed = time.time() - self.start_time
-                            self.elapsed_time = self.format_time(elapsed)
-                        if self.callback:
-                            self.callback(percent=int(self.percent), current=int(self.percent), total=100, speed=self.current_speed, elapsed=self.elapsed_time)
-                    except: pass
-                elif 'error' in line.lower() or 'security' in line.lower() or 'unable' in line.lower():
+                # 디버깅: 모든 출력 로깅 (너무 많으면 주석 해제)
+                if '[download]' in line or 'fragment' in line.lower():
+                    logger.debug(f"yt-dlp: {line}")
+                
+                for prog_re in prog_patterns:
+                    match = prog_re.search(line)
+                    if match:
+                        try:
+                            self.percent = float(match.group('percent'))
+                            speed_group = match.groupdict().get('speed')
+                            if speed_group:
+                                self.current_speed = speed_group.strip()
+                            if self.start_time:
+                                elapsed = time.time() - self.start_time
+                                self.elapsed_time = self.format_time(elapsed)
+                            if self.callback:
+                                self.callback(percent=int(self.percent), current=int(self.percent), total=100, speed=self.current_speed, elapsed=self.elapsed_time)
+                        except: pass
+                        break  # 한 패턴이 매칭되면 중단
+                
+                if 'error' in line.lower() or 'security' in line.lower() or 'unable' in line.lower():
                     logger.warning(f"yt-dlp output notice: {line}")
                     self.error_output.append(line)
 
