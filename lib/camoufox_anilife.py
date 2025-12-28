@@ -55,34 +55,19 @@ async def _run_browser(browser, detail_url, episode_num, result):
     
     try:
         # 1. Detail 페이지 이동 (commit까지만 대기하여 즉시 처리)
+        t_nav_start = asyncio.get_event_loop().time()
         print(f"1. Navigating: {detail_url}", file=sys.stderr)
         await page.goto(detail_url, wait_until="commit", timeout=15000)
-        
-        # 2. 에피소드 링크 찾기 및 클릭
-        print(f"2. Searching episode {episode_num}...", file=sys.stderr)
-        episode_link = None
-        for _ in range(20): # 약 4초
-            try:
-                # epl-num 텍스트 매칭
-                episode_link = page.locator(f'a:has(.epl-num:text("{episode_num}"))').first
-                if await episode_link.is_visible():
-                    break
-                
-                # 대체: provider 링크
-                links = await page.locator('a[href*="/ani/provider/"]').all()
-                for link in links:
-                    if episode_num in await link.inner_text():
-                        episode_link = link
-                        break
-                if episode_link: break
-            except: pass
-            await asyncio.sleep(0.2)
+        print(f"   Navigation took: {round(asyncio.get_event_loop().time() - t_nav_start, 2)}s", file=sys.stderr)
         
         if not episode_link:
             result["error"] = "Episode not found"
             return result
 
+        print(f"   Finding link took: {round(asyncio.get_event_loop().time() - t_find_start, 2)}s", file=sys.stderr)
+
         # 3. 에피소드 클릭
+        t_click_start = asyncio.get_event_loop().time()
         await episode_link.click()
         
         # 4. _aldata 추출 (최대 6초 폴링)
@@ -98,6 +83,7 @@ async def _run_browser(browser, detail_url, episode_num, result):
             return result
             
         # 5. 최후의 수단: 플레이어 버튼 클릭 시도
+        print(f"   Initial extraction failed ({round(asyncio.get_event_loop().time() - t_click_start, 2)}s). Trying player button...", file=sys.stderr)
         btn = page.locator('a[onclick*="moveCloudvideo"], a[onclick*="moveJawcloud"]').first
         if await btn.is_visible(timeout=1500):
             await btn.click()
@@ -108,6 +94,7 @@ async def _run_browser(browser, detail_url, episode_num, result):
                     "aldata": aldata, "success": True, 
                     "elapsed": round(elapsed, 2), "source": f"{source}-player"
                 })
+                print(f"   SUCCESS! Got aldata via player in {result['elapsed']}s", file=sys.stderr)
                 return result
 
         result["error"] = "Aldata extraction failed"
