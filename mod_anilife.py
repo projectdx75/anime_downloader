@@ -1234,51 +1234,53 @@ class AniLifeQueueEntity(FfmpegQueueEntity):
             
             # Camoufox 설치 확인 및 자동 설치
             def ensure_camoufox_installed():
-                """Camoufox가 설치되어 있는지 확인하고, 없으면 자동 설치
-                
-                Note: Docker 환경에서 import camoufox 시 trio/epoll 문제가 발생할 수 있으므로
-                실제 import 대신 importlib.util.find_spec으로 패키지 존재만 확인
-                """
+                """Camoufox 및 필수 시스템 패키지(xvfb) 설치 확인 및 자동 설치"""
                 import importlib.util
+                import subprocess as sp
+                import shutil
                 
-                # 패키지 존재 여부만 확인 (import 하지 않음)
-                if importlib.util.find_spec("camoufox") is not None:
-                    return True
+                # 1. 시스템 패키지 xvfb 설치 확인 (Linux/Docker 전용)
+                if platform.system() == 'Linux' and shutil.which('Xvfb') is None:
+                    logger.info("Xvfb not found. Attempting to install system package...")
+                    try:
+                        # apt-get을 사용하는 데비안/우분투 계열 가정 (Docker 환경)
+                        # sudo 없이 시도 (Docker는 보통 root 권한)
+                        sp.run(['apt-get', 'update', '-qq'], capture_output=True)
+                        sp.run(['apt-get', 'install', '-y', 'xvfb', '-qq'], capture_output=True)
+                        if shutil.which('Xvfb') is not None:
+                            logger.info("Xvfb system package installed successfully")
+                    except Exception as e:
+                        logger.error(f"Failed to install xvfb system package: {e}")
+
+                # 2. Camoufox 패키지 확인 및 업그레이드
+                # 'xvfb' 인자는 최신 버전에서 지원되므로 존재하더라도 업그레이드 시도
+                need_install = importlib.util.find_spec("camoufox") is None
                 
-                logger.info("Camoufox not installed. Installing...")
+                if need_install:
+                    logger.info("Camoufox not installed. Installing latest version...")
+                else:
+                    # 이미 설치되어 있어도 최신 버전으로 업그레이드 (xvfb 지원을 위해)
+                    logger.info("Checking for Camoufox updates to ensure Xvfb support...")
+                
                 try:
-                    import subprocess as sp
+                    # pip 멤버로 설치/업그레이드 (camoufox[geoip] 포함)
+                    cmd = [sys.executable, "-m", "pip", "install", "--upgrade", "camoufox[geoip]", "-q"]
+                    pip_result = sp.run(cmd, capture_output=True, text=True, timeout=120)
                     
-                    # pip로 camoufox[geoip] 설치
-                    pip_result = sp.run(
-                        [sys.executable, "-m", "pip", "install", "camoufox[geoip]", "-q"],
-                        capture_output=True,
-                        text=True,
-                        timeout=120
-                    )
                     if pip_result.returncode != 0:
-                        logger.error(f"Failed to install camoufox: {pip_result.stderr}")
-                        return False
-                    logger.info("Camoufox package installed successfully")
+                        logger.error(f"Failed to install/upgrade camoufox: {pip_result.stderr}")
+                        if need_install: return False # 새로 설치 중이었으면 중단
+                    else:
+                        logger.info("Camoufox package installed/upgraded successfully")
                     
                     # Camoufox 브라우저 바이너리 다운로드
                     logger.info("Downloading Camoufox browser binary...")
-                    fetch_result = sp.run(
-                        [sys.executable, "-m", "camoufox", "fetch"],
-                        capture_output=True,
-                        text=True,
-                        timeout=300  # 브라우저 다운로드는 시간이 걸릴 수 있음
-                    )
-                    if fetch_result.returncode != 0:
-                        logger.warning(f"Camoufox browser fetch warning: {fetch_result.stderr}")
-                        # fetch 실패해도 이미 있을 수 있으므로 계속 진행
-                    else:
-                        logger.info("Camoufox browser binary installed successfully")
+                    sp.run([sys.executable, "-m", "camoufox", "fetch"], capture_output=True, text=True, timeout=300)
                     
                     return True
                 except Exception as install_err:
-                    logger.error(f"Failed to install Camoufox: {install_err}")
-                    return False
+                    logger.error(f"Failed during Camoufox setup: {install_err}")
+                    return not need_install # 이미 설치되어 있었으면 에러나도 일단 진행 시도
             
             # Camoufox를 subprocess로 실행 (스텔스 Firefox - 봇 감지 우회)
             try:
