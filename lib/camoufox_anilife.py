@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """
-Camoufox 기반 Anilife 비디오 URL 추출 스크립트 (최적화 비동기 버전)
+Camoufox 기반 Anilife 비디오 URL 추출 스크립트 (Ultra-Speed 버전)
+- Stealth-Headless 모드 사용 (Xvfb 오버헤드 제거)
+- 엄격한 Stdout/Stderr 분리 (JSON 파싱 안정성)
+- 공격적 리소스 및 도메인 차단
 """
 
 import sys
@@ -9,7 +12,7 @@ import asyncio
 import re
 import os
 
-async def _wait_for_aldata(page, timeout=10):
+async def _wait_for_aldata(page, timeout=8):
     """_aldata 변수가 나타날 때까지 폴링 (최대 timeout초)"""
     start_time = asyncio.get_event_loop().time()
     while asyncio.get_event_loop().time() - start_time < timeout:
@@ -26,17 +29,24 @@ async def _wait_for_aldata(page, timeout=10):
                 return match.group(1), "HTML"
         except:
             pass
-        await asyncio.sleep(0.3)
+        await asyncio.sleep(0.2)
     return None, None
 
 async def _run_browser(browser, detail_url, episode_num, result):
     """최적화된 브라우저 작업 수행"""
-    # 1. 컨텍스트 및 페이지 생성 (이미지/CSS 차단 옵션 적용 가능 시 적용)
+    start_time_all = asyncio.get_event_loop().time()
     page = await browser.new_page()
     
-    # 리소스 차단 (속도 향상의 핵심)
+    # 공격적 리소스 및 트래킹 차단
     async def intercept(route):
-        if route.request.resource_type in ["image", "media", "font", "stylesheet"]:
+        req_url = route.request.url.lower()
+        resource_type = route.request.resource_type
+        
+        # 차단 목록: 이미지, 미디어, 폰트, 스타일시트, 분석/광고 스크립트
+        block_types = ["image", "media", "font", "stylesheet"]
+        block_patterns = ["google-analytics", "googletagmanager", "facebook.net", "ads"]
+        
+        if resource_type in block_types or any(p in req_url for p in block_patterns):
             await route.abort()
         else:
             await route.continue_()
@@ -44,24 +54,24 @@ async def _run_browser(browser, detail_url, episode_num, result):
     await page.route("**/*", intercept)
     
     try:
-        # 1. Detail 페이지 이동
-        print(f"1. Navigating to detail page: {detail_url}", file=sys.stderr)
-        await page.goto(detail_url, wait_until="commit", timeout=20000) # domcontentloaded보다 빠른 commit 대기
+        # 1. Detail 페이지 이동 (commit까지만 대기하여 즉시 처리)
+        print(f"1. Navigating: {detail_url}", file=sys.stderr)
+        await page.goto(detail_url, wait_until="commit", timeout=15000)
         
-        # 2. 에피소드 링크 찾기 (폴링 대기)
-        print(f"2. Searching for episode {episode_num}...", file=sys.stderr)
+        # 2. 에피소드 링크 찾기 및 클릭
+        print(f"2. Searching episode {episode_num}...", file=sys.stderr)
         episode_link = None
-        for _ in range(25): # 약 5초간 대기
+        for _ in range(20): # 약 4초
             try:
+                # epl-num 텍스트 매칭
                 episode_link = page.locator(f'a:has(.epl-num:text("{episode_num}"))').first
                 if await episode_link.is_visible():
                     break
                 
-                # 대체 수단: provider 링크 검색
+                # 대체: provider 링크
                 links = await page.locator('a[href*="/ani/provider/"]').all()
                 for link in links:
-                    text = await link.inner_text()
-                    if episode_num in text:
+                    if episode_num in await link.inner_text():
                         episode_link = link
                         break
                 if episode_link: break
@@ -69,41 +79,38 @@ async def _run_browser(browser, detail_url, episode_num, result):
             await asyncio.sleep(0.2)
         
         if not episode_link:
-            result["error"] = f"Episode {episode_num} not found"
-            result["html"] = await page.content()
+            result["error"] = "Episode not found"
             return result
 
-        # 3. 에피소드 클릭 및 이동
-        print(f"3. Clicking episode {episode_num}", file=sys.stderr)
+        # 3. 에피소드 클릭
         await episode_link.click()
         
-        # 4. _aldata 추출 (폴링)
-        print("4. Waiting for _aldata...", file=sys.stderr)
-        aldata, source = await _wait_for_aldata(page, timeout=8)
+        # 4. _aldata 추출 (최대 6초 폴링)
+        aldata, source = await _wait_for_aldata(page, timeout=6)
         
         if aldata:
-            result["aldata"] = aldata
-            result["success"] = True
-            result["current_url"] = page.url
-            print(f"   SUCCESS! Got _aldata from {source}", file=sys.stderr)
+            elapsed = asyncio.get_event_loop().time() - start_time_all
+            result.update({
+                "aldata": aldata, "success": True, 
+                "elapsed": round(elapsed, 2), "source": source
+            })
+            print(f"   SUCCESS! Extracted via {source} in {result['elapsed']}s", file=sys.stderr)
             return result
             
-        # 5. 추출 실패 시 CloudVideo 버튼 강제 클릭 시도
-        print("5. Aldata not found yet. Trying player button...", file=sys.stderr)
-        await page.mouse.wheel(0, 500)
+        # 5. 최후의 수단: 플레이어 버튼 클릭 시도
         btn = page.locator('a[onclick*="moveCloudvideo"], a[onclick*="moveJawcloud"]').first
-        if await btn.is_visible(timeout=2000):
+        if await btn.is_visible(timeout=1500):
             await btn.click()
-            aldata, source = await _wait_for_aldata(page, timeout=5)
+            aldata, source = await _wait_for_aldata(page, timeout=4)
             if aldata:
-                result["aldata"] = aldata
-                result["success"] = True
-                result["current_url"] = page.url
+                elapsed = asyncio.get_event_loop().time() - start_time_all
+                result.update({
+                    "aldata": aldata, "success": True, 
+                    "elapsed": round(elapsed, 2), "source": f"{source}-player"
+                })
                 return result
 
-        result["error"] = "Could not extract aldata"
-        result["html"] = await page.content()
-        result["current_url"] = page.url
+        result["error"] = "Aldata extraction failed"
             
     finally:
         await page.close()
@@ -111,28 +118,19 @@ async def _run_browser(browser, detail_url, episode_num, result):
     return result
 
 async def extract_aldata(detail_url: str, episode_num: str) -> dict:
-    """AsyncCamoufox로 최적화된 추출 수행"""
+    """AsyncCamoufox Stealth-Headless mode"""
     try:
         from camoufox.async_api import AsyncCamoufox
     except ImportError as e:
         return {"error": f"Camoufox not installed: {e}"}
     
-    result = {"success": False, "aldata": None, "current_url": None, "error": None}
+    result = {"success": False, "aldata": None, "elapsed": 0}
     
     try:
-        has_display = os.environ.get('DISPLAY') is not None
-        camou_args = {"headless": False}
-        if not has_display:
-            camou_args["xvfb"] = True
-        
-        # 속도 최 최적화를 위한 추가 인자 (필요 시)
-        try:
-            async with AsyncCamoufox(**camou_args) as browser:
-                return await _run_browser(browser, detail_url, episode_num, result)
-        except TypeError:
-            # xvfb 미지원 버전 대비
-            async with AsyncCamoufox(headless=True) as browser:
-                return await _run_browser(browser, detail_url, episode_num, result)
+        # Camoufox는 headless=True에서도 강력한 스텔스를 제공함 (Xvfb 오버헤드 불필요)
+        # MacOS/Linux 공통으로 headless=True 권장 (속도 향상)
+        async with AsyncCamoufox(headless=True) as browser:
+            return await _run_browser(browser, detail_url, episode_num, result)
             
     except Exception as e:
         result["error"] = str(e)
@@ -143,8 +141,10 @@ if __name__ == "__main__":
     if len(sys.argv) < 3:
         sys.exit(1)
     
-    detail_url = sys.argv[1]
-    episode_num = sys.argv[2]
-    
-    res = asyncio.run(extract_aldata(detail_url, episode_num))
-    print(json.dumps(res, ensure_ascii=False))
+    # stdout에는 오직 JSON만 출력하도록 보장
+    try:
+        res = asyncio.run(extract_aldata(sys.argv[1], sys.argv[2]))
+        # 최종 JSON 결과 출력
+        print(json.dumps(res, ensure_ascii=False))
+    except Exception as e:
+        print(json.dumps({"error": str(e), "success": False, "elapsed": 0}))

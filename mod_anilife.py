@@ -1314,22 +1314,29 @@ class AniLifeQueueEntity(FfmpegQueueEntity):
                     logger.error(f"Camoufox subprocess failed: {result.stderr}")
                     raise Exception(f"Subprocess error: {result.stderr}")
                 
-                # JSON 결과 파싱
-                cf_result = json_module.loads(result.stdout)
-                logger.debug(f"Camoufox result: success={cf_result.get('success')}, current_url={cf_result.get('current_url')}")
+                # JSON 결과 파싱 (엄격한 분리를 통해 stdout에는 JSON만 남음)
+                try:
+                    cf_result = json_module.loads(result.stdout)
+                except json_module.JSONDecodeError as e:
+                    logger.error(f"Failed to parse Camoufox result: {e}")
+                    logger.error(f"Raw stdout: {result.stdout}")
+                    return
                 
-                if cf_result.get("error"):
-                    logger.error(f"Camoufox error: {cf_result['error']}")
+                elapsed = cf_result.get("elapsed", "?")
+                logger.info(f"Camoufox extraction finished in {elapsed}s (success={cf_result.get('success')})")
                 
-                # _aldata 추출
-                if cf_result.get("success") and cf_result.get("aldata"):
+                if not cf_result.get("success"):
+                    logger.error(f"Camoufox failed: {cf_result.get('error')}")
+                    if cf_result.get("html"):
+                        logger.debug(f"Failed page HTML length: {len(cf_result['html'])}")
+                    return
+                
+                # _aldata 추출 성공
+                if cf_result.get("aldata"):
                     aldata_value = cf_result["aldata"]
-                    logger.debug(f"Got _aldata from Camoufox: {aldata_value[:50]}...")
-                elif cf_result.get("html"):
-                    provider_html = cf_result["html"]
-                    logger.debug(f"Provider page loaded via Camoufox, length: {len(provider_html)}")
+                    logger.debug(f"Got _aldata ({cf_result.get('source', 'unknown')})")
                 else:
-                    logger.error("No aldata or HTML returned from Camoufox")
+                    logger.error("Success reported but no aldata returned")
                     return
                     
             except subprocess.TimeoutExpired:
