@@ -17,6 +17,7 @@
     {{ macros.setting_input_text_and_buttons('anilife_url', '애니라이프 URL', [['go_btn', 'GO']], value=arg['anilife_url']) }}
     {{ macros.setting_input_text('anilife_download_path', '저장 폴더', value=arg['anilife_download_path'], desc='정상적으로 다운 완료 된 파일이 이동할 폴더 입니다. ') }}
     {{ macros.setting_input_int('anilife_max_ffmpeg_process_count', '동시 다운로드 수', value=arg['anilife_max_ffmpeg_process_count'], desc='동시에 다운로드 할 에피소드 갯수입니다.') }}
+    {{ macros.setting_select('anilife_download_method', '다운로드 방법', [['ffmpeg', 'ffmpeg (기본)'], ['ytdlp', 'yt-dlp']], value=arg.get('anilife_download_method', 'ffmpeg'), desc='m3u8 다운로드에 사용할 도구를 선택합니다.') }}
     {{ macros.setting_checkbox('anilife_order_desc', '요청 화면 최신순 정렬', value=arg['anilife_order_desc'], desc='On : 최신화부터, Off : 1화부터') }}
     {{ macros.setting_checkbox('anilife_auto_make_folder', '제목 폴더 생성', value=arg['anilife_auto_make_folder'], desc='제목으로 폴더를 생성하고 폴더 안에 다운로드합니다.') }}
     <div id="anilife_auto_make_folder_div" class="collapse">

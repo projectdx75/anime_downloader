@@ -425,9 +425,10 @@ async def get_vod_url(p_param: PlParam):
 
         async with async_playwright() as p:
             try:
-                # browser = await p.chromium.launch(headless=headless, args=browser_args)
-                browser = await p.chromium.launch(
-                    headless=pl_dict["headless"], args=browser_args
+                # WebKit 사용 (Safari 엔진)
+                browser = await p.webkit.launch(
+                    headless=pl_dict["headless"], 
+                    args=browser_args
                 )
 
                 # browser = await p.webkit.launch(headless=headless)

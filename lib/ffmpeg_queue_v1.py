@@ -43,6 +43,7 @@ class FfmpegQueueEntity(abc.ABCMeta("ABC", (object,), {"__slots__": ()})):
         self.filepath = None
         self.quality = None
         self.headers = None
+        self.proxy = None
         self.current_speed = ""  # 다운로드 속도
         self.download_time = ""  # 경과 시간
         # FfmpegQueueEntity.static_index += 1
@@ -79,7 +80,27 @@ class FfmpegQueueEntity(abc.ABCMeta("ABC", (object,), {"__slots__": ()})):
         tmp["filename"] = self.filename
         tmp["filepath"] = self.filepath
         tmp["quality"] = self.quality
-        # tmp['current_speed'] = self.ffmpeg_arg['current_speed'] if self.ffmpeg_arg is not None else ''
+        tmp["current_speed"] = self.current_speed
+        tmp["download_time"] = self.download_time
+        
+        # 템플릿 호환 필드 추가 (queue.html에서 사용하는 필드명)
+        tmp["idx"] = self.entity_id
+        tmp["callback_id"] = getattr(self, 'name', 'anilife') if hasattr(self, 'name') else 'anilife'
+        tmp["start_time"] = self.created_time
+        tmp["status_kor"] = self.ffmpeg_status_kor
+        tmp["status_str"] = str(self.ffmpeg_status) if self.ffmpeg_status != -1 else "WAITING"
+        tmp["percent"] = self.ffmpeg_percent
+        tmp["duration_str"] = ""
+        tmp["duration"] = ""
+        tmp["current_duration"] = ""
+        tmp["current_pf_count"] = 0
+        tmp["max_pf_count"] = 0
+        tmp["current_bitrate"] = ""
+        tmp["end_time"] = ""
+        tmp["exist"] = False
+        tmp["temp_fullpath"] = self.filepath or ""
+        tmp["save_fullpath"] = self.filepath or ""
+        
         tmp = self.info_dict(tmp)
         return tmp
 
@@ -194,12 +215,18 @@ class FfmpegQueue(object):
                 P.logger.debug(filename)
                 # P.logger.debug(filepath)
 
-                # SupportFfmpeg 초기화
-                self.support_init()
                 # entity.headers가 있으면 우선 사용, 없으면 caller.headers 사용
                 _headers = entity.headers
                 if _headers is None and self.caller is not None:
                     _headers = self.caller.headers
+                
+                # SupportFfmpeg 초기화
+                self.support_init()
+                
+                # proxy 가져오기
+                _proxy = getattr(entity, 'proxy', None)
+                if _proxy is None and self.caller is not None:
+                    _proxy = getattr(self.caller, 'proxy', None)
                 
                 logger.info(f"Starting ffmpeg download - video_url: {video_url}")
                 logger.info(f"save_path: {dirname}, filename: {filename}")
@@ -219,10 +246,17 @@ class FfmpegQueue(object):
                 logger.info(f"=== END COMMAND ===")
 
                 # m3u8 URL인 경우 다운로드 방법 설정에 따라 분기
-                if video_url.endswith('.m3u8'):
+                if video_url.endswith('.m3u8') or 'master.txt' in video_url:
                     # 다운로드 방법 설정 확인
                     download_method = P.ModelSetting.get(f"{self.name}_download_method")
+                    
+                    # cdndania.com 감지 시 YtdlpDownloader 사용 (CDN 세션 쿠키 + Impersonate로 보안 우회)
+                    if 'cdndania.com' in video_url:
+                        logger.info("Detected cdndania.com URL - forcing YtdlpDownloader with cookies (CDN security bypass)")
+                        download_method = "ytdlp"
+                    
                     logger.info(f"Download method: {download_method}")
+
                     
                     # 다운로드 시작 전 카운트 증가
                     self.current_ffmpeg_count += 1
@@ -245,12 +279,17 @@ class FfmpegQueue(object):
                             # yt-dlp 사용
                             from .ytdlp_downloader import YtdlpDownloader
                             logger.info("Using yt-dlp downloader...")
+                            # 엔티티에서 쿠키 파일 가져오기 (있는 경우)
+                            _cookies_file = getattr(entity_ref, 'cookies_file', None)
                             downloader = YtdlpDownloader(
                                 url=video_url,
                                 output_path=output_file_ref,
                                 headers=headers_ref,
-                                callback=progress_callback
+                                callback=progress_callback,
+                                proxy=_proxy,
+                                cookies_file=_cookies_file
                             )
+
                         else:
                             # 기본: HLS 다운로더 사용
                             from .hls_downloader import HlsDownloader
@@ -259,7 +298,8 @@ class FfmpegQueue(object):
                                 m3u8_url=video_url,
                                 output_path=output_file_ref,
                                 headers=headers_ref,
-                                callback=progress_callback
+                                callback=progress_callback,
+                                proxy=_proxy
                             )
                         
                         success, message = downloader.download()
@@ -360,6 +400,7 @@ class FfmpegQueue(object):
                         max_pf_count=0,
                         save_path=ToolUtil.make_path(dirname),
                         timeout_minute=60,
+                        proxy=_proxy,
                     )
                     #
                     # todo: 임시로 start() 중지

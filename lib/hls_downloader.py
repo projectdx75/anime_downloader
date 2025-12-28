@@ -8,17 +8,21 @@ import requests
 import tempfile
 import subprocess
 import time
+import logging
 from urllib.parse import urljoin
+
+logger = logging.getLogger(__name__)
 
 
 class HlsDownloader:
     """HLS 다운로더 - .jpg 확장자 세그먼트 지원"""
     
-    def __init__(self, m3u8_url, output_path, headers=None, callback=None):
+    def __init__(self, m3u8_url, output_path, headers=None, callback=None, proxy=None):
         self.m3u8_url = m3u8_url
         self.output_path = output_path
         self.headers = headers or {}
         self.callback = callback  # 진행 상황 콜백
+        self.proxy = proxy
         self.segments = []
         self.total_segments = 0
         self.downloaded_segments = 0
@@ -31,12 +35,35 @@ class HlsDownloader:
         self.last_bytes = 0
         self.current_speed = 0  # bytes per second
     
-    def parse_m3u8(self):
-        """m3u8 파일 파싱"""
-        response = requests.get(self.m3u8_url, headers=self.headers, timeout=30)
+    def parse_m3u8(self, url=None):
+        """m3u8 파일 파싱 (Master Playlist 대응)"""
+        if url is None:
+            url = self.m3u8_url
+            
+        proxies = None
+        if self.proxy:
+            proxies = {"http": self.proxy, "https": self.proxy}
+            
+        logger.debug(f"Parsing m3u8: {url}")
+        response = requests.get(url, headers=self.headers, timeout=30, proxies=proxies)
         content = response.text
         
-        base_url = self.m3u8_url.rsplit('/', 1)[0] + '/'
+        # Master Playlist 체크
+        if "#EXT-X-STREAM-INF" in content:
+            last_media_url = None
+            for line in content.strip().split('\n'):
+                line = line.strip()
+                if line and not line.startswith('#'):
+                    if not line.startswith('http'):
+                        last_media_url = urljoin(url, line)
+                    else:
+                        last_media_url = line
+            
+            if last_media_url:
+                logger.info(f"Master playlist detected, following media playlist: {last_media_url}")
+                return self.parse_m3u8(last_media_url)
+
+        base_url = url.rsplit('/', 1)[0] + '/'
         
         self.segments = []
         for line in content.strip().split('\n'):
@@ -96,17 +123,22 @@ class HlsDownloader:
                         return False, "Cancelled"
                     
                     # 세그먼트 다운로드
-                    segment_path = os.path.join(temp_dir, f"segment_{i:05d}.ts")
+                    segment_filename = f"segment_{i:05d}.ts"
+                    segment_path = os.path.join(temp_dir, segment_filename)
                     
                     try:
-                        response = requests.get(segment_url, headers=self.headers, timeout=60)
+                        proxies = None
+                        if self.proxy:
+                            proxies = {"http": self.proxy, "https": self.proxy}
+                            
+                        response = requests.get(segment_url, headers=self.headers, timeout=60, proxies=proxies)
                         response.raise_for_status()
                         
                         segment_data = response.content
                         with open(segment_path, 'wb') as f:
                             f.write(segment_data)
                         
-                        segment_files.append(segment_path)
+                        segment_files.append(segment_filename) # 상대 경로 저장
                         self.downloaded_segments = i + 1
                         self.total_bytes += len(segment_data)
                         
@@ -139,27 +171,28 @@ class HlsDownloader:
                 # 세그먼트 합치기 (concat 파일 생성)
                 concat_file = os.path.join(temp_dir, "concat.txt")
                 with open(concat_file, 'w') as f:
-                    for seg_file in segment_files:
-                        f.write(f"file '{seg_file}'\n")
+                    for seg_filename in segment_files:
+                        f.write(f"file '{seg_filename}'\n")
                 
                 # 출력 디렉토리 생성
                 output_dir = os.path.dirname(self.output_path)
                 if output_dir and not os.path.exists(output_dir):
                     os.makedirs(output_dir)
                 
-                # ffmpeg로 합치기
+                # ffmpeg로 합치기 (temp_dir에서 실행)
                 cmd = [
                     'ffmpeg', '-y',
                     '-f', 'concat',
                     '-safe', '0',
-                    '-i', concat_file,
+                    '-i', 'concat.txt',
                     '-c', 'copy',
-                    self.output_path
+                    os.path.abspath(self.output_path)
                 ]
                 
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=600, cwd=temp_dir)
                 
                 if result.returncode != 0:
+                    logger.error(f"FFmpeg stderr: {result.stderr}")
                     return False, f"FFmpeg concat failed: {result.stderr}"
                 
                 return True, "Download completed"

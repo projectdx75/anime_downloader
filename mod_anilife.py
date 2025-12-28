@@ -77,6 +77,7 @@ class LogicAniLife(PluginModuleBase):
         "anilife_auto_make_season_folder": "True",
         "anilife_finished_insert": "[완결]",
         "anilife_max_ffmpeg_process_count": "1",
+        "anilife_download_method": "ffmpeg",  # ffmpeg or ytdlp
         "anilife_order_desc": "False",
         "anilife_auto_start": "False",
         "anilife_interval": "* 5 * * *",
@@ -525,6 +526,9 @@ class LogicAniLife(PluginModuleBase):
                 info = json.loads(request.form["data"])
                 logger.info(f"info:: {info}")
                 ret["ret"] = self.add(info)
+                # 성공적으로 큐에 추가되면 UI 새로고침 트리거
+                if ret["ret"].startswith("enqueue"):
+                    self.socketio_callback("list_refresh", "")
                 return jsonify(ret)
             elif sub == "entity_list":
                 return jsonify(self.queue.get_entity_list())
@@ -559,6 +563,36 @@ class LogicAniLife(PluginModuleBase):
                 return jsonify(ModelAniLifeItem.web_list(request))
             elif sub == "db_remove":
                 return jsonify(ModelAniLifeItem.delete_by_id(req.form["id"]))
+            elif sub == "proxy_image":
+                # 이미지 프록시: CDN hotlink 보호 우회
+                from flask import Response
+                # 'image_url' 또는 'url' 파라미터 둘 다 지원
+                image_url = request.args.get("image_url") or request.args.get("url", "")
+                if not image_url or not image_url.startswith("http"):
+                    return Response("Invalid URL", status=400)
+                try:
+                    # cloudscraper 사용하여 Cloudflare 우회
+                    scraper = cloudscraper.create_scraper(
+                        browser={
+                            "browser": "chrome",
+                            "platform": "windows",
+                            "desktop": True
+                        }
+                    )
+                    headers = {
+                        "Referer": "https://anilife.live/",
+                    }
+                    img_response = scraper.get(image_url, headers=headers, timeout=10)
+                    logger.debug(f"Image proxy: {image_url} -> status {img_response.status_code}")
+                    if img_response.status_code == 200:
+                        content_type = img_response.headers.get("Content-Type", "image/jpeg")
+                        return Response(img_response.content, mimetype=content_type)
+                    else:
+                        logger.warning(f"Image proxy failed: {image_url} -> {img_response.status_code}")
+                        return Response("Image not found", status=404)
+                except Exception as img_err:
+                    logger.error(f"Image proxy error for {image_url}: {img_err}")
+                    return Response("Proxy error", status=500)
         except Exception as e:
             P.logger.error("Exception:%s", e)
             P.logger.error(traceback.format_exc())
@@ -595,9 +629,10 @@ class LogicAniLife(PluginModuleBase):
                 ret["msg"] = "다운로드를 추가 하였습니다."
 
         elif command == "list":
+            # Anilife 큐의 entity_list 반환 (이전: SupportFfmpeg.get_list() - 잘못된 소스)
             ret = []
-            for ins in SupportFfmpeg.get_list():
-                ret.append(ins.get_data())
+            for entity in self.queue.entity_list:
+                ret.append(entity.as_dict())
 
         return jsonify(ret)
 
@@ -672,7 +707,7 @@ class LogicAniLife(PluginModuleBase):
 
     def plugin_load(self):
         self.queue = FfmpegQueue(
-            P, P.ModelSetting.get_int("anilife_max_ffmpeg_process_count"), name
+            P, P.ModelSetting.get_int("anilife_max_ffmpeg_process_count"), name, self
         )
         self.current_data = None
         self.queue.queue_start()
@@ -690,7 +725,7 @@ class LogicAniLife(PluginModuleBase):
         db.session.commit()
         return True
 
-    # 시리즈 정보를 가져오는 함수
+    # 시리즈 정보를 가져오는 함수 (cloudscraper 버전)
     def get_series_info(self, code):
         try:
             if code.isdigit():
@@ -698,24 +733,28 @@ class LogicAniLife(PluginModuleBase):
             else:
                 url = P.ModelSetting.get("anilife_url") + "/g/l?id=" + code
 
-            logger.debug("url::: > %s", url)
-            # response_data = LogicAniLife.get_html(self, url=url, timeout=10)
+            logger.debug("get_series_info()::url > %s", url)
 
-            import json
-
-            post_data = {"url": url, "headless": True, "engine": "webkit"}
-            payload = json.dumps(post_data)
-            logger.debug(payload)
-            response_data = None
-
-            response_data = requests.post(
-                url="http://localhost:7070/get_html_by_playwright", data=payload
+            # cloudscraper를 사용하여 Cloudflare 우회
+            scraper = cloudscraper.create_scraper(
+                browser={
+                    "browser": "chrome",
+                    "platform": "windows",
+                    "desktop": True
+                }
             )
+            
+            # 리다이렉트 자동 처리 (숫자 ID → UUID 페이지로 리다이렉트됨)
+            response = scraper.get(url, timeout=15, allow_redirects=True)
+            
+            if response.status_code != 200:
+                logger.error(f"Failed to fetch series info: HTTP {response.status_code}")
+                return {"ret": "error", "log": f"HTTP {response.status_code}"}
+            
+            # 최종 URL 로깅 (리다이렉트된 경우)
+            logger.debug(f"Final URL after redirect: {response.url}")
 
-            # logger.debug(response_data.json()["html"])
-            soup_text = BeautifulSoup(response_data.json()["html"], "lxml")
-
-            tree = html.fromstring(response_data.json()["html"])
+            tree = html.fromstring(response.text)
 
             # tree = html.fromstring(response_data)
             # logger.debug(response_data)
@@ -788,6 +827,9 @@ class LogicAniLife(PluginModuleBase):
                 date = ""
                 m = hashlib.md5(title.encode("utf-8"))
                 _vi = m.hexdigest()
+                # 고유한 _id 생성: content_code + ep_num + link의 조합
+                # 같은 시리즈 내에서도 에피소드마다 고유하게 식별
+                unique_id = f"{code}_{ep_num}_{link}"
                 episodes.append(
                     {
                         "ep_num": ep_num,
@@ -796,7 +838,7 @@ class LogicAniLife(PluginModuleBase):
                         "thumbnail": image,
                         "date": date,
                         "day": date,
-                        "_id": title,
+                        "_id": unique_id,
                         "va": link,
                         "_vi": _vi,
                         "content_code": code,
@@ -880,44 +922,29 @@ class LogicAniLife(PluginModuleBase):
             logger.info("url:::> %s", url)
             data = {}
 
-            import json
+            # cloudscraper를 사용하여 Cloudflare 우회
+            scraper = cloudscraper.create_scraper(
+                browser={
+                    "browser": "chrome",
+                    "platform": "windows",
+                    "desktop": True
+                }
+            )
+            
+            response = scraper.get(url, timeout=15)
+            
+            if response.status_code != 200:
+                logger.error(f"Failed to fetch anime info: HTTP {response.status_code}")
+                return {"ret": "error", "log": f"HTTP {response.status_code}"}
 
-            post_data = {
-                "url": url,
-                "headless": True,
-                "engine": "chrome",
-                "reload": True,
-            }
-            payload = json.dumps(post_data)
-            logger.debug(payload)
-            try:
-                API_BASE_URL = "http://localhost:7070"
-                response_data = requests.post(
-                    url=("%s/get_html_by_playwright" % API_BASE_URL), data=payload
-                )
-            except Exception as e:
-                logger.error(f"Exception: {str(e)}")
-                return
-
-            LogicAniLife.episode_url = response_data.json()["url"]
-            logger.info(response_data.json()["url"])
+            LogicAniLife.episode_url = response.url
+            logger.info(response.url)
             logger.debug(LogicAniLife.episode_url)
 
-            # logger.debug(response_data.json())
+            soup_text = BeautifulSoup(response.text, "lxml")
 
-            # logger.debug(f"wrapper_xath:: {wrapper_xpath}")
-            # logger.debug(LogicAniLife.response_data)
-            # print(type(response_data))
-            # logger.debug(response_data.json()["html"])
-            soup_text = BeautifulSoup(response_data.json()["html"], "lxml")
-            # print(len(soup_text.select("div.bsx")))
-
-            tree = html.fromstring(response_data.json()["html"])
-            # tree = lxml.etree.HTML(str(soup_text))
-            # logger.debug(tree)
-            # print(wrapper_xpath)
+            tree = html.fromstring(response.text)
             tmp_items = tree.xpath(wrapper_xpath)
-            # tmp_items = tree.xpath('//div[@class="bsx"]')
 
             logger.debug(tmp_items)
             data["anime_count"] = len(tmp_items)
@@ -925,27 +952,154 @@ class LogicAniLife(PluginModuleBase):
 
             for item in tmp_items:
                 entity = {}
-                entity["link"] = item.xpath(".//a/@href")[0]
-                # logger.debug(entity["link"])
+                link_elem = item.xpath(".//a/@href")
+                if not link_elem:
+                    continue
+                entity["link"] = link_elem[0]
                 p = re.compile(r"^[http?s://]+[a-zA-Z0-9-]+/[a-zA-Z0-9-_.?=]+$")
 
-                # print(p.match(entity["link"]) != None)
                 if p.match(entity["link"]) is None:
                     entity["link"] = P.ModelSetting.get("anilife_url") + entity["link"]
-                    # real_url = LogicAniLife.get_real_link(url=entity["link"])
 
                 entity["code"] = entity["link"].split("/")[-1]
-                entity["epx"] = item.xpath(".//span[@class='epx']/text()")[0].strip()
-                entity["title"] = item.xpath(".//div[@class='tt']/text()")[0].strip()
-                entity["image_link"] = item.xpath(".//div[@class='limit']/img/@src")[
-                    0
-                ].replace("..", P.ModelSetting.get("anilife_url"))
+                
+                # 에피소드 수
+                epx_elem = item.xpath(".//span[@class='epx']/text()")
+                entity["epx"] = epx_elem[0].strip() if epx_elem else ""
+                
+                # 제목
+                title_elem = item.xpath(".//div[@class='tt']/text()")
+                entity["title"] = title_elem[0].strip() if title_elem else ""
+                
+                # 이미지 URL (img 태그에서 직접 추출)
+                img_elem = item.xpath(".//img/@src")
+                if not img_elem:
+                    img_elem = item.xpath(".//img/@data-src")
+                if img_elem:
+                    entity["image_link"] = img_elem[0].replace("..", P.ModelSetting.get("anilife_url"))
+                else:
+                    entity["image_link"] = ""
+                    
                 data["ret"] = "success"
                 data["anime_list"].append(entity)
 
             return data
         except Exception as e:
             P.logger.error("Exception:%s", e)
+            P.logger.error(traceback.format_exc())
+            return {"ret": "exception", "log": str(e)}
+
+    def get_search_result(self, query, page, cate):
+        """
+        anilife.live 검색 결과를 가져오는 함수
+        cloudscraper 버전(v2)을 직접 사용
+        
+        Args:
+            query: 검색어
+            page: 페이지 번호 (현재 미사용)
+            cate: 카테고리 (현재 미사용)
+        
+        Returns:
+            dict: 검색 결과 데이터 (anime_count, anime_list)
+        """
+        # cloudscraper 버전 직접 사용 (외부 playwright API 서버 불필요)
+        return self.get_search_result_v2(query, page, cate)
+
+    def get_search_result_v2(self, query, page, cate):
+        """
+        anilife.live 검색 결과를 가져오는 함수 (cloudscraper 버전)
+        외부 playwright API 서버 없이 직접 cloudscraper를 사용
+        
+        Args:
+            query: 검색어
+            page: 페이지 번호 (현재 미사용, 향후 페이지네이션 지원용)
+            cate: 카테고리 (현재 미사용)
+        
+        Returns:
+            dict: 검색 결과 데이터 (anime_count, anime_list)
+        """
+        try:
+            _query = urllib.parse.quote(query)
+            url = P.ModelSetting.get("anilife_url") + "/search?keyword=" + _query
+
+            logger.info("get_search_result_v2()::url> %s", url)
+            data = {}
+
+            # cloudscraper를 사용하여 Cloudflare 우회
+            scraper = cloudscraper.create_scraper(
+                browser={
+                    "browser": "chrome",
+                    "platform": "windows",
+                    "desktop": True
+                }
+            )
+            
+            response = scraper.get(url, timeout=15)
+            
+            if response.status_code != 200:
+                logger.error(f"Failed to fetch search results: HTTP {response.status_code}")
+                return {"ret": "error", "log": f"HTTP {response.status_code}"}
+
+            tree = html.fromstring(response.text)
+            
+            # 검색 결과 항목들 (div.bsx)
+            tmp_items = tree.xpath('//div[@class="bsx"]')
+            
+            data["anime_count"] = len(tmp_items)
+            data["anime_list"] = []
+
+            for item in tmp_items:
+                entity = {}
+                
+                # 링크 추출
+                link_elem = item.xpath(".//a/@href")
+                if link_elem:
+                    entity["link"] = link_elem[0]
+                    # 상대 경로인 경우 절대 경로로 변환
+                    if entity["link"].startswith("/"):
+                        entity["link"] = P.ModelSetting.get("anilife_url") + entity["link"]
+                else:
+                    continue
+                
+                # 코드 추출 (링크에서 ID 추출)
+                # /detail/id/832 -> 832
+                code_match = re.search(r'/detail/id/(\d+)', entity["link"])
+                if code_match:
+                    entity["code"] = code_match.group(1)
+                else:
+                    entity["code"] = entity["link"].split("/")[-1]
+                
+                # 에피소드 수
+                epx_elem = item.xpath(".//span[@class='epx']/text()")
+                entity["epx"] = epx_elem[0].strip() if epx_elem else ""
+                
+                # 제목 (h2 또는 div.tt에서 추출)
+                title_elem = item.xpath(".//h2[@itemprop='headline']/text()")
+                if not title_elem:
+                    title_elem = item.xpath(".//div[@class='tt']/text()")
+                entity["title"] = title_elem[0].strip() if title_elem else ""
+                
+                # 이미지 URL (img 태그에서 직접 추출)
+                img_elem = item.xpath(".//img/@src")
+                if not img_elem:
+                    # data-src 속성 체크 (lazy loading 대응)
+                    img_elem = item.xpath(".//img/@data-src")
+                if img_elem:
+                    entity["image_link"] = img_elem[0]
+                else:
+                    entity["image_link"] = ""
+                
+                # wr_id는 anilife에서는 사용하지 않음
+                entity["wr_id"] = ""
+                
+                data["ret"] = "success"
+                data["anime_list"].append(entity)
+
+            logger.info("Found %d search results (v2) for query: %s", len(data["anime_list"]), query)
+            return data
+
+        except Exception as e:
+            P.logger.error(f"Exception: {str(e)}")
             P.logger.error(traceback.format_exc())
             return {"ret": "exception", "log": str(e)}
 
@@ -1022,114 +1176,181 @@ class AniLifeQueueEntity(FfmpegQueueEntity):
             db_entity.save()
 
     def make_episode_info(self):
-        logger.debug("make_episode_info() routine ==========")
+        """
+        에피소드 정보를 추출하고 비디오 URL을 가져옵니다.
+        Selenium + stealth 기반 구현 (JavaScript 실행 필요)
+        
+        플로우:
+        1. Selenium으로 provider 페이지 접속
+        2. _aldata JavaScript 변수에서 Base64 데이터 추출
+        3. vid_url_1080 값으로 최종 m3u8 URL 구성
+        """
+        logger.debug("make_episode_info() routine (Selenium version) ==========")
         try:
-            # 다운로드 추가
+            import base64
+            import json as json_module
+            
             base_url = "https://anilife.live"
-            iframe_url = ""
-            LogicAniLife.episode_url = self.info["ep_url"]
-
-            logger.debug(LogicAniLife.episode_url)
-
-            url = self.info["va"]
-            # LogicAniLife.episode_url = url
-            logger.debug(f"url:: {url}")
-
-            ourls = parse.urlparse(url)
-
-            self.headers = {
-                "Referer": LogicAniLife.episode_url,
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, "
-                "like Gecko) Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36",
-            }
-
-            logger.debug("make_episode_info()::url==> %s", url)
-            logger.info(f"self.info:::> {self.info}")
-
-            referer = "https://anilife.live/g/l?id=13fd4d28-ff18-4764-9968-7e7ea7347c51"
-
-            # text = requests.get(url, headers=headers).text
-            # text = LogicAniLife.get_html_seleniumwire(url, referer=referer, wired=True)
-            # https://anilife.live/ani/provider/10f60832-20d1-4918-be62-0f508bf5460c
-            referer_url = (
-                "https://anilife.live/g/l?id=b012a355-a997-449a-ae2b-408a81a9b464"
-            )
-
-            referer_url = LogicAniLife.episode_url
-
-            logger.debug(f"LogicAniLife.episode_url:: {LogicAniLife.episode_url}")
-
-            # gevent 에서 asyncio.run
-            # text = asyncio.run(
-            #     LogicAniLife.get_html_playwright(
-            #         url,
-            #         headless=False,
-            #         referer=referer_url,
-            #         engine="chrome",
-            #         stealth=True,
-            #     )
-            # )
-            # task1 = asyncio.create_task(LogicAniLife.get_html_playwright(
-            #     url,
-            #     headless=True,
-            #     referer=referer_url,
-            #     engine="chrome",
-            #     stealth=True
-            # ))
-
-            # loop = asyncio.new_event_loop()
-            logger.debug(url, referer_url)
-            import json
-
-            post_data = {
-                "url": url,
-                "headless": False,
-                # "engine": "chromium",
-                "engine": "webkit",
-                "referer": referer_url,
-                "stealth": "False",
-                "reload": True,
-            }
-            payload = json.dumps(post_data)
-            logger.debug(payload)
-            response_data = requests.post(
-                url="http://localhost:7070/get_html_by_playwright", data=payload
-            )
-
-            # logger.debug(response_data.json()["html"])
-            # soup_text = BeautifulSoup(response_data.json()["html"], 'lxml')
-            #
-            # tree = html.fromstring(response_data.json()["html"])
-            text = response_data.json()["html"]
-
-            # vod_1080p_url = text
-            # logger.debug(text)
-            soup = BeautifulSoup(text, "lxml")
-
-            all_scripts = soup.find_all("script")
-            print(f"all_scripts:: {all_scripts}")
-
-            regex = r"(?P<jawcloud_url>http?s:\/\/.*=jawcloud)"
-            match = re.compile(regex).search(text)
-
-            jawcloud_url = None
-            # print(match)
-            if match:
-                jawcloud_url = match.group("jawcloud_url")
-
-            logger.debug(f"jawcloud_url:: {jawcloud_url}")
-
-            # loop = asyncio.new_event_loop()
-            # asyncio.set_event_loop(loop)
-            #
-            logger.info(self.info)
-
+            LogicAniLife.episode_url = self.info.get("ep_url", base_url)
+            
+            # 에피소드 provider 페이지 URL
+            provider_url = self.info["va"]
+            if provider_url.startswith("/"):
+                provider_url = base_url + provider_url
+            
+            logger.debug(f"Provider URL: {provider_url}")
+            logger.info(f"Episode info: {self.info}")
+            
+            provider_html = None
+            aldata_value = None
+            
+            # Camoufox를 subprocess로 실행 (스텔스 Firefox - 봇 감지 우회)
+            try:
+                import subprocess
+                import json as json_module
+                
+                # camoufox_anilife.py 스크립트 경로
+                script_path = os.path.join(os.path.dirname(__file__), "lib", "camoufox_anilife.py")
+                
+                # detail_url과 episode_num 추출
+                detail_url = self.info.get("ep_url", f"https://anilife.live/detail/id/{self.info.get('content_code', '')}")
+                episode_num = str(self.info.get("ep_num", "1"))
+                
+                logger.debug(f"Running Camoufox subprocess: {script_path}")
+                logger.debug(f"Detail URL: {detail_url}, Episode: {episode_num}")
+                
+                # subprocess로 Camoufox 스크립트 실행
+                result = subprocess.run(
+                    [sys.executable, script_path, detail_url, episode_num],
+                    capture_output=True,
+                    text=True,
+                    timeout=120  # 120초 타임아웃
+                )
+                
+                if result.returncode != 0:
+                    logger.error(f"Camoufox subprocess failed: {result.stderr}")
+                    raise Exception(f"Subprocess error: {result.stderr}")
+                
+                # JSON 결과 파싱
+                cf_result = json_module.loads(result.stdout)
+                logger.debug(f"Camoufox result: success={cf_result.get('success')}, current_url={cf_result.get('current_url')}")
+                
+                if cf_result.get("error"):
+                    logger.error(f"Camoufox error: {cf_result['error']}")
+                
+                # _aldata 추출
+                if cf_result.get("success") and cf_result.get("aldata"):
+                    aldata_value = cf_result["aldata"]
+                    logger.debug(f"Got _aldata from Camoufox: {aldata_value[:50]}...")
+                elif cf_result.get("html"):
+                    provider_html = cf_result["html"]
+                    logger.debug(f"Provider page loaded via Camoufox, length: {len(provider_html)}")
+                else:
+                    logger.error("No aldata or HTML returned from Camoufox")
+                    return
+                    
+            except subprocess.TimeoutExpired:
+                logger.error("Camoufox subprocess timed out")
+                return
+            except FileNotFoundError:
+                logger.error(f"Camoufox script not found: {script_path}")
+                return
+            except Exception as cf_err:
+                logger.error(f"Camoufox subprocess error: {cf_err}")
+                logger.error(traceback.format_exc())
+                return
+            
+            # _aldata 처리
+            if aldata_value:
+                # JavaScript에서 직접 가져온 경우
+                aldata_b64 = aldata_value
+            elif provider_html:
+                # HTML에서 추출
+                aldata_patterns = [
+                    r"var\s+_aldata\s*=\s*['\"]([A-Za-z0-9+/=]+)['\"]",
+                    r"let\s+_aldata\s*=\s*['\"]([A-Za-z0-9+/=]+)['\"]",
+                    r"const\s+_aldata\s*=\s*['\"]([A-Za-z0-9+/=]+)['\"]",
+                    r"_aldata\s*=\s*['\"]([A-Za-z0-9+/=]+)['\"]",
+                    r"_aldata\s*=\s*'([^']+)'",
+                    r'_aldata\s*=\s*"([^"]+)"',
+                ]
+                
+                aldata_match = None
+                for pattern in aldata_patterns:
+                    aldata_match = re.search(pattern, provider_html)
+                    if aldata_match:
+                        logger.debug(f"Found _aldata with pattern: {pattern}")
+                        break
+                
+                if not aldata_match:
+                    if "_aldata" in provider_html:
+                        idx = provider_html.find("_aldata")
+                        snippet = provider_html[idx:idx+200]
+                        logger.error(f"_aldata found but pattern didn't match. Snippet: {snippet}")
+                    else:
+                        logger.error("_aldata not found in provider page at all")
+                        logger.debug(f"HTML snippet (first 1000 chars): {provider_html[:1000]}")
+                    return
+                
+                aldata_b64 = aldata_match.group(1)
+            else:
+                logger.error("No provider HTML or _aldata value available")
+                return
+            
+            logger.debug(f"Found _aldata: {aldata_b64[:50]}...")
+            
+            # Base64 디코딩
+            try:
+                aldata_json = base64.b64decode(aldata_b64).decode('utf-8')
+                aldata = json_module.loads(aldata_json)
+                logger.debug(f"Decoded _aldata: {aldata}")
+            except Exception as decode_err:
+                logger.error(f"Failed to decode _aldata: {decode_err}")
+                return
+            
+            # vid_url_1080 추출
+            vid_url_path = aldata.get("vid_url_1080")
+            if not vid_url_path or vid_url_path == "none":
+                # 720p 폴백
+                vid_url_path = aldata.get("vid_url_720")
+            
+            if not vid_url_path or vid_url_path == "none":
+                logger.error("No video URL found in _aldata")
+                return
+            
+            # API URL 구성 (이 URL은 JSON을 반환함)
+            api_url = f"https://{vid_url_path}"
+            logger.info(f"API URL: {api_url}")
+            
+            # API에서 실제 m3u8 URL 가져오기
+            try:
+                api_headers = {
+                    "Referer": "https://anilife.live/",
+                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+                }
+                api_response = requests.get(api_url, headers=api_headers, timeout=30)
+                api_data = api_response.json()
+                
+                # JSON 배열에서 URL 추출
+                if isinstance(api_data, list) and len(api_data) > 0:
+                    vod_url = api_data[0].get("url")
+                    logger.info(f"Extracted m3u8 URL from API: {vod_url}")
+                else:
+                    logger.error(f"Unexpected API response format: {api_data}")
+                    return
+            except Exception as api_err:
+                logger.error(f"Failed to get m3u8 URL from API: {api_err}")
+                # 폴백: 원래 URL 사용
+                vod_url = api_url
+            
+            logger.info(f"Video URL: {vod_url}")
+            
+            # 파일명 및 저장 경로 설정
             match = re.compile(
                 r"(?P<title>.*?)\s*((?P<season>\d+)%s)?\s*((?P<epi_no>\d+)%s)"
                 % ("기", "화")
             ).search(self.info["title"])
 
-            # epi_no 초기값
             epi_no = 1
             self.quality = "1080P"
 
@@ -1138,7 +1359,6 @@ class AniLifeQueueEntity(FfmpegQueueEntity):
                 if "season" in match.groupdict() and match.group("season") is not None:
                     self.season = int(match.group("season"))
 
-                # epi_no = 1
                 epi_no = int(match.group("epi_no"))
                 ret = "%s.S%sE%s.%s-AL.mp4" % (
                     self.content_title,
@@ -1151,16 +1371,19 @@ class AniLifeQueueEntity(FfmpegQueueEntity):
                 P.logger.debug("NOT MATCH")
                 ret = "%s.720p-AL.mp4" % self.info["title"]
 
-            # logger.info('self.content_title:: %s', self.content_title)
             self.epi_queue = epi_no
 
             self.filename = Util.change_text_for_use_filename(ret)
-            logger.info(f"self.filename::> {self.filename}")
-            self.savepath = P.ModelSetting.get("ohli24_download_path")
-            logger.info(f"self.savepath::> {self.savepath}")
+            logger.info(f"Filename: {self.filename}")
+            
+            # anilife 전용 다운로드 경로 설정 (ohli24_download_path 대신 anilife_download_path 사용)
+            self.savepath = P.ModelSetting.get("anilife_download_path")
+            if not self.savepath:
+                self.savepath = P.ModelSetting.get("ohli24_download_path")
+            logger.info(f"Savepath: {self.savepath}")
 
             if P.ModelSetting.get_bool("ohli24_auto_make_folder"):
-                if self.info["day"].find("완결") != -1:
+                if self.info.get("day", "").find("완결") != -1:
                     folder_name = "%s %s" % (
                         P.ModelSetting.get("ohli24_finished_insert"),
                         self.content_title,
@@ -1173,21 +1396,25 @@ class AniLifeQueueEntity(FfmpegQueueEntity):
                     self.savepath = os.path.join(
                         self.savepath, "Season %s" % int(self.season)
                     )
+            
             self.filepath = os.path.join(self.savepath, self.filename)
             if not os.path.exists(self.savepath):
                 os.makedirs(self.savepath)
 
-            # vod_1080p_url = asyncio.run(
-            #     LogicAniLife.get_vod_url(jawcloud_url, headless=True)
-            # )
-            vod_1080p_url = LogicAniLife.get_vod_url_v2(jawcloud_url, headless=False)
-
-            print(f"vod_1080p_url:: {vod_1080p_url}")
-            self.url = vod_1080p_url
-
-            logger.info(self.url)
+            # 최종 비디오 URL 설정
+            self.url = vod_url
+            logger.info(f"Final video URL: {self.url}")
+            
+            # 헤더 설정 (gcdn.app CDN 접근용)
+            self.headers = {
+                "Referer": "https://anilife.live/",
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Origin": "https://anilife.live"
+            }
+            logger.info(f"Headers: {self.headers}")
+            
         except Exception as e:
-            P.logger.error(f"Exception: str(e)")
+            P.logger.error(f"Exception: {str(e)}")
             P.logger.error(traceback.format_exc())
 
 

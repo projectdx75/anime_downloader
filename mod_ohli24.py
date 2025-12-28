@@ -66,6 +66,11 @@ class LogicOhli24(PluginModuleBase):
     origin_url = None
     episode_url = None
     cookies = None
+    proxy = "http://192.168.0.2:3138"
+    proxies = {
+        "http": proxy,
+        "https": proxy,
+    }
 
     session = requests.Session()
 
@@ -458,8 +463,9 @@ class LogicOhli24(PluginModuleBase):
         code = urllib.parse.quote(code)
 
         try:
-            if self.current_data is not None and "code" in self.current_data and self.current_data["code"] == code:
-                return self.current_data
+            # 캐시 기능을 제거하여 분석 버튼 클릭 시 항상 최신 설정으로 다시 분석하도록 함
+            # if self.current_data is not None and "code" in self.current_data and self.current_data["code"] == code:
+            #     return self.current_data
 
             if code.startswith("http"):
                 if "/c/" in code:
@@ -628,6 +634,9 @@ class LogicOhli24(PluginModuleBase):
                     continue
             
             logger.info(f"Found {len(episodes)} episodes")
+            # 디버깅: 원본 순서 확인 (첫번째 에피소드 제목)
+            if episodes:
+                logger.info(f"First parsed episode: {episodes[0]['title']}")
 
             # 줄거리 추출
             ser_description_result = tree.xpath('//div[@class="view-stocon"]/div[@class="c"]/text()')
@@ -646,10 +655,24 @@ class LogicOhli24(PluginModuleBase):
                 "code": code,
             }
 
-            if not P.ModelSetting.get_bool("ohli24_order_desc"):
-                data["episode"] = list(reversed(data["episode"]))
+            # 정렬 적용: 사이트 원본은 최신화가 가장 위임 (13, 12, ... 1)
+            # ohli24_order_desc가 Off(False)이면 1화부터 나오게 뒤집기
+            raw_order_desc = P.ModelSetting.get("ohli24_order_desc")
+            order_desc = True if str(raw_order_desc).lower() == 'true' else False
+            
+            logger.info(f"Sorting - Raw: {raw_order_desc}, Parsed: {order_desc}")
+            
+            if not order_desc:
+                logger.info("Order is set to Ascending (Off), reversing list to show episode 1 first.")
+                data["episode"] = list(reversed(data['episode']))
+                data["list_order"] = "asc"
+            else:
+                logger.info("Order is set to Descending (On), keeping site order (Newest first).")
                 data["list_order"] = "desc"
-
+            
+            if data["episode"]:
+                logger.info(f"Final episode list range: {data['episode'][0]['title']} ~ {data['episode'][-1]['title']}")
+            
             self.current_data = data
             return data
 
@@ -845,10 +868,7 @@ class LogicOhli24(PluginModuleBase):
                 delay=10
             )
             # 프록시 설정 (필요시 사용)
-            proxies = {
-                "http": "http://192.168.0.2:3138",
-                "https": "http://192.168.0.2:3138",
-            }
+            proxies = LogicOhli24.proxies
             if method.upper() == 'POST':
                 response = scraper.post(url, headers=headers, data=data, timeout=timeout, proxies=proxies)
             else:
@@ -916,6 +936,7 @@ class LogicOhli24(PluginModuleBase):
             # logger.debug("db_entity.status ::: %s", db_entity.status)
             if db_entity is None:
                 entity = Ohli24QueueEntity(P, self, episode_info)
+                entity.proxy = self.proxy
                 logger.debug("entity:::> %s", entity.as_dict())
                 ModelOhli24Item.append(entity.as_dict())
                 # # logger.debug("entity:: type >> %s", type(entity))
@@ -934,7 +955,7 @@ class LogicOhli24(PluginModuleBase):
                 return "enqueue_db_append"
             elif db_entity.status != "completed":
                 entity = Ohli24QueueEntity(P, self, episode_info)
-
+                entity.proxy = self.proxy
                 logger.debug("entity:::> %s", entity.as_dict())
 
                 # P.logger.debug(F.config['path_data'])
@@ -1080,11 +1101,20 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
         self.content_title = None
         self.srt_url = None
         self.headers = None
+        self.cookies_file = None  # yt-dlp용 CDN 세션 쿠키 파일 경로
         # Todo::: 임시 주석 처리
         self.make_episode_info()
 
+
     def refresh_status(self):
         self.module_logic.socketio_callback("status", self.as_dict())
+        # 추가: /queue 네임스페이스로도 명시적으로 전송
+        try:
+            from framework import socketio
+            namespace = f"/{self.P.package_name}/{self.module_logic.name}/queue"
+            socketio.emit("status", self.as_dict(), namespace=namespace)
+        except:
+            pass
 
     def info_dict(self, tmp):
         # logger.debug('self.info::> %s', self.info)
@@ -1168,7 +1198,7 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
             logger.info(f"Found cdndania iframe: {iframe_src}")
             
             # Step 2: cdndania.com 페이지에서 m3u8 URL 추출
-            video_url, vtt_url = self.extract_video_from_cdndania(iframe_src, url)
+            video_url, vtt_url, cookies_file = self.extract_video_from_cdndania(iframe_src, url)
             
             if not video_url:
                 logger.error("Failed to extract video URL from cdndania")
@@ -1176,15 +1206,19 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
             
             self.url = video_url
             self.srt_url = vtt_url
+            self.cookies_file = cookies_file  # yt-dlp용 세션 쿠키 파일
             logger.info(f"Video URL: {self.url}")
             if self.srt_url:
                 logger.info(f"Subtitle URL: {self.srt_url}")
+            if self.cookies_file:
+                logger.info(f"Cookies file: {self.cookies_file}")
             
             # 헤더 설정
             self.headers = {
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 "Referer": iframe_src,
             }
+
             
             # 파일명 생성
             match = re.compile(r"(?P<title>.*?)\s*((?P<season>\d+)%s)?\s*((?P<epi_no>\d+)%s)" % ("기", "화")).search(
@@ -1250,11 +1284,20 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
             P.logger.error(traceback.format_exc())
     
     def extract_video_from_cdndania(self, iframe_src, referer_url):
-        """cdndania.com 플레이어에서 API 호출을 통해 비디오(m3u8) 및 자막(vtt) URL 추출"""
+        """cdndania.com 플레이어에서 API 호출을 통해 비디오(m3u8) 및 자막(vtt) URL 추출
+        
+        Returns:
+            tuple: (video_url, vtt_url, cookies_file) - cookies_file은 yt-dlp용 쿠키 파일 경로
+        """
         video_url = None
         vtt_url = None
+        cookies_file = None
         
         try:
+            import cloudscraper
+            import tempfile
+            import json
+            
             logger.debug(f"Extracting from cdndania: {iframe_src}")
             
             # iframe URL에서 비디오 ID(hash) 추출
@@ -1266,27 +1309,35 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
             
             if not video_id:
                 logger.error(f"Could not find video ID in iframe URL: {iframe_src}")
-                return video_url, vtt_url
+                return video_url, vtt_url, cookies_file
+            
+            # cloudscraper 세션 생성 (쿠키 유지용)
+            scraper = cloudscraper.create_scraper(
+                browser={'browser': 'chrome', 'platform': 'darwin', 'mobile': False},
+                delay=10
+            )
+            proxies = LogicOhli24.proxies
             
             # getVideo API 호출
             api_url = f"https://cdndania.com/player/index.php?data={video_id}&do=getVideo"
             headers = {
+                "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 "x-requested-with": "XMLHttpRequest",
                 "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
-                "referer": iframe_src
+                "referer": iframe_src,
+                "origin": "https://cdndania.com"
             }
-            # Referer는 메인 사이트 도메인만 보내는 것이 더 안정적일 수 있음
             post_data = {
                 "hash": video_id,
                 "r": "https://ani.ohli24.com/"
             }
             
-            logger.debug(f"Calling video API: {api_url}")
-            json_text = LogicOhli24.get_html(api_url, headers=headers, data=post_data, method='POST', timeout=30)
+            logger.debug(f"Calling video API with session: {api_url}")
+            response = scraper.post(api_url, headers=headers, data=post_data, timeout=30, proxies=proxies)
+            json_text = response.text
             
             if json_text:
                 try:
-                    import json
                     data = json.loads(json_text)
                     video_url = data.get("videoSource")
                     if not video_url:
@@ -1299,13 +1350,35 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
                         vtt_url = data.get("videoSubtitle")
                         if vtt_url:
                             logger.info(f"Found subtitle URL via API: {vtt_url}")
+                        
+                        # 세션 쿠키를 파일로 저장 (yt-dlp용)
+                        try:
+                            # Netscape 형식 쿠키 파일 생성
+                            fd, cookies_file = tempfile.mkstemp(suffix='.txt', prefix='cdndania_cookies_')
+                            with os.fdopen(fd, 'w') as f:
+                                f.write("# Netscape HTTP Cookie File\n")
+                                f.write("# https://curl.haxx.se/docs/http-cookies.html\n\n")
+                                for cookie in scraper.cookies:
+                                    # 형식: domain, flag, path, secure, expiry, name, value
+                                    domain = cookie.domain
+                                    flag = "TRUE" if domain.startswith('.') else "FALSE"
+                                    path = cookie.path or "/"
+                                    secure = "TRUE" if cookie.secure else "FALSE"
+                                    expiry = str(int(cookie.expires)) if cookie.expires else "0"
+                                    f.write(f"{domain}\t{flag}\t{path}\t{secure}\t{expiry}\t{cookie.name}\t{cookie.value}\n")
+                            logger.info(f"Saved {len(scraper.cookies)} cookies to: {cookies_file}")
+                        except Exception as cookie_err:
+                            logger.warning(f"Failed to save cookies: {cookie_err}")
+                            cookies_file = None
+                            
                 except Exception as json_err:
                     logger.warning(f"Failed to parse API JSON: {json_err}")
             
             # API 실패 시 기존 방식(정규식)으로 폴백
             if not video_url:
                 logger.info("API extraction failed, falling back to regex")
-                html_content = LogicOhli24.get_html(iframe_src, referer=referer_url, timeout=30)
+                html_response = scraper.get(iframe_src, headers={"referer": referer_url}, timeout=30, proxies=proxies)
+                html_content = html_response.text
                 if html_content:
                     # m3u8 URL 패턴 찾기
                     m3u8_patterns = [
@@ -1337,7 +1410,8 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
             logger.error(f"Error in extract_video_from_cdndania: {e}")
             logger.error(traceback.format_exc())
         
-        return video_url, vtt_url
+        return video_url, vtt_url, cookies_file
+
 
     # def callback_function(self, **args):
     #     refresh_type = None

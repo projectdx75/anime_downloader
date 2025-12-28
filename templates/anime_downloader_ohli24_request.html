@@ -86,6 +86,12 @@
                     if (ret.ret === 'success' && ret.data != null) {
                         // {#console.log(ret.code)#}
                         console.log(ret.data)
+                        var order_text = (ret.data.list_order === 'desc') ? '최신화부터 (역순)' : '1화부터 (정순)';
+                        if (ret.data.list_order === undefined) {
+                            // 로직상 list_order가 없을 수 있으므로 체크
+                            order_text = '';
+                        }
+                        $.notify('<strong>분석 성공</strong><br>' + order_text, {type: 'success'});
                         make_program(ret.data)
                     } else {
                         $.notify('<strong>분석 실패</strong><br>' + ret.log, {type: 'warning'});

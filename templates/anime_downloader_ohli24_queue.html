@@ -112,12 +112,19 @@
 
 
         function on_status(data) {
-            console.log(data)
-            console.log(data.percent)
-            tmp = document.getElementById("progress_" + data.idx)
+            // console.log(data)
+            var entity_id = data.entity_id;
+            var percent = data.ffmpeg_percent;
+            var status_kor = data.ffmpeg_status_kor;
+            var speed = data.current_speed;
+            
+            var tmp = document.getElementById("progress_" + entity_id)
             if (tmp != null) {
-                document.getElementById("progress_" + data.idx).style.width = data.percent + '%';
-                document.getElementById("progress_" + data.idx + "_label").innerHTML = data.status_kor + "(" + data.percent + "%)" + ' ' + ((data.current_speed != null) ? data.current_speed : '')
+                document.getElementById("progress_" + entity_id).style.width = percent + '%';
+                var label = status_kor;
+                if (percent != 0) label += "(" + percent + "%)";
+                if (speed) label += " " + speed;
+                document.getElementById("progress_" + entity_id + "_label").innerHTML = label;
             }
         }
 
