@@ -1281,7 +1281,7 @@ class AniLifeQueueEntity(FfmpegQueueEntity):
                 import json as json_module
                 
                 # 셋업 확인 (이미 완료되었으면 즉시 반환, 아니면 대기)
-                if not self.ensure_camoufox_installed():
+                if not self.module_logic.ensure_camoufox_installed():
                     logger.error("Camoufox installation failed. Cannot proceed.")
                     return
                 
@@ -1291,28 +1291,51 @@ class AniLifeQueueEntity(FfmpegQueueEntity):
                 # detail_url과 episode_num 추출
                 detail_url = self.info.get("ep_url", f"https://anilife.live/detail/id/{self.info.get('content_code', '')}")
                 episode_num = str(self.info.get("ep_num", "1"))
+                provider_url = self.info.get("va") # 직접 진입용 프로바이더 URL
+                if provider_url and provider_url.startswith("/"):
+                    provider_url = f"https://anilife.live{provider_url}"
                 
                 logger.debug(f"Running Camoufox subprocess: {script_path}")
-                logger.debug(f"Detail URL: {detail_url}, Episode: {episode_num}")
+                logger.debug(f"Detail URL: {detail_url}, Episode: {episode_num}, Provider: {provider_url}")
                 
-                # subprocess로 Camoufox 스크립트 실행
-                result = subprocess.run(
-                    [sys.executable, script_path, detail_url, episode_num],
-                    capture_output=True,
-                    text=True,
-                    timeout=120  # 120초 타임아웃
+                # subprocess로 Camoufox 스크립트 실행 (stderr 실시간 로그 연동)
+                cmd = [sys.executable, script_path, detail_url, episode_num]
+                if provider_url:
+                    cmd.append(provider_url)
+                
+                process = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True
                 )
                 
-                if result.returncode != 0:
-                    logger.error(f"Camoufox subprocess failed: {result.stderr}")
-                    raise Exception(f"Subprocess error: {result.stderr}")
+                # stderr를 실시간으로 logger.info에 기록 (진단 가시성 확보)
+                stdout_data = []
+                import threading
+                def log_stderr(pipe):
+                    for line in iter(pipe.readline, ''):
+                        if line.strip():
+                            logger.info(f"[Camoufox] {line.strip()}")
                 
-                # JSON 결과 파싱 (엄격한 분리를 통해 stdout에는 JSON만 남음)
+                stderr_thread = threading.Thread(target=log_stderr, args=(process.stderr,))
+                stderr_thread.start()
+                
+                # stdout 캡처 (JSON 결과)
+                for line in iter(process.stdout.readline, ''):
+                    stdout_data.append(line)
+                
+                process.wait(timeout=120)
+                stderr_thread.join(timeout=5)
+                
+                stdout_full = "".join(stdout_data)
+                
+                # JSON 결과 파싱
                 try:
-                    cf_result = json_module.loads(result.stdout)
+                    cf_result = json_module.loads(stdout_full)
                 except json_module.JSONDecodeError as e:
                     logger.error(f"Failed to parse Camoufox result: {e}")
-                    logger.error(f"Raw stdout: {result.stdout}")
+                    logger.debug(f"Raw stdout: {stdout_full}")
                     return
                 
                 elapsed = cf_result.get("elapsed", "?")
