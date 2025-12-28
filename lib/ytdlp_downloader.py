@@ -9,6 +9,7 @@ import sys
 import time
 import re
 import logging
+import platform
 
 logger = logging.getLogger(__name__)
 
@@ -144,10 +145,21 @@ class YtdlpDownloader:
                 '--no-check-certificate',
                 '--progress',
                 '--verbose',                # 디버깅용 상세 로그
-                '--impersonate', 'chrome-120', # 정밀한 크롬-120 지문 사용
                 '--extractor-args', 'generic:force_hls', # HLS 강제 추출
                 '-o', self.output_path,
             ]
+            
+            # 1.5 환경별 브라우저 위장 설정 (Impersonate)
+            # macOS에서는 고급 위장 기능을 사용하되, 종속성 문제가 잦은 Linux/Docker에서는 UA 수동 지정
+            is_mac = platform.system() == 'Darwin'
+            if is_mac:
+                cmd += ['--impersonate', 'chrome-120']
+                logger.debug("Using yt-dlp --impersonate chrome-120 (macOS detected)")
+            else:
+                # Docker/Linux: impersonate 라이브러리 부재 가능하므로 UA 수동 설정
+                user_agent = self.headers.get('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+                cmd += ['--user-agent', user_agent]
+                logger.debug(f"Using manual User-Agent on {platform.system()}: {user_agent}")
 
             # 2. 프록시 설정
             if self.proxy:
