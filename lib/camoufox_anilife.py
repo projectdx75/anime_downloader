@@ -31,12 +31,19 @@ def extract_aldata(detail_url: str, episode_num: str) -> dict:
     
     try:
         # Camoufox 시작 (자동 fingerprint 생성)
-        # Docker/서버 환경에서는 DISPLAY가 없으므로 headless 모드 사용
+        # Docker/서버 환경에서는 DISPLAY가 없으므로 Xvfb 가상 디스플레이 사용
         import os
         has_display = os.environ.get('DISPLAY') is not None
-        use_headless = not has_display
         
-        with Camoufox(headless=use_headless) as browser:
+        if not has_display:
+            print("   No DISPLAY detected. Using Virtual Display (Xvfb) for better stealth.", file=sys.stderr)
+            # Docker 등 GUI 없는 환경에서는 xvfb=True, headless=False 조합이 가장 스텔스성이 높음
+            camou_args = {"headless": False, "xvfb": True}
+        else:
+            # 로컬 GUI 환경에서는 일반 실행
+            camou_args = {"headless": False}
+        
+        with Camoufox(**camou_args) as browser:
             page = browser.new_page()
             
             try:
