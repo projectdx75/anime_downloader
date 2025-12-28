@@ -154,39 +154,25 @@
 
             // str += m_hr_black();
             str += "</div>"
+            
+            // 에피소드 카드 그리드 레이아웃
+            str += '<div class="episode-list-container">';
             for (i in data.episode) {
-                str += m_row_start();
-                // tmp = '<img src="' + data.episode[i].image + '" class="img-fluid">'
-                // str += m_col(3, tmp)
-                tmp = "<strong>" + data.episode[i].title + "</strong><span>. </span>";
-                {#tmp += "<br>";#}
-                tmp += data.episode[i].filename + "<br><p></p>";
-
-                tmp += '<div class="form-inline">';
-                tmp +=
-                    '<input id="checkbox_' +
-                    i +
-                    '" name="checkbox_' +
-                    i +
-                    '" type="checkbox" checked data-toggle="toggle" data-on="선 택" data-off="-" data-onstyle="success" data-offstyle="danger" data-size="small">&nbsp;&nbsp;&nbsp;&nbsp;';
-                // tmp += m_button('add_queue_btn', '다운로드 추가', [{'key': 'code', 'value': data.episode[i].code}])
-                tmp += m_button("add_queue_btn", "다운로드 추가", [
-                    {key: "idx", value: i},
-                ]);
-                tmp += j_button('insert_download_btn', '다운로드 추가', {
-                    code: data.episode[i]._id,
-                });
-                tmp += j_button(
-                    'force_insert_download_btn',
-                    '다운로드 추가 (DB무시)',
-                    {code: data.episode[i]._id}
-                );
-                // tmp += '<button id="play_video" name="play_video" class="btn btn-sm btn-outline-primary" data-idx="'+i+'">바로보기</button>';
-                tmp += "</div>";
-                str += m_col(12, tmp);
-                str += m_row_end();
-                if (i != data.length - 1) str += m_hr(0);
+                str += '<div class="episode-card">';
+                str += '<div class="episode-thumb">';
+                str += '<span class="episode-num">' + (parseInt(i) + 1) + '화</span>';
+                str += '</div>';
+                str += '<div class="episode-info">';
+                str += '<div class="episode-title">' + data.episode[i].title + '</div>';
+                str += '<div class="episode-filename">' + data.episode[i].filename + '</div>';
+                str += '<div class="episode-actions">';
+                str += '<input id="checkbox_' + i + '" name="checkbox_' + i + '" type="checkbox" checked data-toggle="toggle" data-on="선택" data-off="-" data-onstyle="success" data-offstyle="secondary" data-size="small">';
+                str += m_button("add_queue_btn", "다운로드", [{key: "idx", value: i}]);
+                str += '</div>';
+                str += '</div>';
+                str += '</div>';
             }
+            str += '</div>';
             document.getElementById("episode_list").innerHTML = str;
             $('input[id^="checkbox_"]').bootstrapToggle();
         }
@@ -449,6 +435,105 @@
             border-radius: 30px 10px;
             --bs-border-opacity: 1;
             border-color: rgba(var(--bs-light-rgb), var(--bs-border-opacity)) !important;
+        }
+
+        /* 에피소드 목록 컨테이너 */
+        .episode-list-container {
+            margin-top: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+            gap: 10px;
+        }
+        
+        /* 에피소드 카드 */
+        .episode-card {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 14px;
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.85) 0%, rgba(15, 23, 42, 0.85) 100%);
+            border-radius: 8px;
+            border: 1px solid rgba(148, 163, 184, 0.12);
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+        
+        .episode-card:hover {
+            background: linear-gradient(135deg, rgba(51, 65, 85, 0.95) 0%, rgba(30, 41, 59, 0.95) 100%);
+            border-color: rgba(96, 165, 250, 0.5);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(96, 165, 250, 0.2);
+        }
+        
+        /* 에피소드 썸네일 */
+        .episode-thumb {
+            position: relative;
+            width: 40px;
+            min-width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            overflow: hidden;
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        
+        /* 에피소드 번호 배지 */
+        .episode-num {
+            color: white;
+            font-size: 11px;
+            font-weight: 700;
+        }
+        
+        /* 에피소드 정보 */
+        .episode-info {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            min-width: 0;
+        }
+        
+        .episode-title {
+            color: #e2e8f0;
+            font-weight: 600;
+            font-size: 14px;
+            line-height: 1.3;
+        }
+        
+        .episode-filename {
+            color: #64748b;
+            font-size: 11px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        /* 에피소드 액션 버튼 */
+        .episode-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 4px;
+        }
+        
+        .episode-actions .btn {
+            font-size: 11px;
+            padding: 3px 10px;
+            border-radius: 4px;
+        }
+        
+        .episode-actions .toggle {
+            transform: scale(0.85);
+        }
+        
+        /* 반응형 */
+        @media (max-width: 768px) {
+            .episode-list-container {
+                grid-template-columns: 1fr;
+            }
         }
 
         #airing_list {

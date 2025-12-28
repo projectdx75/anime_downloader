@@ -456,6 +456,34 @@ class LogicAniLife(PluginModuleBase):
             )
         return render_template("sample.html", title="%s - %s" % (P.package_name, sub))
 
+    def socketio_callback(self, refresh_type, data):
+        """
+        socketio를 통해 클라이언트에 상태 업데이트 전송
+        refresh_type: 'add', 'status', 'last', 'list_refresh' 등
+        data: entity.as_dict() 데이터 또는 리스트 갱신용 빈 문자열
+        """
+        try:
+            from flaskfarm.lib.framework.init_main import socketio
+            
+            # /package_name/module_name/queue 네임스페이스로 emit
+            namespace = f"/{P.package_name}/{self.name}/queue"
+            
+            # 큐 페이지 소켓에 직접 emit
+            socketio.emit(refresh_type, data, namespace=namespace, broadcast=True)
+            
+            # 진행 상태인 경우 /framework 네임스페이스로 전역 알림(옵션)
+            if refresh_type == "status" and isinstance(data, dict):
+                percent = data.get('percent', 0)
+                if percent > 0 and percent % 10 == 0: # 10% 단위로 전역 알림
+                    notify_data = {
+                        "type": "info",
+                        "msg": f"[Anilife] 다운로드중 {percent}% - {data.get('filename', '')}",
+                    }
+                    socketio.emit("notify", notify_data, namespace="/framework", broadcast=True)
+                    
+        except Exception as e:
+            logger.error(f"socketio_callback error: {e}")
+
     def process_ajax(self, sub, req):
         try:
             if sub == "analysis":
@@ -1204,10 +1232,63 @@ class AniLifeQueueEntity(FfmpegQueueEntity):
             provider_html = None
             aldata_value = None
             
+            # Camoufox 설치 확인 및 자동 설치
+            def ensure_camoufox_installed():
+                """Camoufox가 설치되어 있는지 확인하고, 없으면 자동 설치
+                
+                Note: Docker 환경에서 import camoufox 시 trio/epoll 문제가 발생할 수 있으므로
+                실제 import 대신 importlib.util.find_spec으로 패키지 존재만 확인
+                """
+                import importlib.util
+                
+                # 패키지 존재 여부만 확인 (import 하지 않음)
+                if importlib.util.find_spec("camoufox") is not None:
+                    return True
+                
+                logger.info("Camoufox not installed. Installing...")
+                try:
+                    import subprocess as sp
+                    
+                    # pip로 camoufox[geoip] 설치
+                    pip_result = sp.run(
+                        [sys.executable, "-m", "pip", "install", "camoufox[geoip]", "-q"],
+                        capture_output=True,
+                        text=True,
+                        timeout=120
+                    )
+                    if pip_result.returncode != 0:
+                        logger.error(f"Failed to install camoufox: {pip_result.stderr}")
+                        return False
+                    logger.info("Camoufox package installed successfully")
+                    
+                    # Camoufox 브라우저 바이너리 다운로드
+                    logger.info("Downloading Camoufox browser binary...")
+                    fetch_result = sp.run(
+                        [sys.executable, "-m", "camoufox", "fetch"],
+                        capture_output=True,
+                        text=True,
+                        timeout=300  # 브라우저 다운로드는 시간이 걸릴 수 있음
+                    )
+                    if fetch_result.returncode != 0:
+                        logger.warning(f"Camoufox browser fetch warning: {fetch_result.stderr}")
+                        # fetch 실패해도 이미 있을 수 있으므로 계속 진행
+                    else:
+                        logger.info("Camoufox browser binary installed successfully")
+                    
+                    return True
+                except Exception as install_err:
+                    logger.error(f"Failed to install Camoufox: {install_err}")
+                    return False
+            
             # Camoufox를 subprocess로 실행 (스텔스 Firefox - 봇 감지 우회)
             try:
                 import subprocess
                 import json as json_module
+                
+                # Camoufox 설치 확인
+                if not ensure_camoufox_installed():
+                    logger.error("Camoufox installation failed. Cannot proceed.")
+                    return
                 
                 # camoufox_anilife.py 스크립트 경로
                 script_path = os.path.join(os.path.dirname(__file__), "lib", "camoufox_anilife.py")

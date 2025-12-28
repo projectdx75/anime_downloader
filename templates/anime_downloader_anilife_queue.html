@@ -27,34 +27,68 @@
         const package_name = "{{arg['package_name'] }}";
         const sub = "{{arg['sub'] }}";
 
-        function on_start() {
+        function on_start(silent = false) {
             $.ajax({
                 url: '/' + package_name + '/ajax/' + sub + '/entity_list',
                 type: "POST",
                 cache: false,
                 data: {},
                 dataType: "json",
+                global: !silent,
                 success: function (data) {
-                    make_download_list(data)
+                    // entity_list 응답을 처리
+                    current_data = data;
+                    
+                    // 목록 개수가 변했거나 데이터가 없을 때만 전체 갱신 (반짝임 방지)
+                    const list_body = $("#list");
+                    if (data.length == 0) {
+                        list_body.html("<tr><td colspan='11'><h4>작업이 없습니다.</h4><td><tr>");
+                    } else if (list_body.children().length !== data.length * 2) { // make_item이 행 2개를 생성하므로
+                        str = ''
+                        for (i in data) {
+                            str += make_item(data[i]);
+                        }
+                        list_body.html(str);
+                    } else {
+                        // 개수가 같으면 각 항목의 상태만 보강 업데이트
+                        for (i in data) {
+                            status_html(data[i]);
+                        }
+                    }
                 }
             });
         }
 
         $(document).ready(function () {
-            const socket = io.connect(window.location.href);
+            const socket_url = window.location.protocol + "//" + document.domain + ":" + location.port + "/anime_downloader/anilife/queue";
+            console.log("Connecting to socket:", socket_url);
+            const socket = io.connect(socket_url);
 
-            {#socket = io.connect(window.location.protocol + "//" + document.domain + ":" + location.port + "/" + package_name + '/' + sub);#}
+            socket.on('connect', function() {
+                console.log('Socket connected to anilife queue!');
+            });
+            
+            // 모든 이벤트 모니터링 (디버깅용)
+            socket.onAny((event, ...args) => {
+                console.log(`[Socket event: ${event}]`, args);
+            });
 
             socket.on('start', function (data) {
                 on_start();
             });
+            
             socket.on('list_refresh', function (data) {
                 on_start()
             });
 
+            // 3초마다 자동 새로고침 폴백 (인디케이터 없이 조용히)
+            setInterval(function() {
+                on_start(true);
+            }, 3000);
+
             socket.on('status', function (data) {
-                console.log(data);
-                on_status(data)
+                console.log("Status update received:", data);
+                status_html(data);
             });
 
             socket.on('on_start', function (data) {
@@ -77,10 +111,6 @@
 
             socket.on('status_change', function (data) {
                 button_html(data);
-            });
-
-            socket.on('status', function (data) {
-                status_html(data);
             });
 
             socket.on('last', function (data) {
@@ -194,6 +224,7 @@
 
         function status_html(data) {
             var progress = document.getElementById("progress_" + data.idx);
+            if (!progress) return;
             progress.style.width = data.percent + '%';
             progress.innerHTML = data.percent + '%';
             progress.style.visibility = 'visible';

@@ -88,7 +88,15 @@ class FfmpegQueueEntity(abc.ABCMeta("ABC", (object,), {"__slots__": ()})):
         tmp["callback_id"] = getattr(self, 'name', 'anilife') if hasattr(self, 'name') else 'anilife'
         tmp["start_time"] = self.created_time
         tmp["status_kor"] = self.ffmpeg_status_kor
-        tmp["status_str"] = str(self.ffmpeg_status) if self.ffmpeg_status != -1 else "WAITING"
+        # status_str: 템플릿에서 문자열 비교에 사용 (DOWNLOADING, COMPLETED, WAITING)
+        status_map = {
+            0: "WAITING",
+            1: "STARTED", 
+            5: "DOWNLOADING",
+            7: "COMPLETED",
+            -1: "FAILED"
+        }
+        tmp["status_str"] = status_map.get(self.ffmpeg_status, "WAITING")
         tmp["percent"] = self.ffmpeg_percent
         tmp["duration_str"] = ""
         tmp["duration"] = ""

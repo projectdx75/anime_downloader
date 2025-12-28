@@ -31,7 +31,12 @@ def extract_aldata(detail_url: str, episode_num: str) -> dict:
     
     try:
         # Camoufox 시작 (자동 fingerprint 생성)
-        with Camoufox(headless=False) as browser:
+        # Docker/서버 환경에서는 DISPLAY가 없으므로 headless 모드 사용
+        import os
+        has_display = os.environ.get('DISPLAY') is not None
+        use_headless = not has_display
+        
+        with Camoufox(headless=use_headless) as browser:
             page = browser.new_page()
             
             try:

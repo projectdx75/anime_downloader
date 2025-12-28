@@ -26,6 +26,7 @@ class YtdlpDownloader:
         self.cancelled = False
         self.process = None
         self.error_output = []  # 에러 메시지 저장
+        self.total_duration_seconds = 0  # 전체 영상 길이 (초)
         
         # 속도 및 시간 계산용
         self.start_time = None
@@ -59,9 +60,53 @@ class YtdlpDownloader:
         else:
             return f"{bytes_per_sec / (1024 * 1024):.2f} MB/s"
     
+    def time_to_seconds(self, time_str):
+        """HH:MM:SS.ms 형식을 초로 변환"""
+        try:
+            if not time_str:
+                return 0
+            parts = time_str.split(':')
+            if len(parts) != 3:
+                return 0
+            h = float(parts[0])
+            m = float(parts[1])
+            s = float(parts[2])
+            return h * 3600 + m * 60 + s
+        except Exception:
+            return 0
+    
+    def _ensure_ytdlp_installed(self):
+        """yt-dlp가 설치되어 있는지 확인하고, 없으면 자동 설치"""
+        import shutil
+        
+        # yt-dlp binary가 PATH에 있는지 확인
+        if shutil.which('yt-dlp') is not None:
+            return True
+        
+        logger.info("yt-dlp not found in PATH. Installing via pip...")
+        try:
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "yt-dlp", "-q"],
+                capture_output=True,
+                text=True,
+                timeout=120
+            )
+            if result.returncode != 0:
+                logger.error(f"Failed to install yt-dlp: {result.stderr}")
+                return False
+            logger.info("yt-dlp installed successfully")
+            return True
+        except Exception as e:
+            logger.error(f"yt-dlp installation error: {e}")
+            return False
+    
     def download(self):
         """yt-dlp CLI를 통한 브라우저 흉내(Impersonate) 방식 다운로드 수행"""
         try:
+            # yt-dlp 설치 확인
+            if not self._ensure_ytdlp_installed():
+                return False, "yt-dlp installation failed"
+            
             self.start_time = time.time()
             
             # 출력 디렉토리 생성
@@ -76,14 +121,26 @@ class YtdlpDownloader:
                 concat_char = '&' if '?' in current_url else '?'
                 current_url = f"{current_url}{concat_char}dummy=.m3u8"
 
-            # 1. 기본 명령어 구성 (Impersonate & HLS 강제)
+            # 1. 기본 명령어 구성 (Impersonate & HLS 옵션)
+            # hlz CDN (linkkf)은 .jpg 확장자로 위장된 TS 세그먼트를 사용
+            # ffmpeg 8.0에서 이를 인식하지 못하므로 native HLS 다운로더 사용
+            use_native_hls = 'hlz' in current_url and '.top/' in current_url
+            
             cmd = [
                 'yt-dlp',
                 '--newline',
                 '--no-playlist',
                 '--no-part',
-                '--hls-prefer-ffmpeg',
-                '--hls-use-mpegts',
+            ]
+            
+            if use_native_hls:
+                # hlz CDN: native HLS 다운로더 사용 (ffmpeg의 확장자 제한 우회)
+                cmd += ['--hls-prefer-native']
+            else:
+                # 기타 CDN: ffmpeg 사용 (더 안정적)
+                cmd += ['--hls-prefer-ffmpeg', '--hls-use-mpegts']
+            
+            cmd += [
                 '--no-check-certificate',
                 '--progress',
                 '--verbose',                # 디버깅용 상세 로그
@@ -121,6 +178,17 @@ class YtdlpDownloader:
                     cmd += ['--referer', 'https://cdndania.com/']
                 cmd += ['--add-header', 'Origin:https://cdndania.com']
                 cmd += ['--add-header', 'X-Requested-With:XMLHttpRequest']
+            
+            # linkkf CDN (hlz3.top, hlz2.top 등) 헤더 보강
+            if 'hlz' in current_url and '.top/' in current_url:
+                # hlz CDN은 자체 도메인을 Referer로 요구함
+                from urllib.parse import urlparse
+                parsed = urlparse(current_url)
+                cdn_origin = f"{parsed.scheme}://{parsed.netloc}"
+                if not has_referer:
+                    cmd += ['--referer', cdn_origin + '/']
+                cmd += ['--add-header', f'Origin:{cdn_origin}']
+                cmd += ['--add-header', 'Accept:*/*']
 
             cmd.append(current_url)
 
@@ -136,13 +204,23 @@ class YtdlpDownloader:
             )
 
             # 여러 진행률 형식 매칭
-            # [download]  10.5% of ~100.00MiB at  2.45MiB/s
-            # [download]  10.5% of 100.00MiB at 2.45MiB/s ETA 00:30
-            # [download] 100% of 100.00MiB
+            # yt-dlp native: [download]  10.5% of ~100.00MiB at  2.45MiB/s
+            # yt-dlp native: [download]  10.5% of 100.00MiB at 2.45MiB/s ETA 00:30
+            # yt-dlp native: [download] 100% of 100.00MiB
+            # ffmpeg: frame= 1234 fps= 30 size= 12345kB time=00:01:23.45 bitrate=1234.5kbits/s
+            # ffmpeg: size=  123456kB time=00:01:23.45
             prog_patterns = [
                 re.compile(r'\[download\]\s+(?P<percent>[\d\.]+)%\s+of\s+.*?(?:\s+at\s+(?P<speed>[\d\.]+\s*\w+/s))?'),
                 re.compile(r'\[download\]\s+(?P<percent>[\d\.]+)%'),
+                # ffmpeg time 출력 파싱 (time=HH:MM:SS.ms)
+                re.compile(r'time=(?P<time>\d+:\d+:\d+\.\d+)'),
+                # ffmpeg size 출력 파싱
+                re.compile(r'size=\s*(?P<size>\d+)kB'),
             ]
+            
+            # ffmpeg time-based progress tracking
+            last_time_str = ""
+            ffmpeg_progress_count = 0
 
             for line in self.process.stdout:
                 if self.cancelled:
@@ -152,11 +230,60 @@ class YtdlpDownloader:
                 line = line.strip()
                 if not line: continue
                 
-                # 디버깅: 모든 출력 로깅 (너무 많으면 주석 해제)
-                if '[download]' in line or 'fragment' in line.lower():
-                    logger.debug(f"yt-dlp: {line}")
+                # ffmpeg Duration 파싱 (전체 길이 확인용)
+                if 'Duration:' in line and self.total_duration_seconds == 0:
+                    dur_match = re.search(r'Duration:\s*(?P<duration>\d+:\d+:\d+\.\d+)', line)
+                    if dur_match:
+                        self.total_duration_seconds = self.time_to_seconds(dur_match.group('duration'))
+                        logger.info(f"[ffmpeg] Total duration detected: {dur_match.group('duration')} ({self.total_duration_seconds}s)")
+
+                # ffmpeg time/size 출력 특별 처리
+                # ffmpeg는 [download] X% 형식을 사용하지 않으므로 time으로 진행 상황 추정
+                if 'time=' in line:
+                    ffmpeg_progress_count += 1
+                    # 매 5번째 출력마다 UI 업데이트 (너무 자주 업데이트 방지)
+                    if ffmpeg_progress_count % 5 == 0 and self.callback:
+                        # time= 파싱
+                        time_match = re.search(r'time=(?P<time>\d+:\d+:\d+\.\d+)', line)
+                        speed_match = re.search(r'bitrate=\s*([\d\.]+\w+)', line)
+                        
+                        time_str = time_match.group('time') if time_match else ""
+                        bitrate = speed_match.group(1) if speed_match else ""
+                        
+                        if self.start_time:
+                            elapsed = time.time() - self.start_time
+                            self.elapsed_time = self.format_time(elapsed)
+                        
+                        # 비디오 시간 위치 표시 (시:분:초)
+                        current_seconds = self.time_to_seconds(time_str)
+                        if time_str:
+                            # "00:05:30.45" -> "5분 30초"
+                            parts = time_str.split(':')
+                            hours = int(parts[0])
+                            mins = int(parts[1])
+                            secs = int(float(parts[2]))
+                            if hours > 0:
+                                video_time = f"{hours}시간 {mins}분"
+                            else:
+                                video_time = f"{mins}분 {secs}초"
+                        else:
+                            video_time = ""
+                        
+                        self.current_speed = bitrate if bitrate else ""
+                        
+                        # % 계산 (전체 길이를 알면 정확하게, 모르면 카운터 기반 99% 제한)
+                        if self.total_duration_seconds > 0:
+                            self.percent = (current_seconds / self.total_duration_seconds) * 100
+                            self.percent = min(100.0, self.percent)
+                        else:
+                            self.percent = min(99.0, ffmpeg_progress_count)
+                        
+                        logger.info(f"[ffmpeg progress] {self.percent:.1f}% time={video_time} bitrate={bitrate}")
+                        self.callback(percent=int(self.percent), current=int(current_seconds), total=int(self.total_duration_seconds), speed=video_time, elapsed=self.elapsed_time)
+                    continue
                 
-                for prog_re in prog_patterns:
+                # 일반 [download] X% 형식 처리 (yt-dlp native 다운로더용)
+                for prog_re in prog_patterns[:2]:  # 첫 두 패턴만 사용 (download 형식)
                     match = prog_re.search(line)
                     if match:
                         try:
@@ -168,8 +295,10 @@ class YtdlpDownloader:
                                 elapsed = time.time() - self.start_time
                                 self.elapsed_time = self.format_time(elapsed)
                             if self.callback:
+                                logger.info(f"[yt-dlp progress] Calling callback: {int(self.percent)}% speed={self.current_speed}")
                                 self.callback(percent=int(self.percent), current=int(self.percent), total=100, speed=self.current_speed, elapsed=self.elapsed_time)
-                        except: pass
+                        except Exception as cb_err:
+                            logger.warning(f"Callback error: {cb_err}")
                         break  # 한 패턴이 매칭되면 중단
                 
                 if 'error' in line.lower() or 'security' in line.lower() or 'unable' in line.lower():
