@@ -87,6 +87,7 @@ class LogicAniLife(PluginModuleBase):
         "anilife_uncompleted_auto_enqueue": "False",
         "anilife_image_url_prefix_series": "https://www.jetcloud.cc/series/",
         "anilife_image_url_prefix_episode": "https://www.jetcloud-list.cc/thumbnail/",
+        "anilife_camoufox_installed": "False",
     }
 
     current_headers = None
@@ -97,6 +98,53 @@ class LogicAniLife(PluginModuleBase):
     cookies = None
     OS_PLATFORM = None
     response_data = None
+    camoufox_setup_done = False
+
+    def ensure_camoufox_installed(self):
+        """Camoufox 및 필수 시스템 패키지(xvfb) 설치 확인 및 자동 설치 (백그라운드 실행 가능)"""
+        # 1. 메모리상 플래그 확인 (이미 이번 세션에서 확인됨)
+        if LogicAniLife.camoufox_setup_done:
+            return True
+
+        import importlib.util
+        import subprocess as sp
+        import shutil
+        
+        # 2. DB상 설치 여부 확인 및 실제 라이브러리 존재 여부 퀵체크
+        # DB에 설치됨으로 되어 있고 실제로 임포트 가능하다면 바이패스
+        lib_exists = importlib.util.find_spec("camoufox") is not None
+        if P.ModelSetting.get_bool("anilife_camoufox_installed") and lib_exists:
+            LogicAniLife.camoufox_setup_done = True
+            return True
+
+        # 3. 실제 설치/패치 과정 진행
+        try:
+            # 시스템 패키지 xvfb 설치 확인 (Linux/Docker 전용)
+            if platform.system() == 'Linux' and shutil.which('Xvfb') is None:
+                logger.info("Xvfb not found. Attempting to background install system package...")
+                try:
+                    sp.run(['apt-get', 'update', '-qq'], capture_output=True)
+                    sp.run(['apt-get', 'install', '-y', 'xvfb', '-qq'], capture_output=True)
+                except Exception as e:
+                    logger.error(f"Failed to install xvfb system package: {e}")
+
+            # Camoufox 패키지 확인 및 설치
+            if not lib_exists:
+                logger.info("Camoufox NOT found in DB or system. Installing in background...")
+                cmd = [sys.executable, "-m", "pip", "install", "camoufox[geoip]", "-q"]
+                sp.run(cmd, capture_output=True, text=True, timeout=120)
+            
+            logger.info("Ensuring Camoufox browser binary is fetched (pre-warming)...")
+            sp.run([sys.executable, "-m", "camoufox", "fetch"], capture_output=True, text=True, timeout=300)
+            
+            # 성공 시 DB에 기록하여 다음 재시작 시에는 아예 이 과정을 건너뜀
+            LogicAniLife.camoufox_setup_done = True
+            P.ModelSetting.set("anilife_camoufox_installed", "True")
+            logger.info("Camoufox setup finished and persisted to DB")
+            return True
+        except Exception as install_err:
+            logger.error(f"Failed during Camoufox setup: {install_err}")
+            return lib_exists
 
     session = requests.Session()
     headers = {
@@ -725,14 +773,6 @@ class LogicAniLife(PluginModuleBase):
                 P.ModelSetting.get_int("anilife_max_ffmpeg_process_count")
             )
 
-    def scheduler_function(self):
-        logger.debug(f"ohli24 scheduler_function::=========================")
-
-        content_code_list = P.ModelSetting.get_list("ohli24_auto_code_list", "|")
-        url = f'{P.ModelSetting.get("anilife_url")}/dailyani'
-        if "all" in content_code_list:
-            ret_data = LogicAniLife.get_auto_anime_info(self, url=url)
-
     def plugin_load(self):
         self.queue = FfmpegQueue(
             P, P.ModelSetting.get_int("anilife_max_ffmpeg_process_count"), name, self
@@ -740,13 +780,16 @@ class LogicAniLife(PluginModuleBase):
         self.current_data = None
         self.queue.queue_start()
 
-        # fastapi running script
-        # import os
-        # cur_abspath = os.path.dirname(os.path.abspath(__file__))
-        # logger.debug(cur_abspath)
-        # os.popen(f"python {os.path.join(cur_abspath, 'yommi_api')}/main.py")
+        # Camoufox 미리 준비 (백그라운드에서 설치 및 바이너리 다운로드)
+        threading.Thread(target=self.ensure_camoufox_installed, daemon=True).start()
 
-        # asyncio_run2(hello("https://anilife.live"))
+    def scheduler_function(self):
+        logger.debug(f"ohli24 scheduler_function::=========================")
+
+        content_code_list = P.ModelSetting.get_list("ohli24_auto_code_list", "|")
+        url = f'{P.ModelSetting.get("anilife_url")}/dailyani'
+        if "all" in content_code_list:
+            ret_data = LogicAniLife.get_auto_anime_info(self, url=url)
 
     def reset_db(self):
         db.session.query(ModelAniLifeItem).delete()
@@ -1232,56 +1275,13 @@ class AniLifeQueueEntity(FfmpegQueueEntity):
             provider_html = None
             aldata_value = None
             
-            # Camoufox 설치 확인 및 자동 설치 (플러그인 세션 내 1회만 실행)
-            if not hasattr(LogicAniLife, 'camoufox_setup_done'):
-                LogicAniLife.camoufox_setup_done = False
-
-            def ensure_camoufox_installed():
-                """Camoufox 및 필수 시스템 패키지(xvfb) 설치 확인 및 자동 설치"""
-                if LogicAniLife.camoufox_setup_done:
-                    return True
-
-                import importlib.util
-                import subprocess as sp
-                import shutil
-                
-                # 1. 시스템 패키지 xvfb 설치 확인 (Linux/Docker 전용)
-                if platform.system() == 'Linux' and shutil.which('Xvfb') is None:
-                    logger.info("Xvfb not found. Attempting to install system package...")
-                    try:
-                        sp.run(['apt-get', 'update', '-qq'], capture_output=True)
-                        sp.run(['apt-get', 'install', '-y', 'xvfb', '-qq'], capture_output=True)
-                    except Exception as e:
-                        logger.error(f"Failed to install xvfb system package: {e}")
-
-                # 2. Camoufox 패키지 확인 및 설치
-                # 이미 설치되어 있다면 무거운 --upgrade 체크는 건너뜀
-                need_install = importlib.util.find_spec("camoufox") is None
-                
-                try:
-                    if need_install:
-                        logger.info("Camoufox not installed. Installing latest version...")
-                        cmd = [sys.executable, "-m", "pip", "install", "camoufox[geoip]", "-q"]
-                        sp.run(cmd, capture_output=True, text=True, timeout=120)
-                    
-                    # 브라우저 바이너리 존재 여부 확인 (기본 경로 추정)
-                    # 실제로는 camoufox fetch를 매번 부르기보다 라이브러리가 알아서 확인하게 두거나 1회만 실행
-                    logger.info("Ensuring Camoufox browser binary is fetched...")
-                    sp.run([sys.executable, "-m", "camoufox", "fetch"], capture_output=True, text=True, timeout=300)
-                    
-                    LogicAniLife.camoufox_setup_done = True
-                    return True
-                except Exception as install_err:
-                    logger.error(f"Failed during Camoufox setup: {install_err}")
-                    return not need_install
-
             # Camoufox를 subprocess로 실행
             try:
                 import subprocess
                 import json as json_module
                 
-                # 셋업 실행 (세션 내 1회만 실제 동작)
-                if not ensure_camoufox_installed():
+                # 셋업 확인 (이미 완료되었으면 즉시 반환, 아니면 대기)
+                if not self.ensure_camoufox_installed():
                     logger.error("Camoufox installation failed. Cannot proceed.")
                     return
                 

@@ -43,8 +43,8 @@ async def _run_browser(browser, detail_url, episode_num, result):
         resource_type = route.request.resource_type
         
         # 차단 목록: 이미지, 미디어, 폰트, 스타일시트, 분석/광고 스크립트
-        block_types = ["image", "media", "font", "stylesheet"]
         block_patterns = ["google-analytics", "googletagmanager", "facebook.net", "ads"]
+        block_types = ["image", "media", "font", "stylesheet"]
         
         if resource_type in block_types or any(p in req_url for p in block_patterns):
             await route.abort()
@@ -54,14 +54,35 @@ async def _run_browser(browser, detail_url, episode_num, result):
     await page.route("**/*", intercept)
     
     try:
-        # 1. Detail 페이지 이동 (commit까지만 대기하여 즉시 처리)
+        # 1. Detail 페이지 이동
         t_nav_start = asyncio.get_event_loop().time()
         print(f"1. Navigating: {detail_url}", file=sys.stderr)
         await page.goto(detail_url, wait_until="commit", timeout=15000)
         print(f"   Navigation took: {round(asyncio.get_event_loop().time() - t_nav_start, 2)}s", file=sys.stderr)
         
+        # 2. 에피소드 링크 찾기 및 클릭
+        t_find_start = asyncio.get_event_loop().time()
+        print(f"2. Searching episode {episode_num}...", file=sys.stderr)
+        episode_link = None
+        for _ in range(20): # 약 4초
+            try:
+                # epl-num 텍스트 매칭
+                episode_link = page.locator(f'a:has(.epl-num:text("{episode_num}"))').first
+                if await episode_link.is_visible():
+                    break
+                
+                # 대체: provider 링크
+                links = await page.locator('a[href*="/ani/provider/"]').all()
+                for link in links:
+                    if episode_num in await link.inner_text():
+                        episode_link = link
+                        break
+                if episode_link: break
+            except: pass
+            await asyncio.sleep(0.2)
+        
         if not episode_link:
-            result["error"] = "Episode not found"
+            result["error"] = f"Episode {episode_num} not found"
             return result
 
         print(f"   Finding link took: {round(asyncio.get_event_loop().time() - t_find_start, 2)}s", file=sys.stderr)
@@ -115,7 +136,6 @@ async def extract_aldata(detail_url: str, episode_num: str) -> dict:
     
     try:
         # Camoufox는 headless=True에서도 강력한 스텔스를 제공함 (Xvfb 오버헤드 불필요)
-        # MacOS/Linux 공통으로 headless=True 권장 (속도 향상)
         async with AsyncCamoufox(headless=True) as browser:
             return await _run_browser(browser, detail_url, episode_num, result)
             
