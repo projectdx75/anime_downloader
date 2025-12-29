@@ -274,7 +274,19 @@ class LogicLinkkf(PluginModuleBase):
             elif sub == "db_remove":
                 return jsonify({"ret": "not_implemented"})
             elif sub == "add_whitelist":
-                return jsonify({"ret": "not_implemented"})
+                try:
+                    params = request.get_json()
+                    logger.debug(f"add_whitelist params: {params}")
+                    if params and "data_code" in params:
+                        code = params["data_code"]
+                        ret = LogicLinkkf.add_whitelist(code)
+                    else:
+                        ret = LogicLinkkf.add_whitelist()
+                    return jsonify(ret)
+                except Exception as e:
+                    logger.error(f"Exception: {e}")
+                    logger.error(traceback.format_exc())
+                    return jsonify({"ret": False, "log": str(e)})
             elif sub == "command":
                 # command = queue_command와 동일
                 cmd = request.form.get("cmd", "")
@@ -975,44 +987,58 @@ class LogicLinkkf(PluginModuleBase):
 
     def get_search_result(self, query, page, cate):
         try:
-            _query = urllib.parse.quote(query)
-            url = f"{P.ModelSetting.get('linkkf_url')}/search/-------------.html?wd={_query}&page={page}"
-
-            logger.info("get_search_result()::url> %s", url)
-            data = {"ret": "success", "page": page}
-            response_data = LogicLinkkf.get_html(url, timeout=10)
-            tree = html.fromstring(response_data)
-
-            # linkkf 검색 결과는 일반 목록과 동일한 구조
-            tmp_items = tree.xpath('//div[@class="myui-vodlist__box"]')
-
-            data["episode_count"] = len(tmp_items)
-            data["episode"] = []
-
-            if tree.xpath('//div[@id="wp_page"]//text()'):
-                data["total_page"] = tree.xpath('//div[@id="wp_page"]//text()')[-1]
+            # API URL: https://linkkf.5imgdarr.top/api/search.php
+            api_url = "https://linkkf.5imgdarr.top/api/search.php"
+            params = {
+                "keyword": query,
+                "page": page,
+                "limit": 20
+            }
+            logger.info(f"get_search_result API: {api_url}, params: {params}")
+            
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+                "Referer": "https://linkkf.live/"
+            }
+            
+            response = requests.get(api_url, params=params, headers=headers, timeout=10)
+            result_json = response.json()
+            
+            data = {"ret": "success", "page": page, "episode": []}
+            
+            if result_json.get("status") == "success":
+                items = result_json.get("data", [])
+                pagination = result_json.get("pagination", {})
+                
+                data["total_page"] = pagination.get("total_pages", 0)
+                data["episode_count"] = pagination.get("total_results", 0)
+                
+                for item in items:
+                    entity = {}
+                    entity["code"] = str(item.get("postid"))
+                    entity["title"] = item.get("name")
+                    
+                    thumb = item.get("thumb")
+                    if thumb:
+                         if thumb.startswith("http"):
+                             entity["image_link"] = thumb
+                         else:
+                             entity["image_link"] = f"https://rez1.ims1.top/350x/{thumb}"
+                    else:
+                        entity["image_link"] = ""
+                        
+                    entity["chapter"] = item.get("postnoti") or item.get("seasontype") or ""
+                    entity["link"] = f"https://linkkf.live/{entity['code']}"
+                    
+                    data["episode"].append(entity)
             else:
-                data["total_page"] = 0
-
-            for item in tmp_items:
-                entity = {}
-                entity["link"] = item.xpath(".//a/@href")[0]
-                entity["code"] = re.search(r"[0-9]+", entity["link"]).group()
-                entity["title"] = item.xpath('.//a[@class="text-fff"]//text()')[
-                    0
-                ].strip()
-                entity["image_link"] = item.xpath("./a/@data-original")[0]
-                entity["chapter"] = (
-                    item.xpath("./a/span//text()")[0].strip()
-                    if len(item.xpath("./a/span//text()")) > 0
-                    else ""
-                )
-                data["episode"].append(entity)
+                 data["total_page"] = 0
+                 data["episode_count"] = 0
 
             return data
         except Exception as e:
-            P.logger.error(f"Exception: {str(e)}")
-            P.logger.error(traceback.format_exc())
+            logger.error(f"Exception: {str(e)}")
+            logger.error(traceback.format_exc())
             return {"ret": "exception", "log": str(e)}
 
     def get_series_info(self, code):

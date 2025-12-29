@@ -19,39 +19,45 @@
             </div>
         </div>
     </div>
-    <div id="yommi_wrapper">
-        <div class="input-group mb-2">
-            <input
-                    id="input_search"
-                    type="search"
-                    class="form-control rounded"
-                    placeholder="Search"
-                    aria-label="Search"
-                    aria-describedby="search-addon"
-            />
-            <button id="btn_search" type="button" class="btn btn-primary">
-                search
-            </button>
+    <div id="yommi_wrapper" class="container-fluid mt-4 mx-auto" style="max-width: 100%;">
+        <!-- Search Section -->
+        <div class="card p-4 mb-4 border-0" style="background: rgba(30,30,40,0.6); backdrop-filter: blur(10px); border-radius: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <div class="row align-items-center">
+                <div class="col-md-8 mx-auto">
+                     <div class="input-group input-group-lg">
+                        <input
+                                id="input_search"
+                                type="search"
+                                class="form-control border-0 text-white"
+                                placeholder="애니메이션 제목 검색..."
+                                aria-label="Search"
+                                style="background: rgba(0,0,0,0.4); border-radius: 12px 0 0 12px !important; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);"
+                        />
+                        <div class="input-group-append">
+                            <button id="btn_search" type="button" class="btn btn-primary px-4 font-weight-bold" style="border-radius: 0 12px 12px 0 !important; box-shadow: 0 0 15px rgba(59, 130, 246, 0.4);">
+                                <i class="bi bi-search"></i> 검색
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Category Buttons -->
+            <div class="row mt-4 justify-content-center">
+                <div id="anime_category" class="d-flex flex-wrap justify-content-center gap-2" role="group">
+                    <button id="ing" type="button" class="btn btn-outline-success btn-pill px-4 mx-1 active-glow">방영중</button>
+                    <button id="theater" type="button" class="btn btn-outline-primary btn-pill px-4 mx-1 active-glow">극장판</button>
+                    <button id="complete_anilist" type="button" class="btn btn-outline-light btn-pill px-4 mx-1 active-glow">완결</button>
+                </div>
+            </div>
         </div>
 
         <div>
-            <div
-                    id="anime_category"
-                    class="btn-group"
-                    role="group"
-                    aria-label="Basic example"
-            >
-                <button id="ing" type="button" class="btn btn-success">방영중</button>
-                <button id="theater" type="button" class="btn btn-primary">극장판</button>
-                <button id="complete_anilist" type="button" class="btn btn-dark">
-                    완결
-                </button>
-            </div>
             <form id="airing_list_form">
                 <div id="airing_list"></div>
             </form>
             <form id="screen_movie_list_form">
-                <div id="screen_movie_list" class="container"></div>
+                <div id="screen_movie_list" class="container-fluid px-0"></div>
             </form>
 
             <form id="program_auto_form">
@@ -159,176 +165,153 @@
             })
         }
 
+        // Common card HTML generator to ensure consistency
+        function generate_card_html(item, linkUrl) {
+            let tmp = '<div class="anime-card-wrapper">';
+            tmp += '<div class="card glass-card w-100 border-0 h-100">';
+            tmp += '<div class="position-relative overflow-hidden" style="border-radius: 12px 12px 0 0;">';
+            
+            // Image with hover effect wrapper
+            tmp += '<div class="img-wrapper">';
+            tmp += '<img class="card-img-top lazyload" src="../static/img_loader_x200.svg" data-original="' + item.image_link + '" style="cursor: pointer; aspect-ratio: 2/3; object-fit: cover;" onclick="location.href=\'' + linkUrl + '\'"/>';
+            tmp += '</div>'; // End img-wrapper
+            
+            tmp += '</div>'; // End relative container
+
+            tmp += '<div class="card-body p-3 d-flex flex-column">';
+            
+            // Title
+            tmp += '<h6 class="card-title text-white font-weight-bold mb-2 text-truncate" title="' + item.title + '">' + item.title + '</h6>';
+            
+            // Code & Heart Button Row
+            tmp += '<div class="d-flex justify-content-between align-items-center mt-auto mb-3">';
+            tmp += '<span class="badge badge-secondary opacity-75 small">' + item.code + '</span>';
+            tmp += '<button id="add_whitelist" name="add_whitelist" class="btn btn-sm btn-circle btn-outline-danger border-0" data-code="' + item.code + '" title="스케쥴링 추가"><i class="bi bi-heart-fill"></i></button>';
+            tmp += '</div>';
+            
+            // Action Button
+            tmp += '<a href="' + linkUrl + '" class="btn btn-primary btn-sm btn-block shadow-sm">상세보기</a>';
+            
+            tmp += '</div>'; // End card-body
+            tmp += '</div>'; // End card
+            tmp += '</div>'; // End wrapper
+            return tmp;
+        }
+
         function make_airing_list(data, page) {
             let str = ''
-            let tmp = ''
-
-            str += '<div>';
-            str += '<button type="button" class="btn btn-info">Page <span class="badge bg-warning">' + page + '</span></button>';
+            
+            str += '<div class="d-flex justify-content-between align-items-center mb-3">';
+            str += '<h5 class="text-white font-weight-bold border-left pl-3" style="border-width: 4px !important; border-color: #00d4ff !important;">방영중 애니메이션</h5>';
+            str += '<button type="button" class="btn btn-sm btn-dark rounded-pill px-3">Page <span class="badge badge-warning ml-1">' + page + '</span></button>';
             str += '</div>';
-            // str += '<div class="card-columns">'
-            str += '<div id="inner_screen_movie" class="row infinite-scroll">';
+            
+            str += '<div id="inner_screen_movie" class="anime-grid infinite-scroll">';
             for (let i in data.anime_list) {
-
-                tmp = '<div class="col-6 col-sm-4 col-md-3">';
-                tmp += '<div class="card">';
-                // tmp += '<img class="lozad" data-src="' + data.anime_list[i].image_link + '" />';
-                tmp += '<img class="lazyload" src="../static/img_loader_x200.svg" data-original="' + data.anime_list[i].image_link + '" style="cursor: pointer" onclick="location.href=\'./request?code=' + data.anime_list[i].code + '\'"/>';
-                tmp += '<div class="card-body">'
-                // {#tmp += '<button id="code_button" data-code="' + data.episode[i].code + '" type="button" class="btn btn-primary code-button bootstrap-tooltip" data-toggle="button" data-tooltip="true" aria-pressed="true" autocomplete="off" data-placement="top">' +#}
-                //  {#    '<span data-tooltip-text="'+data.episode[i].title+'">' + data.episode[i].code + '</span></button></div>';#}
-                tmp += '<h5 class="card-title">' + data.anime_list[i].title + '</h5>';
-                tmp += '<p class="card-text"><button id="add_whitelist" name="add_whitelist" class="btn btn-sm btn-favorite mb-1" data-code="' +
-                    data.anime_list[i].code +
-                    '"><i class="bi bi-heart-fill"></i></button></p>';
-                tmp += '<a href="./request?code=' + data.anime_list[i].code + '" class="btn btn-primary cut-text">' + data.anime_list[i].title + '</a>';
-                // tmp +=
-                // '<button id="add_whitelist" name="add_whitelist" class="btn btn-sm btn-favorite mb-1" data-code="' +
-                // data.anime_list[i].code +
-                // '"><i class="bi bi-heart-fill"></i></button>';
-                tmp += '</div><!-- .card -->';
-                tmp += '</div>';
-                tmp += '</div>';
-                str += tmp
-
+                let item = data.anime_list[i];
+                let request_url = './request?code=' + item.code;
+                str += generate_card_html(item, request_url);
             }
             str += '</div>';
-            // str += '</div><!-- .card-columns -->';
+            
             str += m_hr_black();
 
             if (page > 1) {
-
                 const temp = document.createElement('div')
                 temp.innerHTML = str;
                 while (temp.firstChild) {
                     document.getElementById("screen_movie_list").appendChild(temp.firstChild);
                 }
                 page++
-
             } else {
-
                 document.getElementById("screen_movie_list").innerHTML = str;
-
             }
 
             $("img.lazyload").lazyload({
                 threshold: 10,
                 effect: "fadeIn",
             });
-
         }
 
         function make_search_result_list(data, page) {
             let str = ''
-            let tmp = ''
-
-            console.log(data.anime_list, page)
-
-            str += '<div>';
-            str += '<button type="button" class="btn btn-info">Page <span class="badge bg-warning">' + page + '</span></button>';
+            let list = data.anime_list || [];
+            
+            str += '<div class="d-flex justify-content-between align-items-center mb-3">';
+            str += '<h5 class="text-white font-weight-bold border-left pl-3" style="border-width: 4px !important; border-color: #ff007f !important;">검색 결과</h5>';
+            str += '<button type="button" class="btn btn-sm btn-dark rounded-pill px-3">Page <span class="badge badge-warning ml-1">' + page + '</span></button>';
             str += '</div>';
-            // str += '<div class="card-columns">'
-            str += '<div id="inner_screen_movie" class="row infinite-scroll">';
-            for (let i in data.anime_list) {
-                if (data.anime_list[i].wr_id !== '') {
+            
+            str += '<div id="inner_screen_movie" class="anime-grid infinite-scroll">';
+            
+            for (let i in list) {
+                let item = list[i];
+                let request_url = './request?code=' + item.code;
+                
+                 if (item.wr_id !== '' && item.wr_id !== undefined) {
                     const re = /bo_table=([^&]+)/
-                    const bo_table = data.anime_list[i].link.match(re)
-                    console.log(bo_table)
+                    const bo_table = item.link.match(re)
                     if (bo_table != null) {
-                        request_url = './request?code=' + data.anime_list[i].code + '&amp;wr_id=' + data.anime_list[i].wr_id + '&amp;bo_table=' + bo_table[1]
-                    } else {
-                        request_url = './request?code=' + data.anime_list[i].code
+                        request_url += '&amp;wr_id=' + item.wr_id + '&amp;bo_table=' + bo_table[1];
                     }
-                } else {
-                    request_url = './request?code=' + data.anime_list[i].code
                 }
-
-                tmp = '<div class="col-6 col-sm-4 col-md-3">';
-                tmp += '<div class="card">';
-                tmp += '<img class="card-img-top" src="' + data.anime_list[i].image_link + '" />';
-                tmp += '<div class="card-body">'
-                // {#tmp += '<button id="code_button" data-code="' + data.episode[i].code + '" type="button" class="btn btn-primary code-button bootstrap-tooltip" data-toggle="button" data-tooltip="true" aria-pressed="true" autocomplete="off" data-placement="top">' +#}
-                //  {#    '<span data-tooltip-text="'+data.episode[i].title+'">' + data.episode[i].code + '</span></button></div>';#}
-                tmp += '<h5 class="card-title">' + data.anime_list[i].title + '</h5>';
-                tmp += '<p class="card-text">' + data.anime_list[i].code + '</p>';
-                tmp += '<a href="' + request_url + '" class="btn btn-primary cut-text">' + data.anime_list[i].title + '</a>';
-                tmp += '</div>';
-                tmp += '</div>';
-                tmp += '</div>';
-                str += tmp
-
+                
+                str += generate_card_html(item, request_url);
             }
             str += '</div>';
-            str += '</div><!-- .card-columns -->';
             str += m_hr_black();
 
             if (page > 1) {
-
                 const temp = document.createElement('div')
                 temp.innerHTML = str;
                 while (temp.firstChild) {
                     document.getElementById("screen_movie_list").appendChild(temp.firstChild);
                 }
                 page++
-
             } else {
                 document.getElementById("screen_movie_list").innerHTML = str;
             }
-
         }
 
         function make_screen_movie_list(data, page) {
-            let str = ''
-            let tmp = ''
-
-            console.log(data.anime_list, page)
-
-            str += '<div>';
-            str += '<button type="button" class="btn btn-info">Page <span class="badge bg-warning">' + page + '</span></button>';
+             let str = '';
+            
+            str += '<div class="d-flex justify-content-between align-items-center mb-3">';
+             let title = current_cate === 'movie' ? '극장판' : (current_cate === 'theater' ? '극장판(구)' : '완결 애니메이션');
+            str += '<h5 class="text-white font-weight-bold border-left pl-3" style="border-width: 4px !important; border-color: #ffd700 !important;">' + title + '</h5>';
+            str += '<button type="button" class="btn btn-sm btn-dark rounded-pill px-3">Page <span class="badge badge-warning ml-1">' + page + '</span></button>';
             str += '</div>';
-            // str += '<div class="card-columns">'
-            str += '<div id="inner_screen_movie" class="row infinite-scroll">';
+            
+            str += '<div id="inner_screen_movie" class="anime-grid infinite-scroll">';
             for (let i in data.anime_list) {
-
-                tmp = '<div class="col-sm-4">';
-                tmp += '<div class="card">';
-                tmp += '<img class="card-img-top" src="' + data.anime_list[i].image_link + '" />';
-                tmp += '<div class="card-body">'
-                tmp += '<h5 class="card-title">' + data.anime_list[i].title + '</h5>';
-                tmp += '<p class="card-text">' + data.anime_list[i].code + '</p>';
-                tmp += '<a href="./request?code=' + data.anime_list[i].code + '" class="btn btn-primary cut-text">' + data.anime_list[i].title + '</a>';
-                tmp += '</div>';
-                tmp += '</div>';
-                tmp += '</div>';
-                str += tmp
-
+                let item = data.anime_list[i];
+                 let request_url = './request?code=' + item.code;
+                 
+                str += generate_card_html(item, request_url);
             }
             str += '</div>';
-            // str += '</div><!-- .card-columns -->';
             str += m_hr_black();
 
             if (page > 1) {
-
                 const temp = document.createElement('div')
                 temp.innerHTML = str;
                 while (temp.firstChild) {
                     document.getElementById("screen_movie_list").appendChild(temp.firstChild);
                 }
                 page++
-
             } else {
                 document.getElementById("screen_movie_list").innerHTML = str;
             }
-
             $("img.lazyload").lazyload({
                 threshold: 10,
                 effect: "fadeIn",
             });
-
         }
 
 
         $(document).ready(function () {
+             // Force parent container to be fluid to allow full width
+             $("#main_container").removeClass("container").addClass("container-fluid");
 
             // if ( "{{arg['anilife_current_code']}}" !== "" ) {
             //     document.getElementById("code").value = "{{arg['anilife_current_code']}}";
@@ -579,351 +562,164 @@
         document.addEventListener("scroll", debounce(onScroll, 300));
     </script>
     <style>
-        button.code-button {
-            min-width: 82px !important;
+        body {
+            font-family: 'NamumSquareNeo', system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Noto Sans, Liberation Sans, Arial, sans-serif;
+            background-image: linear-gradient(135deg, #1f2937, #111827, #0f172a);
+            color: #e2e8f0;
+            min-height: 100vh;
         }
 
-        .tooltip {
-            position: relative;
-            display: block;
+        /* Responsive Grid System */
+        .anime-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 20px;
+            width: 100%;
         }
 
-
-        [data-tooltip-text]:hover {
-            position: relative;
+        .anime-card-wrapper {
+             width: 100%;
+             height: 100%;
+        }
+        
+        /* Adjust for smaller screens */
+        @media (max-width: 576px) {
+            .anime-grid {
+                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+                gap: 15px;
+            }
         }
 
-        [data-tooltip-text]:after {
-            -webkit-transition: bottom 0.3s ease-in-out, opacity 0.3s ease-in-out;
-            -moz-transition: bottom 0.3s ease-in-out, opacity 0.3s ease-in-out;
-            transition: bottom 0.3s ease-in-out, opacity 0.3s ease-in-out;
+    /* Navigation Menu Override */
+    ul.nav.nav-pills.bg-light {
+        background-color: rgba(30, 41, 59, 0.6) !important;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 50rem !important;
+        padding: 6px !important;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2) !important;
+        display: inline-flex !important;
+        flex-wrap: wrap;
+        justify-content: center;
+        width: auto !important;
+        margin-bottom: 20px;
+    }
 
-            background-color: rgba(0, 0, 0, 0.8);
+    ul.nav.nav-pills .nav-item {
+        margin: 0 2px;
+    }
 
-            -webkit-box-shadow: 0px 0px 3px 1px rgba(50, 50, 50, 0.4);
-            -moz-box-shadow: 0px 0px 3px 1px rgba(50, 50, 50, 0.4);
-            box-shadow: 0px 0px 3px 1px rgba(50, 50, 50, 0.4);
+    ul.nav.nav-pills .nav-link {
+        border-radius: 50rem !important;
+        padding: 8px 20px !important;
+        color: #94a3b8 !important;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
 
-            -webkit-border-radius: 5px;
-            -moz-border-radius: 5px;
-            border-radius: 5px;
+    ul.nav.nav-pills .nav-link:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+        color: #fff !important;
+        transform: translateY(-1px);
+    }
 
-            color: #ffffff;
-            font-size: 12px;
-            margin-bottom: 10px;
-            padding: 7px 12px;
-            position: absolute;
-            width: auto;
-            min-width: 50px;
-            max-width: 300px;
-            word-wrap: break-word;
+    ul.nav.nav-pills .nav-link.active {
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+        color: #fff !important;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+    }
 
+        /* Glassmorphism Cards */
+        .glass-card {
+            background: rgba(30, 41, 59, 0.7) !important;
+            backdrop-filter: blur(12px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            border-radius: 16px !important;
+            transition: transform 0.3s ease, box-shadow 0.3s ease !important;
+            overflow: hidden;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        .glass-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1) !important;
+            border-color: rgba(96, 165, 250, 0.5) !important;
+        }
+        
+        /* Image Wrapper for Hover Zoom */
+        .img-wrapper {
+            overflow: hidden;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        
+        .img-wrapper img {
+            transition: transform 0.5s ease;
+        }
+        
+        .glass-card:hover .img-wrapper img {
+            transform: scale(1.05);
+        }
+
+        /* Category Buttons */
+        .btn-pill {
+            border-radius: 50rem !important;
+            font-weight: 600;
+            border-width: 2px;
+            transition: all 0.2s;
+        }
+        
+        .btn-pill:hover, .btn-pill:focus, .btn-pill.active {
+             transform: translateY(-2px);
+             box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        /* Preloader (Original but styled) */
+        #preloader {
+            background-color: #0f172a;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
             z-index: 9999;
-
-            opacity: 0;
-            left: -9999px;
-            top: 90%;
-
-            content: attr(data-tooltip-text);
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
-
-        [data-tooltip-text]:hover:after {
-            top: 230%;
-            left: 0;
-            opacity: 1;
-        }
-
-        [data-tooltip-text]:hover {
+        
+        .loader-inner {
             position: relative;
         }
 
-        [data-tooltip-text]:after {
-            -webkit-transition: bottom 0.3s ease-in-out, opacity 0.3s ease-in-out;
-            -moz-transition: bottom 0.3s ease-in-out, opacity 0.3s ease-in-out;
-            transition: bottom 0.3s ease-in-out, opacity 0.3s ease-in-out;
-
-            background-color: rgba(0, 0, 0, 0.8);
-
-            -webkit-box-shadow: 0px 0px 3px 1px rgba(50, 50, 50, 0.4);
-            -moz-box-shadow: 0px 0px 3px 1px rgba(50, 50, 50, 0.4);
-            box-shadow: 0px 0px 3px 1px rgba(50, 50, 50, 0.4);
-
-            -webkit-border-radius: 5px;
-            -moz-border-radius: 5px;
-            border-radius: 5px;
-
-            color: #ffffff;
-            font-size: 12px;
-            margin-bottom: 10px;
-            padding: 7px 12px;
-            position: absolute;
-            width: auto;
-            min-width: 50px;
-            max-width: 300px;
-            word-wrap: break-word;
-
-            z-index: 9999;
-
-            opacity: 0;
-            left: -9999px;
-            top: -210% !important;
-
-            content: attr(data-tooltip-text);
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b; 
         }
 
-        [data-tooltip-text]:hover:after {
-            top: 130%;
-            left: 0;
-            opacity: 1;
-        }
-
-        #airing_list {
-            display: none;
-        }
-
+        /* Utilities */
         .cut-text {
             text-overflow: ellipsis;
             overflow: hidden;
             white-space: nowrap;
-            width: 100%;
         }
-
-        #screen_movie_list {
-            margin-top: 10px;
+        
+        .btn-circle {
+            width: 32px;
+            height: 32px;
+            padding: 0;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
         }
-
-        .card-body {
-            padding: 0 !important;
-        }
-
-        .card-title {
-            padding: 1rem !important;
-        }
-
-        button#add_whitelist {
-            float: right;
-        }
-
-        button.btn-favorite {
-            background-color: #e0ff42;
-            color: #2a7aaf;
-        }
-
-        /*.card-columns {*/
-        /*    @include media-breakpoint-only(lg) {*/
-        /*        column-count: 4;*/
-        /*    }*/
-        /*    @include media-breakpoint-only(xl) {*/
-        /*        column-count: 5;*/
-        /*    }*/
-        /*}*/
-        @media (min-width: 576px) {
-            .container {
-                max-width: 100%;
-            }
-
-            .card-columns {
-                column-count: 2;
-                column-gap: 1.25rem;
-            }
-
-            .card-columns .card {
-                display: inline-block;
-            }
-        }
-
-
-        @media (min-width: 768px) {
-            .card-columns {
-                column-count: 3;
-            }
-        }
-
-        /* Large devices (desktops, 992px and up) */
-        @media (min-width: 992px) {
-            .card-columns {
-                column-count: 3;
-            }
-        }
-
-        /* Extra large devices (large desktops, 1200px and up) */
-        @media (min-width: 1200px) {
-            .card-columns {
-                column-count: 5;
-            }
-
-            #yommi_wrapper {
-
-                max-width: 100%;
-                margin: 0 auto;
-            }
-
-            .container {
-                max-width: 85%!important;
-            }
-            #screen_movie_list {
-               max-width: 100%!important;
-            }
-        }
-
-
-        .card {
-            margin-bottom: 0.75rem;
-        }
-
-        .card-columns .card {
-            margin-bottom: 0.75rem;
-        }
-
-        .card-columns .card img {
-            width: 100%;
-        }
-
-        button#add_whitelist {
-            /*top: -70px;*/
-            position: relative;
-        }
-
-        body {
-            font-family: NanumSquareNeo, system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Noto Sans, Liberation Sans, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji;
-        }
-
-        body {
-            background-image: linear-gradient(90deg, #233f48, #6c6fa2, #768dae);
-        }
-
-        #preloader {
-            /*background-color: green;*/
-            /*color: white;*/
-            /*height: 100vh;*/
-            /*width: 100%;*/
-            /*position: fixed;*/
-            /*z-index: 100;*/
-            background: rgba(0, 0, 0, 0.2);
-            background: radial-gradient(#222, #000);
-            bottom: 0;
-            left: 0;
-            overflow: hidden;
-            position: fixed;
-            right: 0;
-            top: 0;
-            z-index: 99999;
-            opacity: 0.5;
-        }
-
-        /*.loader {*/
-        /*    background: rgb(0, 0, 0, 0.8);*/
-        /*    background: radial-gradient(#222, #000);*/
-        /*    bottom: 0;*/
-        /*    left: 0;*/
-        /*    overflow: hidden;*/
-        /*    position: fixed;*/
-        /*    right: 0;*/
-        /*    top: 0;*/
-        /*    z-index: 99999;*/
-        /*}*/
-
-        .loader-inner {
-            bottom: 0;
-            height: 60px;
-            left: 0;
-            margin: auto;
-            position: absolute;
-            right: 0;
-            top: 0;
-            width: 100px;
-        }
-
-        .loader-line-wrap {
-            animation: spin 2000ms cubic-bezier(.175, .885, .32, 1.275) infinite;
-            box-sizing: border-box;
-            height: 50px;
-            left: 0;
-            overflow: hidden;
-            position: absolute;
-            top: 0;
-            transform-origin: 50% 100%;
-            width: 100px;
-        }
-
-        .loader-line {
-            border: 4px solid transparent;
-            border-radius: 100%;
-            box-sizing: border-box;
-            height: 100px;
-            left: 0;
-            margin: 0 auto;
-            position: absolute;
-            right: 0;
-            top: 0;
-            width: 100px;
-        }
-
-        .loader-line-wrap:nth-child(1) {
-            animation-delay: -50ms;
-        }
-
-        .loader-line-wrap:nth-child(2) {
-            animation-delay: -100ms;
-        }
-
-        .loader-line-wrap:nth-child(3) {
-            animation-delay: -150ms;
-        }
-
-        .loader-line-wrap:nth-child(4) {
-            animation-delay: -200ms;
-        }
-
-        .loader-line-wrap:nth-child(5) {
-            animation-delay: -250ms;
-        }
-
-        .loader-line-wrap:nth-child(1) .loader-line {
-            border-color: hsl(0, 80%, 60%);
-            height: 90px;
-            width: 90px;
-            top: 7px;
-        }
-
-        .loader-line-wrap:nth-child(2) .loader-line {
-            border-color: hsl(60, 80%, 60%);
-            height: 76px;
-            width: 76px;
-            top: 14px;
-        }
-
-        .loader-line-wrap:nth-child(3) .loader-line {
-            border-color: hsl(120, 80%, 60%);
-            height: 62px;
-            width: 62px;
-            top: 21px;
-        }
-
-        .loader-line-wrap:nth-child(4) .loader-line {
-            border-color: hsl(180, 80%, 60%);
-            height: 48px;
-            width: 48px;
-            top: 28px;
-        }
-
-        .loader-line-wrap:nth-child(5) .loader-line {
-            border-color: hsl(240, 80%, 60%);
-            height: 34px;
-            width: 34px;
-            top: 35px;
-        }
-
-        @keyframes spin {
-            0%, 15% {
-                transform: rotate(0);
-            }
-            100% {
-                transform: rotate(360deg);
-            }
-        }
-
-
     </style>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.1/font/bootstrap-icons.css">
+    <link href="{{ url_for('.static', filename='css/bootstrap.min.css') }}" type="text/css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
 {% endblock %}

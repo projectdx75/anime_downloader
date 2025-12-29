@@ -1,5 +1,5 @@
 {% extends "base.html" %} {% block content %}
- <div id="anime_downloader_wrapper">
+ <div id="anime_downloader_wrapper" style="max-width: 100%;">
     <div id="preloader">
         <div class='demo'>
             <!--        <div class="loader-inner">-->
@@ -53,6 +53,8 @@
         };
 
         const wait3seconds = function () {
+            // Force parent container to be fluid to allow full width
+            $("#main_container").removeClass("container").addClass("container-fluid");
             // REFERENCE:  https://www.w3schools.com/jsref/met_win_settimeout.asp
             const result = setTimeout(dismissLoadingScreen, 2000);
         };
@@ -95,76 +97,77 @@
 
         function make_program(data) {
             current_data = data;
-            {#$("body").css({"background":"url("+data.poster_url+")"})#}
-
-            // console.log('current_data:: ', data)
-            str = "";
-            tmp = '<div class="form-inline w-100">';
-            tmp += m_button("check_download_btn", "선택 다운로드 추가", []);
-            tmp += m_button("all_check_on_btn", "전체 선택", []);
-            tmp += m_button("all_check_off_btn", "전체 해제", []);
-            tmp += m_button("down_subtitle_btn", "자막만 전체 받기", [])
-            tmp +=
-                '&nbsp;&nbsp;&nbsp;<input id="new_title" name="new_title" class="form-control form-control-sm" value="' +
-                data.title +
-                '">';
-            tmp += "</div>";
-            tmp += '<div class="form-inline">';
-            tmp += m_button("apply_new_title_btn", "저장폴더명 변경", []);
-            tmp +=
-                '&nbsp;&nbsp;&nbsp;<input id="new_season" name="new_season" class="form-control form-control-sm" value="' +
-                data.season +
-                '">';
-            tmp += m_button("apply_new_season_btn", "시즌 변경 (숫자만 가능)", []);
-            tmp += m_button("search_tvdb_btn", "TVDB", []);
-            tmp += m_button("add_whitelist", "스케쥴링 추가", []);
-
-            tmp += "</div>";
-            tmp = m_button_group(tmp);
-            str += tmp;
-            // program
-            // str += m_hr_black();
-            str += "<div class='card p-lg-5 mt-md-3 p-md-3 border-light'>"
-
-            str += m_row_start(0);
-            tmp = "";
-            if (data.poster_url != null)
-                tmp = '<img src="' + data.poster_url + '" class="img-fluid">';
-            str += m_col(3, tmp);
-            tmp = "";
-            tmp += m_row_start(0);
-            tmp += m_col(3, "제목", "right");
-            tmp += m_col(9, data.title);
-            tmp += m_row_end();
-            tmp += m_row_start(0);
-            tmp += m_col(3, "시즌", "right");
-            tmp += m_col(9, data.season);
-            tmp += m_row_end();
-            for (i in data.detail) {
-                tmp += m_row_start(0);
-                key = Object.keys(data.detail[i])[0];
-                value = data.detail[i][key];
-                tmp += m_col(3, key, "right");
-                tmp += m_col(9, value);
-                tmp += m_row_end();
-            }
-
-            str += m_col(9, tmp);
-            str += m_row_end();
-
-            // str += m_hr_black();
-            str += "</div>"
             
-            // 에피소드 카드 그리드 레이아웃
+            let str = "";
+            
+            // 1. Info Card (Top)
+            str += `<div class='card p-4 mb-4 border-light' style="background: rgba(30,30,40,0.6); backdrop-filter: blur(10px);">`;
+            str += `<div class="row">`;
+            
+            // Poster
+            str += `<div class="col-md-3 text-center mb-3 mb-md-0">`;
+            if (data.poster_url) {
+                str += `<img src="${data.poster_url}" class="img-fluid rounded shadow-lg" style="max-height: 350px; width: auto;">`;
+            }
+            str += `</div>`;
+            
+            // Details
+            str += `<div class="col-md-9">`;
+            str += `<h2 class="font-weight-bold text-white mb-2">${data.title}</h2>`;
+            str += `<div class="mb-4">`;
+            str += `<span class="badge badge-primary mr-2" style="font-size: 1em; padding: 6px 12px;">Season ${data.season}</span>`;
+            str += `</div>`;
+            
+            // Table for details
+            str += `<div class="row mb-4" style="font-size: 0.95em; color: #ccc;">`;
+            if(data.detail) {
+                 for(let i in data.detail) {
+                     const key = Object.keys(data.detail[i])[0];
+                     const value = data.detail[i][key];
+                     str += `<div class="col-md-6 mb-2"><span class="font-weight-bold text-info mr-2">${key}:</span> <span class="text-light">${value}</span></div>`;
+                 }
+            }
+            str += `</div>`; // End detail row
+            
+            // Actions Toolbar
+            str += `<div class="d-flex flex-wrap align-items-center gap-2 p-3 rounded" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05);">`;
+            
+            // Standard Actions
+            str += `<button id="check_download_btn" class="btn btn-primary btn-sm mr-2"><i class="fa fa-download"></i> 선택 다운로드</button>`;
+            str += `<button id="all_check_on_btn" class="btn btn-outline-light btn-sm mr-1">전체 선택</button>`;
+            str += `<button id="all_check_off_btn" class="btn btn-outline-secondary btn-sm mr-3">해제</button>`;
+            str += `<button id="down_subtitle_btn" class="btn btn-outline-warning btn-sm mr-3">자막만 다운로드</button>`;
+            
+            // Scheduling (Heart)
+            str += `<button id="add_whitelist" class="btn btn-outline-danger btn-sm mr-3" style="min-width: 120px;"><i class="bi bi-heart"></i> 스케쥴링 추가</button>`;
+            
+            str += `</div>`; // End Action Toolbar Main
+            
+            // Edit Tools (Secondary Toolbar)
+             str += `<div class="d-flex flex-wrap align-items-center gap-2 mt-2 p-2 rounded" style="">`;
+            str += `<span class="text-muted small mr-2">저장 옵션:</span>`;
+            str += `<input id="new_title" class="form-control form-control-sm mr-1" style="width:200px; background:#222; border:1px solid #444; color:#ddd;" value="${data.title}">`;
+            str += `<button id="apply_new_title_btn" class="btn btn-dark btn-sm mr-3">폴더명 변경</button>`;
+             str += `<input id="new_season" class="form-control form-control-sm mr-1" style="width:60px; background:#222; border:1px solid #444; color:#ddd;" value="${data.season}">`;
+            str += `<button id="apply_new_season_btn" class="btn btn-dark btn-sm mr-2">시즌 변경</button>`;
+            str += `<button id="search_tvdb_btn" class="btn btn-dark btn-sm">TVDB 확인</button>`;
+            str += `</div>`;
+            
+            
+            str += `</div>`; // End Col-9
+            str += `</div>`; // End Row
+            str += `</div>`; // End Card
+            
+            // 2. Episode List
             str += '<div class="episode-list-container">';
-            for (i in data.episode) {
+            for (let i in data.episode) {
                 str += '<div class="episode-card">';
                 str += '<div class="episode-thumb">';
                 str += '<span class="episode-num">' + (parseInt(i) + 1) + '화</span>';
                 str += '</div>';
                 str += '<div class="episode-info">';
                 str += '<div class="episode-title">' + data.episode[i].title + '</div>';
-                str += '<div class="episode-filename">' + data.episode[i].filename + '</div>';
+                str += '<div class="episode-filename" title="' + data.episode[i].filename + '">' + data.episode[i].filename + '</div>';
                 str += '<div class="episode-actions">';
                 str += '<input id="checkbox_' + i + '" name="checkbox_' + i + '" type="checkbox" checked data-toggle="toggle" data-on="선택" data-off="-" data-onstyle="success" data-offstyle="secondary" data-size="small">';
                 str += m_button("add_queue_btn", "다운로드", [{key: "idx", value: i}]);
@@ -173,6 +176,7 @@
                 str += '</div>';
             }
             str += '</div>';
+            
             document.getElementById("episode_list").innerHTML = str;
             $('input[id^="checkbox_"]').bootstrapToggle();
         }
@@ -242,6 +246,33 @@
             });
         });
 
+
+        $("body").on('click', '#add_whitelist', function (e) {
+            e.preventDefault();
+            const code = document.getElementById("code").value || params.code;
+            const $btn = $(this);
+            $.ajax({
+                url: '/' + package_name + '/ajax/' + sub + '/add_whitelist',
+                type: "POST",
+                cache: false,
+                data: JSON.stringify({data_code: code}),
+                contentType: "application/json;charset=UTF-8",
+                dataType: "json",
+                success: function (ret) {
+                    if (ret.ret) {
+                        $.notify('<strong>스케쥴링 목록에 추가하였습니다.</strong>', {type: 'success'});
+                        $btn.html('<i class="bi bi-heart-fill"></i> 추가됨').removeClass('btn-outline-danger').addClass('btn-danger');
+                    } else {
+                         if (ret.log == "이미 추가되어 있습니다.") {
+                            $.notify('<strong>이미 추가되어 있습니다.</strong>', {type: 'warning'});
+                            $btn.html('<i class="bi bi-heart-fill"></i> 추가됨').removeClass('btn-outline-danger').addClass('btn-danger');
+                        } else {
+                            $.notify('<strong>추가 실패</strong><br>' + ret.log, {type: 'warning'});
+                        }
+                    }
+                }
+            });
+        });
 
         $("body").on('click', '#go_ohli24_btn', function (e) {
             e.preventDefault();

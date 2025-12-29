@@ -20,11 +20,24 @@
             <!-- </div>-->
         </div>
     </div>
-    <div>
+    <div id="yommi_wrapper" class="container-fluid mt-4 mx-auto" style="max-width: 100%;">
         <form id="program_list">
-            {{ macros.setting_input_text_and_buttons('code', '작품 Code', [['analysis_btn', '분석'],
-    ['go_ohli24_btn', 'Go OHLI24']], desc='예) "https://ohli24.net/c/녹을 먹는 비스코" 이나 "녹을
-    먹는 비스코"') }}
+            <div class="card p-4 mb-4 border-light" style="background: rgba(30,30,40,0.6); backdrop-filter: blur(10px); box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                <div class="form-group mb-0">
+                    <label for="code" class="text-white font-weight-bold mb-2"><i class="fa fa-search mr-2"></i>작품 Code / 제목</label>
+                    <div class="input-group input-group-lg">
+                        <input type="text" id="code" name="code" class="form-control border-0" placeholder="URL 또는 제목을 입력하세요 (예: 녹을 먹는 비스코)" style="background: rgba(0,0,0,0.4); color: #fff; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);">
+                        <div class="input-group-append">
+                            <button id="analysis_btn" class="btn btn-primary px-4 font-weight-bold" style="box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);">분석</button>
+                            <button id="go_ohli24_btn" class="btn btn-outline-light px-3">Go OHLI24</button>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center mt-2 text-muted small">
+                         <i class="fa fa-info-circle mr-1"></i> 
+                         <span>예) "https://ohli24.net/c/녹을 먹는 비스코" 또는 "녹을 먹는 비스코"</span>
+                    </div>
+                </div>
+            </div>
         </form>
         <form id="program_auto_form">
             <div id="episode_list"></div>
@@ -53,6 +66,8 @@
         };
 
         const wait3seconds = function () {
+            // Force parent container to be fluid to allow full width
+            $("#main_container").removeClass("container").addClass("container-fluid");
             // REFERENCE:  https://www.w3schools.com/jsref/met_win_settimeout.asp
             const result = setTimeout(dismissLoadingScreen, 2000);
         };
@@ -102,50 +117,74 @@
 
         function make_program(data) {
             current_data = data;
-            console.log(data)
-            console.log("current_data::", current_data)
-            let str = '';
-            let tmp = '';
-            tmp = '<div class="form-inline">'
-            tmp += m_button('check_download_btn', '선택 다운로드 추가', []);
-            tmp += m_button('all_check_on_btn', '전체 선택', []);
-            tmp += m_button('all_check_off_btn', '전체 해제', []);
-            /*
-            tmp += '&nbsp;&nbsp;&nbsp;&nbsp;<input id="new_title" name="new_title" class="form-control form-control-sm" value="'+data.title+'">'
-            tmp += '</div>'
-            tmp += m_button('apply_new_title_btn', '저장폴더명, 파일명 제목 변경', []);
-            tmp += m_button('search_tvdb_btn', 'TVDB', []);
-            tmp = m_button_group(tmp)
-            */
-            str += tmp
-            // program
-            {#str += m_hr_black();#}
-            str += "<div class='card p-lg-5 mt-md-3 p-md-3 border-light'>"
-            str += m_row_start(0);
-            tmp = ''
-            if (data.image != null)
-                tmp = '<img src="' + data.image + '" class="img-fluid" />';
-            str += m_col(3, tmp)
-            tmp = ''
-            var des = data.des || {};
-            tmp += m_row_start(2) + m_col(3, '제목', 'right') + m_col(9, data.title || '') + m_row_end();
-            tmp += m_row_start(2) + m_col(3, '원제', 'right') + m_col(9, des._otit || '') + m_row_end();
-            tmp += m_row_start(2) + m_col(3, '감독', 'right') + m_col(9, des._dir || '') + m_row_end();
-            tmp += m_row_start(2) + m_col(3, '제작사', 'right') + m_col(9, des._pub || '') + m_row_end();
-            tmp += m_row_start(2) + m_col(3, '장르', 'right') + m_col(9, des._tag || '') + m_row_end();
-            tmp += m_row_start(2) + m_col(3, '분류', 'right') + m_col(9, des._classifi || '') + m_row_end();
-            tmp += m_row_start(2) + m_col(3, '방영일', 'right') + m_col(9, (data.date || '') + '(' + (data.day || '') + ')') + m_row_end();
-            tmp += m_row_start(2) + m_col(3, '등급', 'right') + m_col(9, des._grade || '') + m_row_end();
-            tmp += m_row_start(2) + m_col(3, '총화수', 'right') + m_col(9, des._total_chapter || '') + m_row_end();
-            tmp += m_row_start(2) + m_col(3, '상영시간', 'right') + m_col(9, des._show_time || '') + m_row_end();
-            tmp += m_row_start(2) + m_col(3, '줄거리', 'right') + m_col(9, data.ser_description || '') + m_row_end();
-            str += m_col(9, tmp)
-            str += m_row_end();
+            console.log(data);
+            
+            let str = "";
+            
+            // 1. Info Card (Top)
+            str += `<div class='card p-4 mb-4 border-light' style="background: rgba(30,30,40,0.6); backdrop-filter: blur(10px);">`;
+            str += `<div class="row">`;
+            
+            // Poster
+            str += `<div class="col-md-3 text-center mb-3 mb-md-0">`;
+            if (data.image) {
+                str += `<img src="${data.image}" class="img-fluid rounded shadow-lg" style="max-height: 350px; width: auto;">`;
+            }
+            str += `</div>`;
+            
+            // Details
+            str += `<div class="col-md-9">`;
+            str += `<h2 class="font-weight-bold text-white mb-2">${data.title || ''}</h2>`;
+            
+            // Subtitle / Original Title
+             const des = data.des || {};
+            if (des._otit) {
+                 str += `<h5 class="text-muted mb-3">${des._otit}</h5>`;
+            }
 
-            str += "</div>"
-            {#str += m_hr_black();#}
-
-            // 에피소드 카드 그리드 레이아웃
+            // Tags (Genre, etc.)
+            str += `<div class="mb-4">`;
+             if (des._tag) str += `<span class="badge badge-info mr-2" style="padding: 6px 12px; font-size:0.9em;">${des._tag}</span>`;
+             if (des._grade) str += `<span class="badge badge-secondary mr-2" style="padding: 6px 12px; font-size:0.9em;">${des._grade}</span>`;
+             if (data.date || data.day) str += `<span class="badge badge-dark mr-2" style="padding: 6px 12px; font-size:0.9em;">${data.date || ''} (${data.day || ''})</span>`;
+            str += `</div>`;
+            
+            // Table for details (Grid)
+            str += `<div class="row mb-4" style="font-size: 0.95em; color: #ccc;">`;
+             // Helper to add detail item
+             const addDetail = (label, val) => {
+                 if(val) str += `<div class="col-md-6 mb-2"><span class="font-weight-bold text-info mr-2">${label}:</span> <span class="text-light">${val}</span></div>`;
+             };
+             
+             addDetail("감독", des._dir);
+             addDetail("제작사", des._pub);
+             addDetail("분류", des._classifi);
+             addDetail("총화수", des._total_chapter);
+             addDetail("상영시간", des._show_time);
+             
+             if (data.ser_description) {
+                  str += `<div class="col-12 mt-3"><span class="font-weight-bold text-info mr-2">줄거리:</span> <p class="text-light mt-1" style="line-height:1.6;">${data.ser_description}</p></div>`;
+             }
+            str += `</div>`; // End detail row
+            
+            // Actions Toolbar
+            str += `<div class="d-flex flex-wrap align-items-center gap-2 p-3 rounded" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05);">`;
+            
+            // Standard Actions
+            str += `<button id="check_download_btn" class="btn btn-primary btn-sm mr-2"><i class="fa fa-download"></i> 선택 다운로드</button>`;
+            str += `<button id="all_check_on_btn" class="btn btn-outline-light btn-sm mr-1">전체 선택</button>`;
+            str += `<button id="all_check_off_btn" class="btn btn-outline-secondary btn-sm mr-3">해제</button>`;
+            
+            // Scheduling (Heart)
+            str += `<button id="add_whitelist" class="btn btn-outline-danger btn-sm mr-3" style="min-width: 120px;"><i class="bi bi-heart"></i> 스케쥴링 추가</button>`;
+            
+            str += `</div>`; // End Action Toolbar
+            
+            str += `</div>`; // End Col-9
+            str += `</div>`; // End Row
+            str += `</div>`; // End Card
+            
+             // Episode List (Reuse existing logic or standard logic)
             str += '<div class="episode-list-container">';
             for (let i in data.episode) {
                 let epThumbSrc = data.episode[i].thumbnail || '';
@@ -177,6 +216,7 @@
                 str += '</div>';
             }
             str += '</div>';
+
             document.getElementById("episode_list").innerHTML = str;
             $('input[id^="checkbox_"]').bootstrapToggle()
         }
@@ -266,6 +306,33 @@
 
         });
 
+
+        $("body").on('click', '#add_whitelist', function (e) {
+            e.preventDefault();
+            const code = document.getElementById("code").value || params.code;
+            const $btn = $(this);
+            $.ajax({
+                url: '/' + package_name + '/ajax/' + sub + '/add_whitelist',
+                type: "POST",
+                cache: false,
+                data: JSON.stringify({data_code: code}),
+                contentType: "application/json;charset=UTF-8",
+                dataType: "json",
+                success: function (ret) {
+                    if (ret.ret) {
+                        $.notify('<strong>스케쥴링 목록에 추가하였습니다.</strong>', {type: 'success'});
+                        $btn.html('<i class="bi bi-heart-fill"></i> 추가됨').removeClass('btn-outline-danger').addClass('btn-danger');
+                    } else {
+                         if (ret.log == "이미 추가되어 있습니다.") {
+                            $.notify('<strong>이미 추가되어 있습니다.</strong>', {type: 'warning'});
+                            $btn.html('<i class="bi bi-heart-fill"></i> 추가됨').removeClass('btn-outline-danger').addClass('btn-danger');
+                        } else {
+                            $.notify('<strong>추가 실패</strong><br>' + ret.log, {type: 'warning'});
+                        }
+                    }
+                }
+            });
+        });
 
         $("body").on('click', '#go_ohli24_btn', function (e) {
             e.preventDefault();
@@ -1022,6 +1089,45 @@
             color: #fff !important;
             background-color: #0dcaf0 !important;
             border-color: #0dcaf0 !important;
+        }
+        
+        /* Navigation Menu Override */
+        ul.nav.nav-pills.bg-light {
+            background-color: rgba(30, 41, 59, 0.6) !important;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 50rem !important;
+            padding: 6px !important;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2) !important;
+            display: inline-flex !important;
+            flex-wrap: wrap;
+            justify-content: center;
+            width: auto !important;
+            margin-bottom: 20px;
+        }
+
+        ul.nav.nav-pills .nav-item {
+            margin: 0 2px;
+        }
+
+        ul.nav.nav-pills .nav-link {
+            border-radius: 50rem !important;
+            padding: 8px 20px !important;
+            color: #94a3b8 !important;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        ul.nav.nav-pills .nav-link:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: #fff !important;
+            transform: translateY(-1px);
+        }
+
+        ul.nav.nav-pills .nav-link.active {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+            color: #fff !important;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
         }
         
         /* 로딩 인디케이터 오버라이드 */

@@ -669,6 +669,20 @@ class LogicAniLife(PluginModuleBase):
                 except Exception as img_err:
                     logger.error(f"Image proxy error for {image_url}: {img_err}")
                     return Response("Proxy error", status=500)
+            elif sub == "add_whitelist":
+                try:
+                    params = request.get_json()
+                    logger.debug(f"add_whitelist params: {params}")
+                    if params and "data_code" in params:
+                        code = params["data_code"]
+                        ret = LogicAniLife.add_whitelist(code)
+                    else:
+                        ret = LogicAniLife.add_whitelist()
+                    return jsonify(ret)
+                except Exception as e:
+                    logger.error(f"Exception: {e}")
+                    logger.error(traceback.format_exc())
+                    return jsonify({"ret": False, "log": str(e)})
         except Exception as e:
             P.logger.error("Exception:%s", e)
             P.logger.error(traceback.format_exc())

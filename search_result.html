@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="kr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name='robots' content='noindex, follow, max-image-preview:large' />
+<script type='text/javascript' id='mv_jquery-js-extra'>
+/* <![CDATA[ */
+var mv_base = {"ajaxurl":"https:\/\/linkkf.live\/wp-admin\/admin-ajax.php"};
+/* ]]> */
+</script>
+<script type='text/javascript' src='https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js' id='mv_jquery-js'></script>
+<script type='text/javascript' src='https://linkkf.live/wp-content/themes/kfbeta16/assets/js/layer/layer.js' id='mv_layui-js'></script>
+<script type='text/javascript' src='https://linkkf.live/wp-content/themes/kfbeta16/assets/js/mytheme-ui.js' id='mv_mytheme_ui-js'></script>
+<script type='text/javascript' src='https://linkkf.live/wp-content/themes/kfbeta16/assets/js/mytheme-cms.js' id='mv_mytheme_cms-js'></script>
+<script type='text/javascript'>
+/* <![CDATA[ */
+var taqyeem = {"ajaxurl":"https://linkkf.live/wp-admin/admin-ajax.php" , "your_rating":"Your Rating:"};
+/* ]]> */
+</script>
+<link rel="icon" href="https://linkkf.live/wp-content/uploads/2020/09/cropped-logo-32x32.png" sizes="32x32" />
+<link rel="icon" href="https://linkkf.live/wp-content/uploads/2020/09/cropped-logo-192x192.png" sizes="192x192" />
+<link rel="apple-touch-icon" href="https://linkkf.live/wp-content/uploads/2020/09/cropped-logo-180x180.png" />
+<meta name="msapplication-TileImage" content="https://linkkf.live/wp-content/uploads/2020/09/cropped-logo-270x270.png" />
+<link href="https://linkkf.live/wp-content/themes/kfbeta16/style.css" rel="stylesheet" type="text/css" />
+<link rel="author" href="https://1.bp.blogspot.com/-yjRTBw8mtN4/X2f2XSQ8o5I/AAAAAAAAKn8/oCxwBIPZo5AEgaR-Ak7tVvPJiHEHKTjpQCLcBGAsYHQ/s52/logo.png" />
+
+
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-YKQT0BN847"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-YKQT0BN847');
+</script>
+
+
+
+<style>
+
+    #masthead {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 0 16px; height: 56px; background-color: #202020;
+         top: 0; z-index: 100; border-bottom: 1px solid #2a2a2a;
+    }
+
+    .header-left { display: flex; align-items: center; gap: 15px; min-width: 150px; z-index: 2; }
+    .logo-text { font-size: 18px; font-weight: bold; color: #fff; letter-spacing: -0.5px; display: flex; align-items: center; gap: 5px; }
+
+    .header-center { flex: 0 1 700px; display: flex; justify-content: center; margin: 0 20px; }
+    
+    .yt-search-form { display: flex; width: 100%; max-width: 600px; position: relative; }
+
+    .yt-search-input {
+        width: 100%; padding: 0 15px; height: 40px; background-color: #121212;
+        border: 1px solid #303030; border-right: none; border-radius: 40px 0 0 40px;
+        color: #fff; font-size: 16px; outline: none; box-shadow: inset 0 1px 2px #000000;
+    }
+    .yt-search-input:focus { border-color: #1c62b9; }
+
+    .yt-search-btn {
+        width: 64px; height: 40px; background-color: #222; border: 1px solid #303030;
+        border-radius: 0 40px 40px 0; display: flex; align-items: center; justify-content: center;
+    }
+    .yt-search-btn:hover { background-color: #303030; }
+    .yt-search-btn svg { fill: #fff; width: 24px; height: 24px; }
+
+    .mobile-back-btn {
+        display: none; background: transparent; border: none; padding: 10px; margin-right: 5px;
+    }
+    .mobile-back-btn svg { fill: #fff; width: 24px; height: 24px; }
+
+    .header-right { display: flex; align-items: center; gap: 10px; min-width: auto; justify-content: flex-end; z-index: 2; }
+
+    .mobile-search-trigger {
+        display: none; background: transparent; border: none; padding: 8px; border-radius: 50%;
+    }
+    .mobile-search-trigger:active { background-color: #2a2a2a; }
+    .mobile-search-trigger svg { fill: #fff; width: 24px; height: 24px; }
+
+    .auth-btn-link {
+        display: flex; align-items: center; gap: 6px;
+        padding: 6px 12px; border: 1px solid #303030; border-radius: 18px;
+        color: #3ea6ff; font-size: 14px; font-weight: 500; background: rgba(38, 56, 80, 0.3);
+    }
+
+    .user-avatar-wrap { 
+        width: 32px; height: 32px; border-radius: 50%; overflow: hidden; 
+        cursor: pointer; background: #333; border: 1px solid #444; 
+        display: block; 
+    }
+    .user-avatar-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+    .header-avatar-letter {
+        width: 100%; height: 100%; display: flex;
+        justify-content: center; align-items: center;
+        color: #fff; font-weight: bold; text-transform: uppercase;
+        font-size: 14px; user-select: none;
+    }
+
+    .btn-logout-mini {
+        font-size: 12px; color: #aaa; background: transparent; border: none; cursor: pointer; padding: 5px;
+    }
+
+    #sub-nav {
+        display: flex; justify-content: center; gap: 10px; padding: 10px 15px;
+        background-color: #202020; border-bottom: 1px solid #2a2a2a;
+        overflow-x: auto; white-space: nowrap;  top: 56px; z-index: 99;
+    }
+    #sub-nav::-webkit-scrollbar { display: none; }
+    .nav-chip {
+        display: flex; align-items: center; gap: 6px; padding: 6px 14px; 
+        background-color: #222; border: 1px solid #333; color: #fff; 
+        border-radius: 8px; font-size: 14px; font-weight: 500;
+    }
+    .nav-chip.active { background-color: #f1f1f1; color: #0f0f0f; }
+    .nav-chip svg { width: 16px; height: 16px; fill: currentColor; }
+
+    @media (max-width: 768px) {
+        .header-center { display: none; } 
+        .mobile-search-trigger { display: block; } 
+        .header-right { min-width: auto; }
+
+        body.search-active .header-left { display: none; }   
+        body.search-active .header-right { display: none; }  
+        
+        body.search-active .header-center { 
+            display: flex; flex: 1; margin: 0; padding: 0 5px; 
+            animation: fadeIn 0.2s ease-in-out;
+        }
+        
+        body.search-active .mobile-back-btn { display: block; } 
+        body.search-active .yt-search-input { border-radius: 20px 0 0 20px; }
+        body.search-active .yt-search-btn { border-radius: 0 20px 20px 0; background: #2a2a2a; }
+        
+        #sub-nav { justify-content: flex-start; padding-left: 10px; }
+        .auth-btn-link span { display: none; }
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    .auth-modal { display: none; position: fixed; z-index: 9999; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.8); backdrop-filter: blur(3px); }
+    .auth-content { background-color: #1e1e1e; margin: 10% auto; padding: 30px; border: 1px solid #444; width: 350px; border-radius: 10px; position: relative; color: #eee; }
+    .close-auth { position: absolute; top: 10px; right: 15px; cursor: pointer; font-size: 24px; }
+    .auth-form input { width: 100%; padding: 12px; margin: 10px 0; background: #2a2a2a; border: 1px solid #444; color: #fff; border-radius: 4px; box-sizing: border-box;}
+    .submit-btn { width: 100%; background: #0073aa; color: #fff; padding: 12px; border: none; border-radius: 4px; font-weight: bold; margin-top: 10px; }
+    .auth-switch { text-align: center; margin-top: 15px; font-size: 0.9em; color: #aaa; }
+    .auth-msg { text-align: center; margin-top: 10px; min-height: 20px; font-size: 0.9em; }
+</style>
+</head>
+
+<body>
+
+<header id="masthead">
+    <div class="header-left">
+        <a href="/" class="logo-text"><strong>Linkkf</strong></a>
+        <div style="display:flex; gap:8px; margin-left:10px; opacity:0.7;">
+             <a href="https://www.youtube.com/@linkkfanime" target="_blank"><img src="https://cdn.jsdelivr.net/gh/756751uosmaqy/wpp@main/yt.png" width="18" height="18"></a>
+             <a href="https://x.com/linkkfcom" target="_blank"><img src="https://cdn.jsdelivr.net/gh/756751uosmaqy/wpp@main/tw.png" width="18" height="18"></a>
+              <a href="https://www.tiktok.com/@linkkfani" target="_blank"><img src="https://cdn.jsdelivr.net/gh/756751uosmaqy/wpp@main/tt.png" width="18" height="18"></a>
+        </div>
+    </div>
+
+    <div class="header-center">
+        <form role="search" method="get" class="yt-search-form" action="https://linkkf.live/">
+            <button type="button" class="mobile-back-btn" onclick="toggleMobileSearch(false)">
+                <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"></path></svg>
+            </button>
+            
+            <input type="text" class="yt-search-input" placeholder="검색 ..." value="원펀맨" name="s" id="masthead-search-term">
+            
+            <button type="submit" class="yt-search-btn">
+                <svg viewBox="0 0 24 24"><path d="M20.87,20.17l-5.59-5.59C16.35,13.35,17,11.75,17,10c0-3.87-3.13-7-7-7s-7,3.13-7,7s3.13,7,7,7c1.75,0,3.35-0.65,4.58-1.71 l5.59,5.59L20.87,20.17z M10,16c-3.31,0-6-2.69-6-6s2.69-6,6-6s6,2.69,6,6S13.31,16,10,16z"></path></svg>
+            </button>
+        </form>
+    </div>
+
+    <div class="header-right">
+        <button class="mobile-search-trigger" onclick="toggleMobileSearch(true)">
+            <svg viewBox="0 0 24 24"><path d="M20.87,20.17l-5.59-5.59C16.35,13.35,17,11.75,17,10c0-3.87-3.13-7-7-7s-7,3.13-7,7s3.13,7,7,7c1.75,0,3.35-0.65,4.58-1.71 l5.59,5.59L20.87,20.17z M10,16c-3.31,0-6-2.69-6-6s2.69-6,6-6s6,2.69,6,6S13.31,16,10,16z"></path></svg>
+        </button>
+
+        <div id="guest-buttons" style="display:flex;">
+            <a href="/login/" class="auth-btn-link">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>
+                <span>로그인</span>
+            </a>
+        </div>
+        
+        <div id="user-info" style="display:none; align-items:center; gap:10px;">
+            <a href="/login/" class="user-avatar-wrap" id="header-avatar-link" title="user-info">
+                <img id="header-user-avatar" src="" alt="Avatar">
+            </a>
+
+        </div>
+    </div>
+</header>
+
+<nav id="sub-nav">
+    <a href="/" class="nav-chip ">
+        <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg> 홈
+    </a>
+     <a href="/rr/" class="nav-chip">
+        <svg viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg> 리뷰
+    </a>
+    <a href="/gg" class="nav-chip">
+        <svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg> 추천
+    </a>
+    <a href="/favorites/" class="nav-chip ">
+        <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg> 찜 목록
+    </a>
+    <a href="/history/" class="nav-chip ">
+        <svg viewBox="0 0 24 24"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg> 시청 기록
+    </a>
+</nav>
+
+
+<div id="auth-modal" class="auth-modal">
+    <div class="auth-content">
+        <span class="close-auth" onclick="closeAuthModal()">×</span>
+        
+        <div id="form-login" class="auth-form">
+            <h2>로그인</h2>
+            <input type="email" id="login-email" placeholder="이메일">
+            <input type="password" id="login-pass" placeholder="비밀번호">
+            <button onclick="handleLogin()" class="submit-btn">로그인</button>
+            <p class="auth-switch">계정이 없으신가요? <a href="#" onclick="switchAuth('register')">회원가입</a></p>
+        </div>
+
+        <div id="form-register" class="auth-form" style="display:none;">
+            <h2>회원가입</h2>
+            <input type="text" id="reg-name" placeholder="닉네임">
+            <input type="email" id="reg-email" placeholder="이메일">
+            <input type="password" id="reg-pass" placeholder="비밀번호">
+            <button onclick="handleRegister()" class="submit-btn">회원가입</button>
+            <p class="auth-switch">이미 계정이 있으신가요? <a href="#" onclick="switchAuth('login')">로그인</a></p>
+        </div>
+
+        <p id="auth-msg" class="auth-msg"></p>
+    </div>
+</div>
+
+<script>
+const AUTH_API = 'https://ro2.ani19962004.top/api/auth.php'; 
+
+function toggleMobileSearch(show) {
+    if (show) {
+        document.body.classList.add('search-active');
+        setTimeout(() => document.getElementById('masthead-search-term').focus(), 100);
+    } else {
+        document.body.classList.remove('search-active');
+    }
+}
+
+function stringToHeaderColor(str) {
+    let hash = 0; for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
+    return '#' + '00000'.substring(0, 6 - c.length) + c;
+}
+
+function createHeaderLetterAvatar(name, container) {
+    const letter = name ? name.charAt(0) : 'U';
+    const div = document.createElement('div');
+    div.className = 'header-avatar-letter';
+    div.textContent = letter;
+    div.style.backgroundColor = stringToHeaderColor(name || 'User'); 
+    container.appendChild(div);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const userStr = localStorage.getItem('anime_user');
+    const guestBtns = document.getElementById('guest-buttons');
+    const userInfo = document.getElementById('user-info');
+    
+    if(userStr) {
+        const user = JSON.parse(userStr);
+        if (guestBtns) guestBtns.style.display = 'none';
+        if (userInfo) {
+            userInfo.style.display = 'flex';
+            const avatarWrap = document.getElementById('header-avatar-link');
+            const avatarImg = document.getElementById('header-user-avatar');
+            const oldLetter = avatarWrap.querySelector('.header-avatar-letter');
+            if(oldLetter) oldLetter.remove();
+
+            if (user.avatar_path && user.avatar_path.length > 5) {
+                avatarImg.style.display = 'block';
+                avatarImg.src = user.avatar_path;
+                avatarImg.onerror = function() {
+                    this.style.display = 'none';
+                    createHeaderLetterAvatar(user.name, avatarWrap);
+                };
+            } else {
+                avatarImg.style.display = 'none';
+                createHeaderLetterAvatar(user.name, avatarWrap);
+            }
+        }
+    } else {
+        if (guestBtns) guestBtns.style.display = 'flex';
+        if (userInfo) userInfo.style.display = 'none';
+    }
+});
+
+
+function showAuthModal(type) { document.getElementById('auth-modal').style.display = 'block'; switchAuth(type); }
+function closeAuthModal() { document.getElementById('auth-modal').style.display = 'none'; }
+function switchAuth(type) { document.getElementById('form-login').style.display = (type=='login')?'block':'none'; document.getElementById('form-register').style.display = (type=='register')?'block':'none'; document.getElementById('auth-msg').textContent = ''; }
+async function handleLogin(){ /* ... ... */ } 
+async function handleRegister(){ /* ...  ... */ }
+
+function doLogout(){ if(confirm('로그아웃 ? 0.o ?')){localStorage.removeItem('anime_user'); window.location.href='/';}}
+
+</script>
+
+<div id="body">
+<title>원펀맨 애니 자막 Linkkf</title>
+
+<style>
+   
+    #primary .entry-header {
+        background: none; border: none; padding: 0 0 15px 0;
+        margin-bottom: 25px; border-bottom: 3px solid #0073aa;
+        display: flex; justify-content: space-between; align-items: flex-end;
+    }
+    #primary .entry-title {
+        color: #ffffff; font-size: 2.2em; font-weight: 700;
+        margin: 0; padding: 0; line-height: 1.3;
+    }
+    #primary .search-total-count {
+        font-size: 1.1em; font-weight: 500; color: #aaa; margin-top: 5px;
+    }
+
+    .external-search-container {
+        background: transparent; 
+        padding: 0; 
+        border: none;
+        margin: 30px auto; 
+        max-width: 700px; 
+    }
+
+    #external-search-form {
+        display: flex; 
+        width: 100%;
+    }
+
+    #external-search-input {
+        flex-grow: 1; 
+        padding: 10px 20px; 
+        background-color: #121212; 
+        color: #fff; 
+        border: 1px solid #303030; 
+        border-right: none; 
+        border-radius: 40px 0 0 40px; 
+        font-size: 1.1em;
+        outline: none; 
+        transition: border-color 0.3s;
+    }
+
+    #external-search-input:focus {
+        border-color: #1c62b9; 
+        box-shadow: inset 0 1px 2px rgba(0,0,0,0.3);
+    }
+
+    #external-search-form button {
+        padding: 10px 25px; 
+        background-color: #222222; 
+        color: #aaa; 
+        border: 1px solid #303030; 
+        cursor: pointer; 
+        font-size: 1em; 
+        font-weight: 500;
+        transition: background-color 0.2s, color 0.2s;
+        white-space: nowrap;
+    }
+
+    #external-search-form button:hover { 
+        background-color: #333333; 
+        color: #fff; 
+    }
+    
+
+    .ext-json-grid { display: grid; gap: 15px; margin-top: 20px; grid-template-columns: repeat(2, 1fr); }
+    @media (min-width: 768px) { .ext-json-grid { grid-template-columns: repeat(4, 1fr); } }
+    
+    .ext-json-grid .loading, .ext-json-grid .error { 
+        font-style: italic; color: #777; font-size: 1.2em; padding: 20px 0; grid-column: 1 / -1; text-align: center; 
+    }
+    .ext-json-grid .error { color: #d9534f; }
+
+
+    .ext-json-item { background-color: #2a2a2a; border-radius: 8px; overflow: hidden; border: 1px solid #333; transition: transform 0.2s ease; }
+    .ext-json-item:hover { transform: translateY(-5px); }
+    .ext-json-item a { text-decoration: none; }
+
+    .ext-json-thumb { position: relative; display: block; aspect-ratio: 16 / 9; background-color: #1a1a1a; }
+    .ext-json-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+    .ext-json-noti { position: absolute; top: 8px; left: 8px; background-color: #5bb7fe; color: white; padding: 3px 8px; border-radius: 4px; font-size: 0.8em; font-weight: bold; z-index: 2; }
+
+    .ext-json-info { padding: 12px; }
+    .ext-json-name { font-size: 0.9em; color: #eee; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    
+    .ext-json-info .ext-json-meta { font-size: 0.8em; color: #999; margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ext-json-info .ext-json-meta .ext-json-season { margin-left: 5px; padding-left: 5px; border-left: 1px solid #555; }
+
+
+    @keyframes skeleton-shimmer {
+        0% { background-position: -200% 0; }
+        100% { background-position: 200% 0; }
+    }
+    
+    .skeleton-item {
+        background-color: #2a2a2a;
+        border-radius: 8px;
+        overflow: hidden;
+        border: 1px solid #333;
+    }
+    
+    .skeleton-animate {
+        background: #2a2a2a;
+        background: linear-gradient(90deg, #2a2a2a 25%, #3a3a3a 50%, #2a2a2a 75%);
+        background-size: 200% 100%;
+        animation: skeleton-shimmer 1.5s infinite linear;
+    }
+
+    .skeleton-thumb {
+        aspect-ratio: 16 / 9;
+        width: 100%;
+        display: block;
+    }
+
+    .skeleton-info { padding: 12px; }
+    
+    .skeleton-text {
+        height: 14px;
+        border-radius: 4px;
+        margin-bottom: 8px;
+    }
+    
+    .skeleton-title { width: 85%; height: 18px; margin-bottom: 12px; }
+    .skeleton-meta { width: 50%; }
+    /* ---------------------------- */
+
+    /* Pagination */
+    #pagination-container.pagination-dark { display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 30px; padding: 15px; background: #2a2a2a; border-radius: 8px; font-family: Arial, sans-serif; border: 1px solid #333; }
+    #pagination-container.pagination-dark button { padding: 12px 12px; background-color: #444; color: #eee; border: 1px solid #555; border-radius: 4px; cursor: pointer; font-size: 0.9em; }
+    #pagination-container.pagination-dark button:hover:not(:disabled) { background-color: #0073aa; color: #fff; border-color: #0073aa; }
+    #pagination-container.pagination-dark button:disabled { background-color: #333; color: #777; border-color: #444; cursor: not-allowed; }
+    #pagination-container.pagination-dark .page-info { color: #ccc; font-size: 0.9em; }
+    #pagination-container.pagination-dark input[type="number"] { width: 50px; padding: 7px; text-align: center; background-color: #333; color: #fff; border: 1px solid #555; border-radius: 4px; margin: 0 5px; -moz-appearance: textfield; }
+    #pagination-container.pagination-dark input[type="number"]::-webkit-outer-spin-button, #pagination-container.pagination-dark input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+</style>
+
+<div id="primary" class="content-area">
+    <main id="main" class="site-main">
+
+        <article>
+            <header class="entry-header">
+                <h1 class="entry-title" id="search-page-title">검색: 원펀맨</h1>
+                <span class="search-total-count" id="search-total-count-display" style="display: none;"></span>
+            </header>
+
+            <div class="entry-content">
+                
+                <div class="external-search-container">
+                    <form id="external-search-form" action="https://linkkf.live/" method="get">
+                        <input type="text" name="s" id="external-search-input" 
+                               placeholder="......" 
+                               value="원펀맨" required>
+                        <button type="submit"> 검색 </button>
+                    </form>
+                </div>
+
+                <div id="results-grid" class="ext-json-grid">
+                    </div>
+                
+                <div id="pagination-container" class="pagination-dark" style="display: none;">
+                    <button id="page-first" disabled>&laquo; &laquo; &laquo;</button>
+                    <button id="page-prev" disabled>&lsaquo; </button>
+                    <span class="page-info">
+                        page <input type="number" id="page-input" min="1" value="1" disabled> / <span id="page-total">1</span>
+                    </span>
+                    <button id="page-next" disabled> &rsaquo;</button>
+                    <button id="page-last" disabled> &raquo; &raquo; &raquo;</button>
+                </div>
+                
+            </div>
+        </article>
+
+    </main>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    
+    const API_SEARCH_URL = 'https://linkkf.5imgdarr.top/api/search.php';
+    const POSTS_PER_PAGE = 20; 
+    
+    // DOM Elements
+    const searchForm = document.getElementById('external-search-form'); 
+    const searchInput = document.getElementById('external-search-input'); 
+    const pageTitle = document.getElementById('search-page-title'); 
+    
+    const resultsContainer = document.getElementById('results-grid');
+    const paginationContainer = document.getElementById('pagination-container');
+    const btnFirst = document.getElementById('page-first');
+    const btnPrev = document.getElementById('page-prev');
+    const btnNext = document.getElementById('page-next');
+    const btnLast = document.getElementById('page-last');
+    const pageInput = document.getElementById('page-input');
+    const pageTotal = document.getElementById('page-total');
+    const totalCountDisplay = document.getElementById('search-total-count-display');
+
+    let currentKeyword = "원펀맨";
+    let currentPage = 1;
+    let totalPages = 1;
+
+  
+    function showSkeleton() {
+      
+        let skeletonHTML = '';
+        for(let i=0; i<8; i++) {
+            skeletonHTML += `
+                <div class="skeleton-item">
+                    <div class="skeleton-thumb skeleton-animate"></div>
+                    <div class="skeleton-info">
+                        <div class="skeleton-text skeleton-title skeleton-animate"></div>
+                        <div class="skeleton-text skeleton-meta skeleton-animate"></div>
+                    </div>
+                </div>
+            `;
+        }
+        resultsContainer.innerHTML = skeletonHTML;
+    }
+    // ---------------------------------
+
+    function getPageFromURL() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const pageFromUrl = parseInt(urlParams.get('page'), 10);
+        if (!isNaN(pageFromUrl) && pageFromUrl > 0) return pageFromUrl;
+        return 1;
+    }
+
+    function updateURL(keyword, page) {
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.set('s', keyword);
+
+        if (page > 1) {
+            newUrl.searchParams.set('page', page);
+        } else {
+            newUrl.searchParams.delete('page');
+        }
+
+        if (newUrl.href !== window.location.href) {
+            history.pushState({s: keyword, page: page}, '', newUrl.href);
+        }
+        
+        pageTitle.textContent = ' o.o? ' + keyword;
+    }
+
+    async function fetchResults(page) {
+        if (!currentKeyword) {
+            resultsContainer.innerHTML = '<p class="error">....</p>';
+            return;
+        }
+
+        if (page < 1) page = 1;
+        if (page > totalPages && totalPages > 1) page = totalPages;
+        currentPage = page;
+
+        updateURL(currentKeyword, page);
+
+        showSkeleton();
+        
+        paginationContainer.style.display = 'none'; 
+        totalCountDisplay.style.display = 'none'; 
+
+        const params = new URLSearchParams();
+        params.append('keyword', currentKeyword); 
+        params.append('page', page);
+        params.append('limit', POSTS_PER_PAGE);
+        
+        try {
+            const response = await fetch(`${API_SEARCH_URL}?${params.toString()}`);
+            if (!response.ok) { throw new Error(` HTTP: ${response.status}`); }
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                displayResults(data.data);
+                displayPagination(data.pagination);
+
+                if (data.pagination.total_results != null) {
+                    totalCountDisplay.textContent = `( + ${data.pagination.total_results} anime )`;
+                    totalCountDisplay.style.display = 'block'; 
+                }
+            } else {
+                resultsContainer.innerHTML = '<p class="error"> ....</p>';
+            }
+        } catch (error) {
+            console.error(' :', error);
+            resultsContainer.innerHTML = `<p class="error"> ....0.o </p>`;
+        }
+    }
+
+    function displayResults(items) {
+        if (!items || items.length === 0) {
+            resultsContainer.innerHTML = '<p class="error"> ...</p>';
+            return;
+        }
+        let htmlOutput = '';
+        items.forEach(item => {
+            const postUrl = `https://linkkf.live/${item.postid}`;
+            const thumbHtml = item.thumb ? `<img src="https://rez1.ims1.top/350x/${item.thumb}" alt="${item.name}" loading="lazy">` : '';
+            const notiHtml = item.postnoti ? `<span class="ext-json-noti">${item.postnoti}</span>` : '';
+            
+            const year = item.year || 'N/A';
+            const season = item.seasontype || 'N/A';
+
+            htmlOutput += `
+                <div class="ext-json-item">
+                    <a href="${postUrl}" title="${item.name}">
+                        <div class="ext-json-thumb">${thumbHtml}${notiHtml}</div>
+                        <div class="ext-json-info">
+                            <h3 class="ext-json-name">${item.name}</h3>
+                            <div class="ext-json-meta">
+                                <span class="ext-json-year">${year}</span>
+                                <span class="ext-json-season">${season}</span>
+                            </div>
+                        </div>
+                    </a>
+                </div>`;
+        });
+        resultsContainer.innerHTML = htmlOutput; 
+    }
+
+    function displayPagination(pagination) {
+        const { current_page, total_pages } = pagination;
+        currentPage = current_page; totalPages = total_pages;
+        if (total_pages <= 1) { paginationContainer.style.display = 'none'; return; }
+
+        paginationContainer.style.display = 'flex';
+        pageInput.value = current_page; pageInput.max = total_pages; pageTotal.textContent = total_pages;
+        
+        const isFirstPage = (current_page === 1);
+        btnFirst.disabled = isFirstPage; btnPrev.disabled = isFirstPage;
+        const isLastPage = (current_page === total_pages);
+        btnNext.disabled = isLastPage; btnLast.disabled = isLastPage;
+        pageInput.disabled = false;
+    }
+
+    searchForm.addEventListener('submit', function(event) {
+        event.preventDefault(); 
+        
+        const newKeyword = searchInput.value.trim();
+        if (newKeyword) {
+            currentKeyword = newKeyword;
+            fetchResults(1); 
+        }
+    });
+
+    btnFirst.addEventListener('click', () => { if (currentPage > 1) fetchResults(1); });
+    btnPrev.addEventListener('click', () => { if (currentPage > 1) fetchResults(currentPage - 1); });
+    btnNext.addEventListener('click', () => { if (currentPage < totalPages) fetchResults(currentPage + 1); });
+    btnLast.addEventListener('click', () => { if (currentPage < totalPages) fetchResults(totalPages); });
+    pageInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault(); 
+            let targetPage = parseInt(pageInput.value, 10);
+            if (isNaN(targetPage)) { pageInput.value = currentPage; return; }
+            if (targetPage < 1) targetPage = 1;
+            if (targetPage > totalPages) targetPage = totalPages;
+            fetchResults(targetPage);
+        }
+    });
+
+
+    window.addEventListener('popstate', function(event) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const page = parseInt(urlParams.get('page'), 10) || 1;
+        const keyword = urlParams.get('s') || '';
+        
+        if (keyword) {
+            currentKeyword = keyword;
+            searchInput.value = keyword;
+
+         
+            showSkeleton();
+
+            const params = new URLSearchParams();
+            params.append('keyword', currentKeyword); 
+            params.append('page', page);
+            params.append('limit', POSTS_PER_PAGE);
+            
+            fetch(`${API_SEARCH_URL}?${params.toString()}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        displayResults(data.data);
+                        displayPagination(data.pagination);
+                         if (data.pagination.total_results != null) {
+                            totalCountDisplay.textContent = `( + ${data.pagination.total_results}  anime )`;
+                            totalCountDisplay.style.display = 'block'; 
+                        }
+                    } else { resultsContainer.innerHTML = '<p class="error"> 0o0 .</p>'; }
+                });
+        }
+    });
+
+    const initialPage = getPageFromURL(); 
+    if (currentKeyword) {
+        fetchResults(initialPage); 
+    }
+
+});
+</script>
+
+
+<nav id="head-menu" role="navigation">
+		<ul>
+		    
+			<li>   <a href="/" rel="home"style="
+    height: 30px;"> <span style='font-size:13px;'>&#128512;</span> </br> <strong>메인</strong></a>   </li>
+			<li>   <a href="https://linkkf.live/anime-list/" rel="home"style="
+    height: 30px;
+"> <span style='font-size:13px;'>&#128528;</span> </br> <strong>신작</strong></a>   </li>
+
+<li>   <a href="https://linkkf.live/menulist" rel="home"style="
+    height: 30px;
+"> <span style='font-size:13px;'>&#128566;</span> </br> <strong>장르</strong></a>   </li>
+
+
+
+<li>   <a href="https://linkkf.live/topanime" rel="home"style="
+    height: 30px;
+"> <span style='font-size:13px;'>&#127775;</span> </br> <strong>TOP</strong></a>   </li>
+
+
+<li>   <a href="https://linkkf.tv" rel="home"style="
+    height: 30px;
+"> <span style='font-size:13px;'> &#128518; </span> </br> <strong>링크2</strong></a>   </li>
+
+</ul></nav>
+    
+    
+<article  style="height:53px;width:100%px;">
+
+</article>
+
+
+
+
+
+
+
+
+
+
+
+    
+<div id="toast-notification" class="toast-container">
+    <div class="toast-icon"></div>
+    <div class="toast-message"> 0.o </div>
+</div>    
+
+<style>
+
+.toast-container {
+    position: fixed;
+    bottom: 130px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px); 
+    background-color: #1e1e1e;
+    color: #fff;
+    padding: 12px 25px;
+    border-radius: 50px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 15px;
+    font-weight: 500;
+    z-index: 9999;
+    opacity: 0;
+    transition: all 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55); 
+    border: 1px solid #333;
+    min-width: 250px;
+    justify-content: center;
+}
+
+.toast-container.show {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+}
+
+.toast-icon {
+    font-size: 1.2em;
+}
+
+
+.toast-success .toast-icon { color: #4caf50; } 
+.toast-error .toast-icon { color: #f44336; }   
+.toast-info .toast-icon { color: #2196f3; }    
+
+
+</style>
+    
+
+
+</body>
+</html>
