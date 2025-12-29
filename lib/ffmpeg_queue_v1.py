@@ -632,10 +632,18 @@ class FfmpegQueue(object):
                         ret["ret"] = "notify"
                         ret["log"] = "다운로드중 상태가 아닙니다."
                     else:
-                        idx = entity.ffmpeg_arg["data"]["idx"]
-                        import ffmpeg
-
-                        ffmpeg.Ffmpeg.stop_by_idx(idx)
+                        # ffmpeg_arg가 있는 경우에만 ffmpeg 모듈로 중지
+                        if entity.ffmpeg_arg is not None and entity.ffmpeg_arg.get("data") is not None:
+                            try:
+                                idx = entity.ffmpeg_arg["data"].get("idx")
+                                if idx is not None:
+                                    import ffmpeg
+                                    ffmpeg.Ffmpeg.stop_by_idx(idx)
+                            except Exception as e:
+                                logger.debug(f"ffmpeg stop error (non-critical): {e}")
+                        # 커스텀 다운로더의 경우 cancel 플래그만 설정
+                        entity.cancel = True
+                        entity.ffmpeg_status_kor = "취소"
                         entity.refresh_status()
                         ret["ret"] = "refresh"
             elif cmd == "reset":
@@ -643,11 +651,20 @@ class FfmpegQueue(object):
                     with self.download_queue.mutex:
                         self.download_queue.queue.clear()
                     for _ in self.entity_list:
+                        # 다운로드중 상태인 경우에만 중지 시도
                         if _.ffmpeg_status == 5:
-                            import ffmpeg
-
-                            idx = _.ffmpeg_arg["data"]["idx"]
-                            ffmpeg.Ffmpeg.stop_by_idx(idx)
+                            # ffmpeg_arg가 있는 경우에만 ffmpeg 모듈로 중지
+                            if _.ffmpeg_arg is not None and _.ffmpeg_arg.get("data") is not None:
+                                try:
+                                    import ffmpeg
+                                    idx = _.ffmpeg_arg["data"].get("idx")
+                                    if idx is not None:
+                                        ffmpeg.Ffmpeg.stop_by_idx(idx)
+                                except Exception as e:
+                                    logger.debug(f"ffmpeg stop error (non-critical): {e}")
+                            # 커스텀 다운로더의 경우 cancel 플래그만 설정
+                            _.cancel = True
+                            _.ffmpeg_status_kor = "취소"
                 self.entity_list = []
                 ret["ret"] = "refresh"
             elif cmd == "delete_completed":
