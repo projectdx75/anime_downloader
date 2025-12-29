@@ -20,12 +20,13 @@ logger = logging.getLogger(__name__)
 class CdndaniaDownloader:
     """cdndania.com 전용 다운로더 (세션 기반 보안 우회)"""
     
-    def __init__(self, iframe_src, output_path, referer_url=None, callback=None, proxy=None):
+    def __init__(self, iframe_src, output_path, referer_url=None, callback=None, proxy=None, threads=16):
         self.iframe_src = iframe_src  # cdndania.com 플레이어 iframe URL
         self.output_path = output_path
         self.referer_url = referer_url or "https://ani.ohli24.com/"
         self.callback = callback
         self.proxy = proxy
+        self.threads = threads
         self.cancelled = False
         
         # 진행 상황 추적
@@ -52,7 +53,8 @@ class CdndaniaDownloader:
                 self.output_path,
                 self.referer_url or "",
                 self.proxy or "",
-                progress_path
+                progress_path,
+                str(self.threads)
             ]
             
             logger.info(f"Starting download subprocess: {self.iframe_src}")
@@ -144,7 +146,7 @@ class CdndaniaDownloader:
             self.process.terminate()
 
 
-def _download_worker(iframe_src, output_path, referer_url, proxy, progress_path):
+def _download_worker(iframe_src, output_path, referer_url, proxy, progress_path, threads=16):
     """실제 다운로드 작업 (subprocess에서 실행)"""
     import sys
     import os
@@ -329,72 +331,104 @@ def _download_worker(iframe_src, output_path, referer_url, proxy, progress_path)
         
         log.info(f"Found {len(segments)} segments")
         
-        # 6. 세그먼트 다운로드
+        # 6. 세그먼트 다운로드 (병렬 처리)
         start_time = time.time()
-        last_speed_time = start_time
         total_bytes = 0
-        last_bytes = 0
         current_speed = 0
         
-        with tempfile.TemporaryDirectory() as temp_dir:
-            segment_files = []
+        # 진행 상황 공유 변수 (Thread-safe하게 관리 필요)
+        completed_segments = 0
+        lock = threading.Lock()
+        
+        # 출력 디렉토리 미리 생성 (임시 폴더 생성을 위해)
+        output_dir = os.path.dirname(output_path)
+        if output_dir and not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+            
+        with tempfile.TemporaryDirectory(dir=output_dir) as temp_dir:
+            segment_files = [None] * len(segments)  # 순서 보장을 위해 미리 할당
             total_segments = len(segments)
             
             log.info(f"Temp directory: {temp_dir}")
+            log.info(f"Starting parallel download with {threads} threads for {total_segments} segments...")
             
-            for i, segment_url in enumerate(segments):
-                segment_path = os.path.join(temp_dir, f"segment_{i:05d}.ts")
-                
-                # 매 20개마다 또는 첫 5개 로그
-                if i < 5 or i % 20 == 0:
-                    log.info(f"Downloading segment {i+1}/{total_segments}")
-                
+            # 세그먼트 다운로드 함수
+            def download_segment(index, url):
+                nonlocal completed_segments, total_bytes
                 try:
-                    seg_resp = session.get(segment_url, headers=m3u8_headers, 
-                                          proxies=proxies, timeout=120)
-                    
-                    if seg_resp.status_code != 200:
-                        time.sleep(0.5)
-                        seg_resp = session.get(segment_url, headers=m3u8_headers, 
-                                              proxies=proxies, timeout=120)
-                    
-                    segment_data = seg_resp.content
-                    
-                    if len(segment_data) < 100:
-                        print(f"CDN security block: segment {i} returned {len(segment_data)}B", file=sys.stderr)
-                        sys.exit(1)
-                    
-                    with open(segment_path, 'wb') as f:
-                        f.write(segment_data)
-                    
-                    segment_files.append(f"segment_{i:05d}.ts")
-                    total_bytes += len(segment_data)
-                    
-                    # 속도 계산
-                    current_time = time.time()
-                    if current_time - last_speed_time >= 1.0:
-                        bytes_diff = total_bytes - last_bytes
-                        time_diff = current_time - last_speed_time
-                        current_speed = bytes_diff / time_diff if time_diff > 0 else 0
-                        last_speed_time = current_time
-                        last_bytes = total_bytes
-                    
-                    # 진행률 업데이트
-                    percent = int(((i + 1) / total_segments) * 100)
-                    elapsed = format_time(current_time - start_time)
-                    update_progress(percent, i + 1, total_segments, format_speed(current_speed), elapsed)
-                    
+                    # 재시도 로직
+                    for retry in range(3):
+                        try:
+                            seg_resp = session.get(url, headers=m3u8_headers, proxies=proxies, timeout=30)
+                            if seg_resp.status_code == 200:
+                                content = seg_resp.content
+                                if len(content) < 100:
+                                    if retry == 2:
+                                        raise Exception(f"Segment data too small ({len(content)}B)")
+                                    time.sleep(1)
+                                    continue
+                                    
+                                # 파일 저장
+                                filename = f"segment_{index:05d}.ts"
+                                filepath = os.path.join(temp_dir, filename)
+                                with open(filepath, 'wb') as f:
+                                    f.write(content)
+                                
+                                # 결과 기록
+                                with lock:
+                                    segment_files[index] = filename
+                                    total_bytes += len(content)
+                                    completed_segments += 1
+                                    
+                                    # 진행률 업데이트 (너무 자주는 말고 10개마다)
+                                    if completed_segments % 10 == 0 or completed_segments == total_segments:
+                                        pct = int((completed_segments / total_segments) * 100)
+                                        elapsed = time.time() - start_time
+                                        speed = total_bytes / elapsed if elapsed > 0 else 0
+                                        
+                                        log.info(f"Progress: {pct}% ({completed_segments}/{total_segments}) Speed: {format_speed(speed)}")
+                                        update_progress(pct, completed_segments, total_segments, format_speed(speed), format_time(elapsed))
+                                return True
+                        except Exception as e:
+                            if retry == 2:
+                                log.error(f"Seg {index} failed after retries: {e}")
+                                raise e
+                            time.sleep(0.5)
                 except Exception as e:
-                    log.error(f"Segment {i} download error: {e}")
-                    print(f"Segment {i} download failed: {e}", file=sys.stderr)
-                    sys.exit(1)
+                    return False
+
+            # 스레드 풀 실행
+            from concurrent.futures import ThreadPoolExecutor
+            
+            # 설정된 스레드 수로 병렬 다운로드
+            with ThreadPoolExecutor(max_workers=threads) as executor:
+                futures = []
+                for i, seg_url in enumerate(segments):
+                    futures.append(executor.submit(download_segment, i, seg_url))
+                
+                # 모든 작업 완료 대기
+                for future in futures:
+                    try:
+                        future.result()
+                    except Exception as e:
+                        log.error(f"Thread error: {e}")
+                        print(f"Download thread failed: {e}", file=sys.stderr)
+                        sys.exit(1)
+            
+            # 다운로드 완료 확인
+            if completed_segments != total_segments:
+                print(f"Incomplete download: {completed_segments}/{total_segments}", file=sys.stderr)
+                sys.exit(1)
+            
+            log.info("All segments downloaded successfully.")
             
             # 7. ffmpeg로 합치기
             log.info("Concatenating segments with ffmpeg...")
             concat_file = os.path.join(temp_dir, "concat.txt")
             with open(concat_file, 'w') as f:
                 for seg_file in segment_files:
-                    f.write(f"file '{seg_file}'\n")
+                    if seg_file:
+                        f.write(f"file '{seg_file}'\n")
             
             # 출력 디렉토리 생성
             output_dir = os.path.dirname(output_path)
@@ -447,8 +481,9 @@ if __name__ == "__main__":
         referer = sys.argv[3] if sys.argv[3] else None
         proxy = sys.argv[4] if sys.argv[4] else None
         progress_path = sys.argv[5]
+        threads = int(sys.argv[6]) if len(sys.argv) > 6 else 16
         
-        _download_worker(iframe_url, output_path, referer, proxy, progress_path)
+        _download_worker(iframe_url, output_path, referer, proxy, progress_path, threads)
     elif len(sys.argv) >= 3:
         # CLI 테스트 모드
         logging.basicConfig(level=logging.DEBUG)

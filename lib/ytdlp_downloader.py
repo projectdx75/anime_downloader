@@ -17,13 +17,15 @@ logger = logging.getLogger(__name__)
 class YtdlpDownloader:
     """yt-dlp 기반 다운로더"""
     
-    def __init__(self, url, output_path, headers=None, callback=None, proxy=None, cookies_file=None):
+    def __init__(self, url, output_path, headers=None, callback=None, proxy=None, cookies_file=None, use_aria2c=False, threads=16):
         self.url = url
         self.output_path = output_path
         self.headers = headers or {}
         self.callback = callback  # 진행 상황 콜백
         self.proxy = proxy
         self.cookies_file = cookies_file  # CDN 세션 쿠키 파일 경로
+        self.use_aria2c = use_aria2c  # Aria2c 사용 여부
+        self.threads = threads        # 병렬 다운로드 스레드 수
         self.cancelled = False
         self.process = None
         self.error_output = []  # 에러 메시지 저장
@@ -134,8 +136,9 @@ class YtdlpDownloader:
                 '--no-part',
             ]
             
-            if use_native_hls:
+            if use_native_hls or self.use_aria2c:
                 # hlz CDN: native HLS 다운로더 사용 (ffmpeg의 확장자 제한 우회)
+                # Aria2c 사용 시: Native HLS를 써야 프래그먼트 병렬 다운로드가 가능함 (ffmpeg 모드는 순차적)
                 cmd += ['--hls-prefer-native']
             else:
                 # 기타 CDN: ffmpeg 사용 (더 안정적)
@@ -148,6 +151,26 @@ class YtdlpDownloader:
                 '--extractor-args', 'generic:force_hls', # HLS 강제 추출
                 '-o', self.output_path,
             ]
+
+            # 1.3 Aria2c 설정 (병렬 다운로드)
+            # 1.3 Aria2c / 고속 모드 설정
+            if self.use_aria2c:
+                # [최적화] HLS(m3u8)의 경우, 작은 파일 수백 개를 받는데 aria2c 프로세스를 매번 띄우는 것보다
+                # yt-dlp 내장 멀티스레드(-N)를 사용하는 것이 훨씬 빠르고 가볍습니다.
+                # 따라서 사용자가 'aria2c'를 선택했더라도 HLS 스트림에 대해서는 'Native Concurrent' 모드로 작동시켜 속도를 극대화합니다.
+                
+                # 병렬 프래그먼트 다운로드 개수 (기본 1 -> 16 or 설정값)
+                cmd += ['--concurrent-fragments', str(self.threads)]
+                
+                # 버퍼 크기 조절 (속도 향상 도움)
+                cmd += ['--buffer-size', '16M']
+                
+                # DNS 캐싱 등 네트워크 타임아웃 완화
+                cmd += ['--socket-timeout', '30']
+                
+                logger.info(f"High Speed Mode Active: Using Native Downloader with {self.threads} concurrent threads (Optimized for HLS)")
+                # 주의: --external-downloader aria2c는 HLS 프래그먼트에서 오버헤드가 크므로 제거함
+            
             
             # 1.5 환경별 브라우저 위장 설정 (Impersonate)
             # macOS에서는 고급 위장 기능을 사용하되, 종속성 문제가 잦은 Linux/Docker에서는 UA 수동 지정
@@ -204,7 +227,10 @@ class YtdlpDownloader:
 
             cmd.append(current_url)
 
-            logger.info(f"Executing refined browser-impersonated yt-dlp CLI (v16): {' '.join(cmd)}")
+            logger.info(f"Executing refined browser-impersonated yt-dlp CLI (v17): {' '.join(cmd)}")
+            if self.use_aria2c:
+                 logger.info("ARIA2C ACTIVE: Forcing native HLS downloader for concurrency.")
+            
             
             # 4. subprocess 실행 및 파싱
             self.process = subprocess.Popen(
@@ -316,6 +342,10 @@ class YtdlpDownloader:
                 if 'error' in line.lower() or 'security' in line.lower() or 'unable' in line.lower():
                     logger.warning(f"yt-dlp output notice: {line}")
                     self.error_output.append(line)
+                
+                # Aria2c / 병렬 다운로드 로그 로깅
+                if 'aria2c' in line.lower() or 'fragment' in line.lower():
+                    logger.info(f"yt-dlp: {line}")
 
             self.process.wait()
             

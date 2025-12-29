@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+    /* Premium Dark Theme Variables */
+    :root {
+        --bg-color: #0f172a; /* Slate 900 */
+        --card-bg: #1e293b; /* Slate 800 */
+        --text-color: #f8fafc; /* Slate 50 */
+        --text-muted: #94a3b8; /* Slate 400 */
+        --accent-color: #3b82f6; /* Blue 500 */
+        --accent-hover: #2563eb; /* Blue 600 */
+        --terminal-bg: #000000;
+        --terminal-text: #4ade80; /* Green 400 */
+        --border-color: #334155; /* Slate 700 */
+    }
+
+    /* Global Override */
+    body {
+        background-color: var(--bg-color) !important;
+        background-image: radial-gradient(circle at top right, #1e293b 0%, transparent 60%), radial-gradient(circle at bottom left, #1e293b 0%, transparent 60%);
+        color: var(--text-color);
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    /* Container & Typography */
+    .container-fluid {
+        padding: 40px;
+    }
+
+    h1, h2, h3, h4, h5, h6 {
+        color: var(--text-color);
+        font-weight: 700;
+        letter-spacing: -0.025em;
+    }
+
+    /* Main Card */
+    .dashboard-card {
+        background-color: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        overflow: hidden;
+        margin-top: 20px;
+    }
+
+    /* Tabs Styling */
+    .nav-tabs {
+        border-bottom: 1px solid var(--border-color);
+        background-color: rgba(0,0,0,0.2);
+        padding: 10px 10px 0 10px;
+    }
+
+    .nav-tabs .nav-link {
+        color: var(--text-muted) !important;
+        border: none !important;
+        border-radius: 8px 8px 0 0 !important;
+        padding: 10px 20px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+        background: transparent;
+    }
+
+    .nav-tabs .nav-link:hover {
+        color: var(--text-color) !important;
+        background-color: rgba(255,255,255,0.05);
+    }
+
+    .nav-tabs .nav-link.active {
+        color: var(--accent-color) !important;
+        background-color: var(--card-bg) !important;
+        border-bottom: 2px solid var(--accent-color) !important;
+    }
+
+    /* Content Area */
+    .tab-content {
+        padding: 0; /* Removing default padding to let terminal fill */
+    }
+
+    .tab-pane {
+        padding: 20px;
+    }
+
+    /* Terminal Styling */
+    textarea#log, textarea#add {
+        background-color: var(--terminal-bg) !important;
+        color: var(--terminal-text) !important;
+        border: 1px solid #333;
+        border-radius: 6px;
+        font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+        font-size: 14px;
+        line-height: 1.5;
+        padding: 16px;
+        width: 100%;
+        box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.5);
+        resize: none; /* Disable manual resize */
+    }
+
+    textarea#log:focus, textarea#add:focus {
+        outline: none;
+        border-color: var(--accent-color);
+        box-shadow: 0 0 0 1px var(--accent-color);
+    }
+
+    /* Controls Bar */
+    .controls-bar {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        padding: 12px 20px;
+        background-color: rgba(0,0,0,0.2);
+        border-top: 1px solid var(--border-color);
+    }
+
+    /* Toggle Switch */
+    .form-check-input {
+        background-color: #334155;
+        border-color: #475569;
+        cursor: pointer;
+    }
+
+    .form-check-input:checked {
+        background-color: var(--accent-color);
+        border-color: var(--accent-color);
+    }
+
+    .form-check-label {
+        color: var(--text-muted);
+        font-weight: 500;
+        margin-right: 12px;
+        user-select: none;
+    }
+
+    /* Buttons */
+    .btn-action {
+        background-color: transparent;
+        border: 1px solid var(--border-color);
+        color: var(--text-color);
+        border-radius: 6px;
+        padding: 6px 16px;
+        font-size: 14px;
+        font-weight: 500;
+        transition: all 0.2s;
+        margin-left: 12px;
+    }
+
+    .btn-action:hover {
+        background-color: var(--accent-color);
+        border-color: var(--accent-color);
+        color: white;
+    }
+
+</style>
+
+<div class="container-fluid content-cloak" id="main_container">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-1">System Logs</h2>
+            <p class="text-muted mb-0" style="color: var(--text-muted);">Real-time application logs and history.</p>
+        </div>
+    </div>
+
+    <div class="dashboard-card">
+        <nav>
+            {{ macros.m_tab_head_start() }}
+                {{ macros.m_tab_head('old', 'History', true) }}
+                {{ macros.m_tab_head('new', 'Real-time', false) }}
+            {{ macros.m_tab_head_end() }}
+        </nav>
+        
+        <div class="tab-content" id="nav-tabContent">
+            <!-- Old Logs -->
+            {{ macros.m_tab_content_start('old', true) }}
+                <div>
+                    <textarea id="log" rows="30" disabled spellcheck="false"></textarea>
+                </div>
+            {{ macros.m_tab_content_end() }}
+            
+            <!-- New Logs -->
+            {{ macros.m_tab_content_start('new', false) }}
+                <div>
+                    <textarea id="add" rows="30" disabled spellcheck="false"></textarea>
+                </div>
+                
+                <div class="controls-bar">
+                    <div class="d-flex align-items-center">
+                        <label class="form-check-label" for="auto_scroll">Auto Scroll</label>
+                        <div class="form-check form-switch mb-0">
+                            <input id="auto_scroll" name="auto_scroll" class="form-check-input" type="checkbox" checked>
+                        </div>
+                        <button id="clear" class="btn btn-action">Clear Console</button>
+                    </div>
+                </div>
+            {{ macros.m_tab_content_end() }}
+        </div>
+    </div>
+</div>
+
+<script type="text/javascript">
+$(document).ready(function() {
+  // Force fluid layout
+  $("#main_container").removeClass("container").addClass("container-fluid");
+  
+  $('#loading').show();
+  ResizeTextAreaLog()
+})
+
+function ResizeTextAreaLog() {
+  // Dynamic height calculation
+  ClientHeight = window.innerHeight;
+  // Adjust calculation based on new layout (header + padding + tabs + toolbars)
+  // Approx header: 80, padding: 80, tabs: 50, footer: 60 => ~270
+  var offset = 340; 
+  var newHeight = ClientHeight - offset;
+  if (newHeight < 400) newHeight = 400; // Min height
+
+  $("#log").height(newHeight);
+  $("#add").height(newHeight);
+}
+
+$(window).resize(function() {
+  ResizeTextAreaLog();
+});
+
+var protocol = window.location.protocol;
+var socket = io.connect(protocol + "//" + document.domain + ":" + location.port + "/log");
+
+socket.emit("start", {'package':'{{package}}'} );
+socket.on('on_start', function(data){
+  var logEl = document.getElementById("log");
+  logEl.innerHTML += data.data;
+  logEl.scrollTop = logEl.scrollHeight;
+  logEl.style.visibility = 'visible';
+  $('#loading').hide();
+});
+
+socket.on('add', function(data){
+  if (data.package == "{{package}}") {
+    var chk = $('#auto_scroll').is(":checked");
+    var addEl = document.getElementById("add");
+    addEl.innerHTML += data.data;
+    if (chk) addEl.scrollTop = addEl.scrollHeight;
+  }
+});
+
+$("#clear").click(function(e) {
+  e.preventDefault(); 
+  document.getElementById("add").innerHTML = '';
+});
+</script>    
+
+<style>
+    /* Smooth Load Transition */
+    .content-cloak, 
+    #menu_module_div, 
+    #menu_page_div {
+        opacity: 0;
+        transition: opacity 0.5s ease-out;
+    }
+    
+    /* Staggered Delays for Natural Top-Down Flow */
+    #menu_module_div.visible {
+        opacity: 1;
+        transition-delay: 0ms;
+    }
+
+    #menu_page_div.visible {
+        opacity: 1;
+        transition-delay: 150ms;
+    }
+
+    .content-cloak.visible {
+        opacity: 1;
+        transition-delay: 300ms;
+    }
+</style>
+
+<script type="text/javascript">
+$(document).ready(function(){
+  // Smooth Load Trigger
+  setTimeout(function() {
+      $('.content-cloak, #menu_module_div, #menu_page_div').addClass('visible');
+  }, 100);
+});
+</script>
+{% endblock %}

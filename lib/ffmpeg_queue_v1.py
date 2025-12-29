@@ -255,12 +255,18 @@ class FfmpegQueue(object):
 
                 # m3u8 URL인 경우 다운로드 방법 설정에 따라 분기
                 if video_url.endswith('.m3u8') or 'master.txt' in video_url or 'gcdn.app' in video_url:
-                    # 다운로드 방법 설정 확인
+                    # 다운로드 방법 및 스레드 설정 확인
                     download_method = P.ModelSetting.get(f"{self.name}_download_method")
+                    download_threads = P.ModelSetting.get_int(f"{self.name}_download_threads")
+                    if not download_threads:
+                        download_threads = 16
                     
                     # cdndania.com 감지 시 CdndaniaDownloader 사용 (curl_cffi로 세션 기반 보안 우회)
+                    # [주의] cdndania는 yt-dlp로 받으면 14B 가짜 파일(보안 차단)이 받아지므로
+                    # aria2c 선택 여부와 무관하게 전용 다운로더(CdndaniaDownloader)를 써야 함.
+                    # 대신 CdndaniaDownloader 내부에 멀티스레드(16)를 구현하여 속도를 해결함.
                     if 'cdndania.com' in video_url:
-                        logger.info("Detected cdndania.com URL - using CdndaniaDownloader (curl_cffi session)")
+                        logger.info(f"Detected cdndania.com URL - using Optimized CdndaniaDownloader (curl_cffi + {download_threads} threads)")
                         download_method = "cdndania"
                     
                     logger.info(f"Download method: {download_method}")
@@ -298,12 +304,13 @@ class FfmpegQueue(object):
                                 output_path=output_file_ref,
                                 referer_url="https://ani.ohli24.com/",
                                 callback=progress_callback,
-                                proxy=_proxy
+                                proxy=_proxy,
+                                threads=download_threads
                             )
-                        elif method == "ytdlp":
-                            # yt-dlp 사용
+                        elif method == "ytdlp" or method == "aria2c":
+                            # yt-dlp 사용 (aria2c 옵션 포함)
                             from .ytdlp_downloader import YtdlpDownloader
-                            logger.info("Using yt-dlp downloader...")
+                            logger.info(f"Using yt-dlp downloader (method={method})...")
                             # 엔티티에서 쿠키 파일 가져오기 (있는 경우)
                             _cookies_file = getattr(entity_ref, 'cookies_file', None)
                             downloader = YtdlpDownloader(
@@ -312,7 +319,9 @@ class FfmpegQueue(object):
                                 headers=headers_ref,
                                 callback=progress_callback,
                                 proxy=_proxy,
-                                cookies_file=_cookies_file
+                                cookies_file=_cookies_file,
+                                use_aria2c=(method == "aria2c"),
+                                threads=download_threads
                             )
 
                         else:

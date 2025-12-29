@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<div id="ohli24_setting_wrapper" class="container-fluid mt-4 mx-auto" style="max-width: 100%;">
+<div id="ohli24_setting_wrapper" class="container-fluid mt-4 mx-auto content-cloak" style="max-width: 100%;">
   
   <div class="glass-card p-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -25,7 +25,11 @@
       {{ macros.setting_input_text_and_buttons('ohli24_url', 'ohli24 URL', [['go_btn', 'GO']], value=arg['ohli24_url']) }}
       {{ macros.setting_input_text('ohli24_download_path', '저장 폴더', value=arg['ohli24_download_path'], desc='정상적으로 다운 완료 된 파일이 이동할 폴더 입니다. ') }}
       {{ macros.setting_input_int('ohli24_max_ffmpeg_process_count', '동시 다운로드 수', value=arg['ohli24_max_ffmpeg_process_count'], desc='동시에 다운로드 할 에피소드 갯수입니다.') }}
-      {{ macros.setting_select('ohli24_download_method', '다운로드 방법', [['ffmpeg', 'ffmpeg (기본)'], ['ytdlp', 'yt-dlp']], value=arg.get('ohli24_download_method', 'ffmpeg'), desc='m3u8 다운로드에 사용할 도구를 선택합니다.') }}
+      {{ macros.setting_select('ohli24_download_method', '다운로드 방법', [['ffmpeg', 'ffmpeg (기본)'], ['ytdlp', 'yt-dlp'], ['aria2c', 'aria2c (yt-dlp)']], value=arg.get('ohli24_download_method', 'ffmpeg'), desc='m3u8 다운로드에 사용할 도구를 선택합니다.') }}
+      
+      <div id="ohli24_download_threads_div">
+        {{ macros.setting_select('ohli24_download_threads', '다운로드 속도', [['1', '1배속 (1개)'], ['2', '2배속 (2개)'], ['4', '4배속 (4개)'], ['8', '8배속 (8개)'], ['16', '16배속 (16개 MAX)']], value=arg.get('ohli24_download_threads', '16'), desc='yt-dlp/aria2c 모드에서 사용할 병렬 다운로드 스레드 수입니다.') }}
+      </div>
       {{ macros.setting_checkbox('ohli24_order_desc', '요청 화면 최신순 정렬', value=arg['ohli24_order_desc'], desc='On : 최신화부터, Off : 1화부터') }}
       {{ macros.setting_checkbox('ohli24_auto_make_folder', '제목 폴더 생성', value=arg['ohli24_auto_make_folder'], desc='제목으로 폴더를 생성하고 폴더 안에 다운로드합니다.') }}
       <div id="ohli24_auto_make_folder_div" class="collapse pl-4 border-left ml-3" style="border-color: rgba(255,255,255,0.1) !important;">
@@ -60,6 +64,30 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
 
 <style>
+    /* Smooth Load Transition */
+    .content-cloak, 
+    #menu_module_div, 
+    #menu_page_div {
+        opacity: 0;
+        transition: opacity 0.5s ease-out;
+    }
+    
+    /* Staggered Delays for Natural Top-Down Flow */
+    #menu_module_div.visible {
+        opacity: 1;
+        transition-delay: 0ms;
+    }
+
+    #menu_page_div.visible {
+        opacity: 1;
+        transition-delay: 150ms;
+    }
+
+    .content-cloak.visible {
+        opacity: 1;
+        transition-delay: 300ms;
+    }
+
     /* Navigation Menu Override (Top Sub-menu) */
     ul.nav.nav-pills.bg-light {
         background-color: rgba(30, 41, 59, 0.6) !important;
@@ -247,12 +275,33 @@ $(document).ready(function(){
   // Width Fix
   $("#main_container").removeClass("container").addClass("container-fluid");
   
+  // Smooth Load Trigger
+  setTimeout(function() {
+      $('.content-cloak, #menu_module_div, #menu_page_div').addClass('visible');
+  }, 100);
+
   use_collapse('ohli24_auto_make_folder');
 });
 
 $('#ani365_auto_make_folder').change(function() {
   use_collapse('ohli24_auto_make_folder');
 });
+
+function toggle_download_threads() {
+  var method = $('#ohli24_download_method').val();
+  if (method == 'ytdlp' || method == 'aria2c') {
+    $('#ohli24_download_threads_div').slideDown();
+  } else {
+    $('#ohli24_download_threads_div').slideUp();
+  }
+}
+
+$('#ohli24_download_method').change(function() {
+  toggle_download_threads();
+});
+    
+// Initial check
+toggle_download_threads();
 
 
 $("body").on('click', '#go_btn', function(e){

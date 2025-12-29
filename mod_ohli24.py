@@ -106,6 +106,7 @@ class LogicOhli24(PluginModuleBase):
             "ohli24_finished_insert": "[완결]",
             "ohli24_max_ffmpeg_process_count": "1",
             f"{self.name}_download_method": "ffmpeg",  # ffmpeg or ytdlp
+            "ohli24_download_threads": "16",
             "ohli24_order_desc": "False",
             "ohli24_auto_start": "False",
             "ohli24_interval": "* 5 * * *",

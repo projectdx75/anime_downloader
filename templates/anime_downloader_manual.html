@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+{% block content %}
+<!-- Google Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+    /* Theme Variables */
+    :root {
+        --page-bg: #0f172a; /* Slate 900 */
+        --content-bg: #1e293b; /* Slate 800 */
+        --text-primary: #f8fafc; /* Slate 50 */
+        --text-secondary: #cbd5e1; /* Slate 300 */
+        --accent: #60a5fa; /* Blue 400 */
+        --border: #334155; /* Slate 700 */
+        --code-bg: #020617; /* Slate 950 */
+    }
+
+    body {
+        background-color: var(--page-bg) !important;
+        background-image: radial-gradient(circle at 15% 50%, rgba(59, 130, 246, 0.08), transparent 25%), radial-gradient(circle at 85% 30%, rgba(236, 72, 153, 0.08), transparent 25%);
+        color: var(--text-primary);
+        font-family: 'Inter', sans-serif;
+        line-height: 1.6;
+    }
+
+    /* Container constraint for readability */
+    .article-container {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 40px 20px;
+    }
+
+    /* Content Card */
+    .manual-card {
+        background-color: var(--content-bg);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        padding: 60px;
+    }
+    
+    @media (max-width: 768px) {
+        .manual-card {
+            padding: 30px;
+        }
+    }
+
+    /* Markdown Styles */
+    #text_div {
+        font-size: 16px;
+    }
+
+    #text_div h1 {
+        font-size: 2.5rem;
+        font-weight: 800;
+        margin-bottom: 1.5rem;
+        padding-bottom: 1rem;
+        border-bottom: 2px solid var(--border);
+        color: white;
+        letter-spacing: -0.02em;
+    }
+
+    #text_div h2 {
+        font-size: 1.8rem;
+        font-weight: 700;
+        margin-top: 3rem;
+        margin-bottom: 1rem;
+        color: var(--text-primary);
+    }
+
+    #text_div h3 {
+        font-size: 1.4rem;
+        font-weight: 600;
+        margin-top: 2rem;
+        margin-bottom: 0.8rem;
+        color: var(--text-primary);
+    }
+
+    #text_div p, #text_div li {
+        color: var(--text-secondary);
+        margin-bottom: 1rem;
+    }
+
+    #text_div strong {
+        color: white;
+        font-weight: 600;
+    }
+
+    #text_div a {
+        color: var(--accent);
+        text-decoration: none;
+        border-bottom: 1px solid transparent;
+        transition: border-color 0.2s;
+    }
+
+    #text_div a:hover {
+        border-bottom-color: var(--accent);
+    }
+
+    #text_div blockquote {
+        border-left: 4px solid var(--accent);
+        background: rgba(59, 130, 246, 0.1);
+        padding: 1rem 1.5rem;
+        margin: 1.5rem 0;
+        border-radius: 0 8px 8px 0;
+        color: var(--text-primary);
+    }
+
+    #text_div ul, #text_div ol {
+        padding-left: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    #text_div li {
+        margin-bottom: 0.5rem;
+    }
+
+    /* Code Blocks */
+    #text_div pre {
+        background-color: var(--code-bg) !important;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 20px;
+        overflow-x: auto;
+        margin: 1.5rem 0;
+    }
+
+    #text_div code {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.9em;
+        background-color: rgba(0, 0, 0, 0.3);
+        padding: 0.2em 0.4em;
+        border-radius: 4px;
+        color: #e2e8f0;
+    }
+
+    #text_div pre code {
+        background-color: transparent;
+        padding: 0;
+        color: inherit;
+    }
+
+    /* Pretty Print Overrides */
+    li.L0, li.L1, li.L2, li.L3, li.L5, li.L6, li.L7, li.L8 {
+        list-style-type: decimal !important;
+        border-left: 1px solid #475569;
+        padding-left: 10px;
+        margin-left: 10px; 
+    }
+    
+    /* Tables */
+    #text_div table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        margin: 2rem 0;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+
+    #text_div th {
+        background-color: rgba(255, 255, 255, 0.05);
+        color: white;
+        font-weight: 600;
+        padding: 12px 16px;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+    }
+
+    #text_div td {
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border);
+        color: var(--text-secondary);
+    }
+
+    #text_div tr:last-child td {
+        border-bottom: none;
+    }
+
+    #text_div tr:hover td {
+        background-color: rgba(255, 255, 255, 0.02);
+    }
+
+    /* Images */
+    #text_div img {
+        max-width: 100%;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        margin: 1.5rem 0;
+    }
+
+</style>
+
+<div class="article-container content-cloak">
+    <div class="manual-card">
+        <meta id="text" data-text="{{data}}">
+        <div id="text_div"></div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/gh/google/code-prettify@master/loader/run_prettify.js?autorun=true&amp;lang=css&lang=python&skin=sunburst"></script>
+<script src="{{ url_for('static', filename='js/showdown_2.1.0.js') }}"></script>
+<script src="{{ url_for('static', filename='js/showdown-prettify.js') }}"></script>
+<link href="{{ url_for('static', filename='css/showdown.css') }}" rel="stylesheet">
+
+
+<script type="text/javascript">
+  $(document).ready(function(){
+    // Ensure we are not fully fluid to maintain readability constraint
+    $("#main_container").removeClass("container").addClass("container-fluid");
+    
+    var converter = new showdown.Converter({extensions: ['prettify']});
+    converter.setOption('tables', true);
+    converter.setOption('strikethrough', true);
+    converter.setOption('ghCodeBlocks',true);
+    
+    text = $('#text').data('text');
+    if (window.location.href.endsWith('.yaml')) {
+      text = "```" + text + "```";
+    }
+    // Simple sanitization or enhancements could happen here
+    
+    html = converter.makeHtml(text);
+    $('#text_div').html(html);
+  });
+</script>    
+
+<style>
+    /* Smooth Load Transition */
+    .content-cloak, 
+    #menu_module_div, 
+    #menu_page_div {
+        opacity: 0;
+        transition: opacity 0.5s ease-out;
+    }
+    
+    /* Staggered Delays for Natural Top-Down Flow */
+    #menu_module_div.visible {
+        opacity: 1;
+        transition-delay: 0ms;
+    }
+
+    #menu_page_div.visible {
+        opacity: 1;
+        transition-delay: 150ms;
+    }
+
+    .content-cloak.visible {
+        opacity: 1;
+        transition-delay: 300ms;
+    }
+</style>
+
+<script type="text/javascript">
+$(document).ready(function(){
+  // Smooth Load Trigger
+  setTimeout(function() {
+      $('.content-cloak, #menu_module_div, #menu_page_div').addClass('visible');
+  }, 100);
+});
+</script>
+{% endblock %}

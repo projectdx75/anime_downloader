@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+    /* Global Background & Layout */
+    body {
+        width: 100%;
+        background-size: 300% 300%;
+        background-image: linear-gradient(
+                -45deg,
+                rgba(59, 173, 227, 1) 0%,
+                rgba(87, 111, 230, 1) 25%,
+                rgba(152, 68, 183, 1) 51%,
+                rgba(255, 53, 127, 1) 100%
+        );
+        animation: AnimateBG 20s ease infinite;
+        color: white;
+    }
+
+    @keyframes AnimateBG {
+        0% { background-position: 0% 50% }
+        50% { background-position: 100% 50% }
+        100% { background-position: 0% 50% }
+    }
+
+    /* Glassmorphism Container */
+    .tab-content {
+        background: rgba(30, 41, 59, 0.4);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border-radius: 16px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        padding: 20px;
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        color: #e2e8f0;
+        margin-top: 15px;
+    }
+
+    /* Log Screen Styling */
+    textarea#log, textarea#add {
+        background-color: rgba(15, 23, 42, 0.6) !important;
+        color: #10b981 !important; /* Terminal Green text */
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        font-family: 'Consolas', 'Monaco', monospace;
+        padding: 15px;
+        width: 100%;
+        box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
+    }
+    
+    /* Navigation Pills Override */
+    ul.nav.nav-tabs {
+        border-bottom: none;
+        margin-bottom: 0;
+    }
+    
+    /* Convert default tabs to pills look */
+    .nav-tabs .nav-link {
+        border-radius: 50rem !important;
+        padding: 8px 20px !important;
+        color: #e2e8f0 !important;
+        font-weight: 600;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        background: rgba(30, 41, 59, 0.4);
+        margin-right: 5px;
+        transition: all 0.3s ease;
+    }
+
+    .nav-tabs .nav-link:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: #fff !important;
+        transform: translateY(-1px);
+    }
+
+    .nav-tabs .nav-link.active {
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+        color: #fff !important;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+        border-color: transparent !important;
+    }
+    
+    /* Buttons and Controls */
+    .btn-outline-success {
+        color: #4ade80;
+        border-color: #4ade80;
+        margin-left: 10px;
+    }
+    
+    .btn-outline-success:hover {
+        background-color: #4ade80;
+        color: #000;
+        box-shadow: 0 0 15px rgba(74, 222, 128, 0.4);
+    }
+    
+    label {
+        color: #e2e8f0;
+        font-weight: 500;
+        margin-right: 10px;
+    }
+</style>
+
+<div class="container-fluid">
+  <nav>
+    {{ macros.m_tab_head_start() }}
+      {{ macros.m_tab_head('old', '이전', true) }}
+      {{ macros.m_tab_head('new', '실시간', false) }}
+    {{ macros.m_tab_head_end() }}
+  </nav>
+  <div class="tab-content" id="nav-tabContent">
+    {{ macros.m_tab_content_start('old', true) }}
+      <div>
+        <textarea id="log" class="col-md-12" rows="30" charswidth="23" disabled></textarea>
+      </div>
+    {{ macros.m_tab_content_end() }}
+    
+    {{ macros.m_tab_content_start('new', false) }}
+      <div>
+        <textarea id="add" class="col-md-12" rows="30" charswidth="23" disabled></textarea>
+      </div>
+      
+      <div class="d-flex align-items-center mt-3">
+        <label class="form-check-label" for="auto_scroll">자동 스크롤</label>
+        <div class="form-check form-switch" style="display:inline-block; padding-left: 2.5em;">
+            <input id="auto_scroll" name="auto_scroll" class="form-check-input" type="checkbox" checked style="cursor: pointer;">
+        </div>
+        <button id="clear" class="btn btn-sm btn-outline-success rounded-pill px-3">리셋</button>
+      </div>
+    {{ macros.m_tab_content_end() }}
+
+  </div>
+</div>
+
+
+<script type="text/javascript">
+$(document).ready(function() {
+  // setWide(); 
+  // Force fluid layout on parent if needed
+  $("#main_container").removeClass("container").addClass("container-fluid");
+  
+  $('#loading').show();
+  ResizeTextAreaLog()
+})
+
+function ResizeTextAreaLog() {
+  ClientHeight = window.innerHeight
+  $("#log").height(ClientHeight-240);
+  $("#add").height(ClientHeight-260);
+}
+
+$(window).resize(function() {
+  ResizeTextAreaLog();
+});
+
+
+var protocol = window.location.protocol;
+var socket = io.connect(protocol + "//" + document.domain + ":" + location.port + "/log");
+
+socket.emit("start", {'package':'{{package}}'} );
+socket.on('on_start', function(data){
+  document.getElementById("log").innerHTML += data.data;
+  document.getElementById("log").scrollTop = document.getElementById("log").scrollHeight;
+  document.getElementById("log").style.visibility = 'visible';
+  $('#loading').hide();
+});
+
+socket.on('add', function(data){
+  if (data.package == "{{package}}") {
+    var chk = $('#auto_scroll').is(":checked");
+    document.getElementById("add").innerHTML += data.data;
+    if (chk) document.getElementById("add").scrollTop = document.getElementById("add").scrollHeight;
+  }
+});
+
+$("#clear").click(function(e) {
+  e.preventDefault(); 
+  document.getElementById("add").innerHTML = '';
+});
+
+$("#auto_scroll").click(function(){
+  var chk = $(this).is(":checked");
+});
+  
+</script>    
+{% endblock %}

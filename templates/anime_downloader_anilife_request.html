@@ -1,7 +1,7 @@
 {% extends "base.html" %} {% block content %}
 
 
-<div>
+<div class="content-cloak">
     <div id="preloader" class="loader">
         <div class="loader-inner">
             <div class="loader-line-wrap">
@@ -1028,4 +1028,73 @@
         animation: loader-spin 0.8s linear infinite;
     }
 </style>
+
+<style>
+    /* Smooth Load Transition */
+    .content-cloak, 
+    #menu_module_div, 
+    #menu_page_div {
+        opacity: 0;
+        transition: opacity 0.5s ease-out;
+    }
+    
+    /* Staggered Delays for Natural Top-Down Flow */
+    #menu_module_div.visible {
+        opacity: 1;
+        transition-delay: 0ms;
+    }
+
+    #menu_page_div.visible {
+        opacity: 1;
+        transition-delay: 150ms;
+    }
+
+    .content-cloak.visible {
+        opacity: 1;
+        transition-delay: 300ms;
+    }
+    
+    /* Navigation Menu Override (Top Sub-menu) */
+    ul.nav.nav-pills.bg-light {
+        background-color: rgba(30, 41, 59, 0.6) !important;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 50rem !important;
+        padding: 6px !important;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2) !important;
+        display: inline-flex !important;
+        flex-wrap: wrap;
+        justify-content: center;
+        width: auto !important;
+        margin-bottom: 20px;
+    }
+
+    ul.nav.nav-pills .nav-item { margin: 0 2px; }
+    ul.nav.nav-pills .nav-link {
+        border-radius: 50rem !important;
+        padding: 8px 20px !important;
+        color: #94a3b8 !important;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    ul.nav.nav-pills .nav-link:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+        color: #fff !important;
+        transform: translateY(-1px);
+    }
+    ul.nav.nav-pills .nav-link.active {
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+        color: #fff !important;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+    }
+</style>
+
+<script type="text/javascript">
+$(document).ready(function(){
+  // Smooth Load Trigger
+  setTimeout(function() {
+      $('.content-cloak, #menu_module_div, #menu_page_div').addClass('visible');
+  }, 100);
+});
+</script>
 {% endblock %}

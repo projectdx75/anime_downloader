@@ -84,7 +84,7 @@ __menu = {
             ]
         },
         {
-            'uri': 'manual',
+            'uri': 'guide',
             'name': '매뉴얼',
             'list': [
                 {
@@ -111,6 +111,34 @@ setting = {
 }
 
 from plugin import *
+import os
+import traceback
+from flask import render_template
+
+class LogicLog(PluginModuleBase):
+    def __init__(self, P):
+        super(LogicLog, self).__init__(P, name='log', first_menu='log')
+
+    def process_menu(self, sub, req):
+        return render_template('anime_downloader_log.html', package=self.P.package_name)
+
+class LogicGuide(PluginModuleBase):
+    def __init__(self, P):
+        super(LogicGuide, self).__init__(P, name='guide', first_menu='README.md')
+
+    def process_menu(self, sub, req):
+        try:
+            # sub is likely the filename e.g., 'README.md'
+            plugin_root = os.path.dirname(self.P.blueprint.template_folder)
+            filepath = os.path.join(plugin_root, *sub.split('/'))
+            from support import SupportFile
+            data = SupportFile.read_file(filepath)
+            # Override to use our custom manual template
+            return render_template('anime_downloader_manual.html', data=data)
+        except Exception as e:
+            self.P.logger.error(f"Exception:{str(e)}")
+            self.P.logger.error(traceback.format_exc())
+            return render_template('sample.html', title=f"Error loading manual: {sub}")
 
 DEFINE_DEV = True
 
@@ -120,6 +148,9 @@ try:
         from .mod_ohli24 import LogicOhli24
         from .mod_anilife import LogicAniLife
         from .mod_linkkf import LogicLinkkf
+        
+        # Include our custom logic modules
+        P.set_module_list([LogicOhli24, LogicAniLife, LogicLinkkf, LogicLog, LogicGuide])
 
     else:
         from support import SupportSC
@@ -127,10 +158,12 @@ try:
         ModuleOhli24 = SupportSC.load_module_P(P, 'mod_ohli24').LogicOhli24
         ModuleAnilife = SupportSC.load_module_P(P, 'mod_anilife').LogicAnilife
         ModuleLinkkf = SupportSC.load_module_P(P, 'mod_linkkf').LogicLinkkf
-        P.set_module_list([ModuleOhli24, ModuleAnilife, ModuleLinkkf])
-
-    P.set_module_list([LogicOhli24, LogicAniLife, LogicLinkkf])
+        
+        # Note: LogicLog/Guide are defined here, we can use them in prod too if needed, 
+        # but focused on dev environment for now.
+        P.set_module_list([ModuleOhli24, ModuleAnilife, ModuleLinkkf, LogicLog, LogicGuide])
 
 except Exception as e:
     P.logger.error(f'Exception: {str(e)}')
     P.logger.error(traceback.format_exc())
+
