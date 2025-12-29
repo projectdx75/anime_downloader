@@ -27,15 +27,15 @@
 
 
         $(document).ready(function () {
-            console.log(window.location.href)
+            // console.log(window.location.href)
             var socket = io.connect(window.location.href);
-            console.log(socket)
+            // console.log(socket)
             socket.on('on_start', (data) => {
-                console.log('on_start().............')
-                console.log(data)
+                // console.log('on_start().............')
+                // console.log(data)
             })
             socket.on('start', function (data) {
-                console.log('socket start()')
+                // console.log('socket start()')
                 on_start();
             });
             socket.on('list_refresh', function (data) {
@@ -103,7 +103,7 @@
                 data: {},
                 dataType: "json",
                 success: function (data) {
-                    console.log("on_start():: ", data)
+                    // console.log("on_start():: ", data)
                     current_list_length = data.length;
                     make_download_list(data)
                 }

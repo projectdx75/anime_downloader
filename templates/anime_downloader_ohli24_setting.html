@@ -35,10 +35,10 @@
     {{ macros.setting_checkbox('ohli24_auto_mode_all', '에피소드 모두 받기', value=arg['ohli24_auto_mode_all'], desc=['On : 이전 에피소드를 모두 받습니다.', 'Off : 최신 에피소드만 받습니다.']) }}
   {{ macros.m_tab_content_end() }}
 
-{#  {{ macros.m_tab_content_start('action', false) }}#}
-{#    {{ macros.setting_button([['global_one_execute_sub_btn', '1회 실행']], left='1회 실행' ) }}#}
-{#    {{ macros.setting_button([['global_reset_db_sub_btn', 'DB 초기화']], left='DB정리' ) }}#}
-{#  {{ macros.m_tab_content_end() }}#}
+  {{ macros.m_tab_content_start('action', false) }}
+    {{ macros.setting_buttons([['global_one_execute_btn', '1회 실행']], left='1회 실행' ) }}
+    {{ macros.setting_buttons([['global_reset_db_btn', 'DB 초기화']], left='DB정리' ) }}
+  {{ macros.m_tab_content_end() }}
 
   </div><!--tab-content-->
   </form>
@@ -63,6 +63,49 @@ $("body").on('click', '#go_btn', function(e){
   e.preventDefault();
   let url = document.getElementById("ohli24_url").value
   window.open(url, "_blank");
+});
+
+// 1회 실행 버튼
+$("body").on('click', '#global_one_execute_btn', function(e){
+  e.preventDefault();
+  $.ajax({
+    url: '/'+package_name+'/ajax/'+sub+'/immediately_execute',
+    type: "POST",
+    cache: false,
+    dataType: "json",
+    success: function(ret) {
+      if (ret.ret == 'success') {
+        notify('스케줄러 1회 실행을 시작합니다.', 'success');
+      } else {
+        notify(ret.msg || '실행 실패', 'danger');
+      }
+    },
+    error: function(xhr, status, error) {
+      notify('에러: ' + error, 'danger');
+    }
+  });
+});
+
+// DB 초기화 버튼
+$("body").on('click', '#global_reset_db_btn', function(e){
+  e.preventDefault();
+  if (!confirm('정말 DB를 초기화하시겠습니까?')) return;
+  $.ajax({
+    url: '/'+package_name+'/ajax/'+sub+'/reset_db',
+    type: "POST",
+    cache: false,
+    dataType: "json",
+    success: function(ret) {
+      if (ret.ret == 'success') {
+        notify('DB가 초기화되었습니다.', 'success');
+      } else {
+        notify(ret.msg || '초기화 실패', 'danger');
+      }
+    },
+    error: function(xhr, status, error) {
+      notify('에러: ' + error, 'danger');
+    }
+  });
 });
 
 </script>
