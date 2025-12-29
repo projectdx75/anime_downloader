@@ -1,203 +1,541 @@
 {% extends "base.html" %}
 {% block content %}
 
-    <div>
-        {{ macros.m_button_group([['reset_btn', '초기화'], ['delete_completed_btn', '완료 목록 삭제'], ['go_ffmpeg_btn', 'Go FFMPEG']]) }}
-        {{ macros.m_row_start('0') }}
-        {{ macros.m_row_end() }}
-        {{ macros.m_hr_head_top() }}
-        {{ macros.m_row_start('0') }}
-        {{ macros.m_col(1,  macros.m_strong('Idx')) }}
-        {{ macros.m_col(2,  macros.m_strong('CreatedTime')) }}
-        {{ macros.m_col(4,  macros.m_strong('Filename')) }}
-        {{ macros.m_col(3,  macros.m_strong('Status')) }}
-        {{ macros.m_col(2,  macros.m_strong('Action')) }}
-        {{ macros.m_row_end() }}
-        {{ macros.m_hr_head_bottom() }}
-        <div id="download_list_div"></div>
-    </div> <!--전체-->
+<div class="queue-container">
+    <!-- 헤더 버튼 그룹 -->
+    <div class="queue-header">
+        <div class="header-title">
+            <i class="fa fa-download"></i>
+            <span>다운로드 큐</span>
+            <span class="queue-count" id="queue_count">0</span>
+        </div>
+        <div class="header-buttons">
+            <button id="reset_btn" class="queue-btn queue-btn-danger">
+                <i class="fa fa-refresh"></i> 초기화
+            </button>
+            <button id="delete_completed_btn" class="queue-btn queue-btn-warning">
+                <i class="fa fa-trash"></i> 완료 삭제
+            </button>
+            <button id="go_ffmpeg_btn" class="queue-btn queue-btn-info">
+                <i class="fa fa-external-link"></i> FFMPEG
+            </button>
+        </div>
+    </div>
+    
+    <!-- 다운로드 목록 -->
+    <div id="download_list_div" class="queue-list"></div>
+    
+    <!-- 빈 상태 표시 -->
+    <div id="empty_state" class="empty-state" style="display: none;">
+        <i class="fa fa-inbox"></i>
+        <p>다운로드 대기 중인 항목이 없습니다</p>
+    </div>
+</div>
 
-
-        <script src="{{ url_for('.static', filename='js/sjva_ui14.js') }}"></script>
-    <script type="text/javascript">
-        var package_name = "{{arg['package_name'] }}";
-        var sub = "{{arg['sub'] }}";
-        var current_data = null;
-        {#socket = io.connect(window.location.protocol + "//" + document.domain + ":" + location.port + "/" + package_name + '/' + sub);#}
-
-
-        $(document).ready(function () {
-            // console.log(window.location.href)
-            var socket = io.connect(window.location.href);
-            // console.log(socket)
-            socket.on('on_start', (data) => {
-                // console.log('on_start().............')
-                // console.log(data)
-            })
-            socket.on('start', function (data) {
-                // console.log('socket start()')
-                on_start();
-            });
-            socket.on('list_refresh', function (data) {
-                on_start()
-            });
-
-            socket.on('status', function (data) {
-                // console.log(data);
-                on_status(data)
-            });
-
-            // 초기 목록 로드
-            on_start();
-            
-            // 3초마다 자동 새로고침 시작
-            var refreshIntervalId = setInterval(silentRefresh, 3000);
-        });
-
-        var current_list_length = 0;
-        var refreshIntervalId = null;
-
-        // 로딩 인디케이터 없이 조용히 목록 가져오기
-        function silentRefresh() {
-            $.ajax({
-                url: '/' + package_name + '/ajax/' + sub + '/entity_list',
-                type: "POST",
-                cache: false,
-                global: false,  // 로딩 인디케이터 표시 안함
-                data: {},
-                dataType: "json",
-                success: function (data) {
-                    // 목록이 변경된 경우에만 갱신
-                    if (data.length !== current_list_length) {
-                        current_list_length = data.length;
-                        make_download_list(data);
-                    }
-                    
-                    // 활성 다운로드 확인
-                    var hasActive = false;
-                    for (var i = 0; i < data.length; i++) {
-                        if (data[i].ffmpeg_status_kor === '다운로드중' || data[i].ffmpeg_status_kor === '대기') {
-                            hasActive = true;
-                            break;
-                        }
-                    }
-                    
-                    // 모든 다운로드 완료 시 새로고침 중지
-                    if (!hasActive && refreshIntervalId) {
-                        clearInterval(refreshIntervalId);
-                        refreshIntervalId = null;
-                    }
-                    // 활성 다운로드 있고 새로고침 중지된 경우 재시작
-                    if (hasActive && !refreshIntervalId) {
-                        refreshIntervalId = setInterval(silentRefresh, 3000);
-                    }
-                }
-            });
-        }
-
-        function on_start() {
-            $.ajax({
-                url: '/' + package_name + '/ajax/' + sub + '/entity_list',
-                type: "POST",
-                cache: false,
-                data: {},
-                dataType: "json",
-                success: function (data) {
-                    // console.log("on_start():: ", data)
-                    current_list_length = data.length;
-                    make_download_list(data)
-                }
-            });
-        }
-
-
-        function on_status(data) {
-            // console.log(data)
-            var entity_id = data.entity_id;
-            var percent = data.ffmpeg_percent;
-            var status_kor = data.ffmpeg_status_kor;
-            var speed = data.current_speed;
-            
-            var tmp = document.getElementById("progress_" + entity_id)
-            if (tmp != null) {
-                document.getElementById("progress_" + entity_id).style.width = percent + '%';
-                var label = status_kor;
-                if (percent != 0) label += "(" + percent + "%)";
-                if (speed) label += " " + speed;
-                document.getElementById("progress_" + entity_id + "_label").innerHTML = label;
-            }
-        }
-
-        function make_download_list(data) {
-            str = '';
-            for (i in data) {
-                str += m_row_start();
-                str += m_col(1, data[i].entity_id);
-                str += m_col(2, data[i].created_time);
-                str += m_col(4, (data[i].filename != null) ? data[i].filename : '');
-
-                label = data[i].ffmpeg_status_kor
-                if (data[i].ffmpeg_percent != 0) {
-                    label += '(' + data[i].ffmpeg_percent + '%)'
-                }
-                tmp = m_progress('progress_' + data[i].entity_id, data[i].ffmpeg_percent, label)
-                str += m_col(3, tmp);
-                tmp = m_button('program_cancel_btn', '취소', [{'key': 'id', 'value': data[i].entity_id}]);
-                tmp = m_button_group(tmp)
-                str += m_col(2, tmp)
-                str += m_row_end();
-                if (i != data.length - 1) str += m_hr(0);
-            }
-            document.getElementById("download_list_div").innerHTML = str;
-        }
-
-        $("body").on('click', '#program_cancel_btn', function (e) {
-            e.preventDefault();
-            entity_id = $(this).data('id')
-            send_data = {'command': 'cancel', 'entity_id': entity_id}
-            queue_command(send_data)
-        });
-
-        $("body").on('click', '#reset_btn', function (e) {
-            e.preventDefault();
-            entity_id = $(this).data('id')
-            send_data = {'command': 'reset', 'entity_id': -1}
-            queue_command(send_data)
-        });
-
-        $("body").on('click', '#delete_completed_btn', function (e) {
-            e.preventDefault();
-            entity_id = $(this).data('id')
-            send_data = {'command': 'delete_completed', 'entity_id': -1}
-            queue_command(send_data)
-        });
-
-        function queue_command(data) {
-            $.ajax({
-                url: '/' + package_name + '/ajax/' + sub + '/queue_command',
-                type: "POST",
-                cache: false,
-                data: data,
-                dataType: "json",
-                success: function (ret) {
-                    if (ret.ret == 'notify') {
-                        $.notify('<strong>' + ret.log + '</strong>', {type: 'warning'});
-                    }
-                    on_start();
-                }
-            });
-        }
-
-        $("body").on('click', '#go_ffmpeg_btn', function (e) {
-            e.preventDefault();
-            $(location).attr('href', '/ffmpeg')
-        });
-
-    </script>
-    <style>
-    #progress_1_label {
-        color: #966f93;
-        font-weight: 700;
+<style>
+    /* 컨테이너 */
+    .queue-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
     }
-    </style>
+    
+    /* 헤더 */
+    .queue-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 15px;
+        margin-bottom: 20px;
+        padding: 15px 20px;
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%);
+        border-radius: 12px;
+        border: 1px solid rgba(148, 163, 184, 0.15);
+    }
+    
+    .header-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: #e2e8f0;
+        font-size: 18px;
+        font-weight: 600;
+    }
+    
+    .header-title i {
+        color: #60a5fa;
+    }
+    
+    .queue-count {
+        background: linear-gradient(135deg, #3b82f6, #2563eb);
+        color: white;
+        padding: 2px 10px;
+        border-radius: 12px;
+        font-size: 13px;
+        font-weight: 600;
+    }
+    
+    .header-buttons {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    
+    .queue-btn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 14px;
+        border: none;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    
+    .queue-btn-danger {
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+        color: white;
+    }
+    
+    .queue-btn-danger:hover {
+        background: linear-gradient(135deg, #dc2626, #b91c1c);
+        transform: translateY(-1px);
+    }
+    
+    .queue-btn-warning {
+        background: linear-gradient(135deg, #f59e0b, #d97706);
+        color: white;
+    }
+    
+    .queue-btn-warning:hover {
+        background: linear-gradient(135deg, #d97706, #b45309);
+        transform: translateY(-1px);
+    }
+    
+    .queue-btn-info {
+        background: linear-gradient(135deg, #0ea5e9, #0284c7);
+        color: white;
+    }
+    
+    .queue-btn-info:hover {
+        background: linear-gradient(135deg, #0284c7, #0369a1);
+        transform: translateY(-1px);
+    }
+    
+    /* 다운로드 목록 */
+    .queue-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    /* 다운로드 아이템 카드 */
+    .queue-item {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        padding: 15px;
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.85) 0%, rgba(15, 23, 42, 0.85) 100%);
+        border-radius: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.12);
+        transition: all 0.2s ease;
+    }
+    
+    .queue-item:hover {
+        border-color: rgba(96, 165, 250, 0.4);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    }
+    
+    /* 아이템 번호 */
+    .item-number {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        min-width: 36px;
+        height: 36px;
+        background: linear-gradient(135deg, #4f46e5, #6366f1);
+        color: white;
+        font-weight: 600;
+        font-size: 12px;
+        border-radius: 8px;
+    }
+    
+    /* 아이템 정보 */
+    .item-info {
+        flex: 1;
+        min-width: 0;
+    }
+    
+    .item-filename {
+        color: #fbbf24;
+        font-weight: 600;
+        font-size: 15px;
+        margin-bottom: 4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    }
+    
+    .item-meta {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 12px;
+        color: #94a3b8;
+    }
+    
+    .item-time {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+    
+    /* 진행률 바 */
+    .progress-container {
+        flex: 0 0 350px;
+        min-width: 200px;
+    }
+    
+    .progress-wrapper {
+        position: relative;
+        height: 32px;
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 16px;
+        overflow: hidden;
+    }
+    
+    .progress-bar {
+        height: 100%;
+        border-radius: 12px;
+        transition: width 0.3s ease;
+    }
+    
+    .progress-bar.status-waiting {
+        background: linear-gradient(90deg, #94a3b8, #64748b);
+    }
+    
+    .progress-bar.status-downloading {
+        background: linear-gradient(90deg, #3b82f6, #60a5fa);
+    }
+    
+    .progress-bar.status-completed {
+        background: linear-gradient(90deg, #22c55e, #4ade80);
+    }
+    
+    .progress-bar.status-failed {
+        background: linear-gradient(90deg, #ef4444, #f87171);
+    }
+    
+    .progress-label {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 600;
+        color: white;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    }
+    
+    /* 액션 버튼 */
+    .item-actions {
+        display: flex;
+        gap: 6px;
+    }
+    
+    .cancel-btn {
+        padding: 6px 12px;
+        background: rgba(239, 68, 68, 0.2);
+        border: 1px solid rgba(239, 68, 68, 0.4);
+        color: #f87171;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    
+    .cancel-btn:hover {
+        background: rgba(239, 68, 68, 0.3);
+        border-color: #ef4444;
+    }
+    
+    /* 빈 상태 */
+    .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 60px 20px;
+        color: #64748b;
+    }
+    
+    .empty-state i {
+        font-size: 48px;
+        margin-bottom: 15px;
+        opacity: 0.5;
+    }
+    
+    .empty-state p {
+        font-size: 15px;
+        margin: 0;
+    }
+    
+    /* 모바일 반응형 */
+    @media (max-width: 768px) {
+        .queue-container {
+            padding: 10px;
+        }
+        
+        .queue-header {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 12px;
+            padding: 12px 15px;
+        }
+        
+        .header-title {
+            justify-content: center;
+        }
+        
+        .header-buttons {
+            justify-content: center;
+        }
+        
+        .queue-btn {
+            padding: 6px 10px;
+            font-size: 12px;
+        }
+        
+        .queue-item {
+            flex-wrap: wrap;
+            gap: 10px;
+            padding: 12px;
+        }
+        
+        .item-number {
+            width: 30px;
+            min-width: 30px;
+            height: 30px;
+            font-size: 11px;
+        }
+        
+        .item-info {
+            flex: 1 1 calc(100% - 50px);
+            order: 1;
+        }
+        
+        .item-filename {
+            font-size: 13px;
+        }
+        
+        .progress-container {
+            flex: 1 1 100%;
+            order: 3;
+        }
+        
+        .item-actions {
+            order: 2;
+        }
+    }
+    
+    @media (max-width: 400px) {
+        .queue-btn span {
+            display: none;
+        }
+        
+        .queue-btn i {
+            margin: 0;
+        }
+        
+        .header-title span:not(.queue-count) {
+            font-size: 15px;
+        }
+    }
+</style>
+
+<script src="{{ url_for('.static', filename='js/sjva_ui14.js') }}"></script>
+<script type="text/javascript">
+    var package_name = "{{arg['package_name'] }}";
+    var sub = "{{arg['sub'] }}";
+    var current_data = null;
+
+    $(document).ready(function () {
+        var socket = io.connect(window.location.href);
+        socket.on('on_start', (data) => {})
+        socket.on('start', function (data) {
+            on_start();
+        });
+        socket.on('list_refresh', function (data) {
+            on_start()
+        });
+        socket.on('status', function (data) {
+            on_status(data)
+        });
+
+        on_start();
+        var refreshIntervalId = setInterval(silentRefresh, 3000);
+    });
+
+    var current_list_length = 0;
+    var refreshIntervalId = null;
+
+    function silentRefresh() {
+        $.ajax({
+            url: '/' + package_name + '/ajax/' + sub + '/entity_list',
+            type: "POST",
+            cache: false,
+            global: false,
+            data: {},
+            dataType: "json",
+            success: function (data) {
+                if (data.length !== current_list_length) {
+                    current_list_length = data.length;
+                    make_download_list(data);
+                }
+                
+                var hasActive = false;
+                for (var i = 0; i < data.length; i++) {
+                    if (data[i].ffmpeg_status_kor === '다운로드중' || data[i].ffmpeg_status_kor === '대기중') {
+                        hasActive = true;
+                        break;
+                    }
+                }
+                
+                if (!hasActive && refreshIntervalId) {
+                    clearInterval(refreshIntervalId);
+                    refreshIntervalId = null;
+                }
+                if (hasActive && !refreshIntervalId) {
+                    refreshIntervalId = setInterval(silentRefresh, 3000);
+                }
+            }
+        });
+    }
+
+    function on_start() {
+        $.ajax({
+            url: '/' + package_name + '/ajax/' + sub + '/entity_list',
+            type: "POST",
+            cache: false,
+            data: {},
+            dataType: "json",
+            success: function (data) {
+                current_list_length = data.length;
+                make_download_list(data)
+            }
+        });
+    }
+
+    function on_status(data) {
+        var entity_id = data.entity_id;
+        var percent = data.ffmpeg_percent;
+        var status_kor = data.ffmpeg_status_kor;
+        var speed = data.current_speed;
+        
+        var progressBar = document.getElementById("progress_" + entity_id);
+        if (progressBar != null) {
+            progressBar.style.width = percent + '%';
+            var label = status_kor;
+            if (percent != 0) label += " (" + percent + "%)";
+            if (speed) label += " " + speed;
+            document.getElementById("progress_" + entity_id + "_label").innerHTML = label;
+        }
+    }
+
+    function getStatusClass(status) {
+        if (status === '다운로드중') return 'status-downloading';
+        if (status === '완료' || status === 'completed') return 'status-completed';
+        if (status === '실패' || status === 'FAILED') return 'status-failed';
+        return 'status-waiting';
+    }
+
+    function make_download_list(data) {
+        document.getElementById('queue_count').textContent = data.length;
+        
+        if (data.length === 0) {
+            document.getElementById('download_list_div').style.display = 'none';
+            document.getElementById('empty_state').style.display = 'flex';
+            return;
+        }
+        
+        document.getElementById('download_list_div').style.display = 'flex';
+        document.getElementById('empty_state').style.display = 'none';
+        
+        var str = '';
+        for (var i in data) {
+            var item = data[i];
+            var statusClass = getStatusClass(item.ffmpeg_status_kor);
+            var label = item.ffmpeg_status_kor;
+            if (item.ffmpeg_percent != 0) {
+                label += ' (' + item.ffmpeg_percent + '%)';
+            }
+            
+            str += '<div class="queue-item">';
+            str += '<div class="item-number">#' + item.entity_id + '</div>';
+            str += '<div class="item-info">';
+            str += '<div class="item-filename">' + (item.filename || '파일명 없음') + '</div>';
+            str += '<div class="item-meta">';
+            str += '<span class="item-time"><i class="fa fa-clock-o"></i> ' + item.created_time + '</span>';
+            str += '</div>';
+            str += '</div>';
+            str += '<div class="progress-container">';
+            str += '<div class="progress-wrapper">';
+            str += '<div id="progress_' + item.entity_id + '" class="progress-bar ' + statusClass + '" style="width: ' + item.ffmpeg_percent + '%;"></div>';
+            str += '<span id="progress_' + item.entity_id + '_label" class="progress-label">' + label + '</span>';
+            str += '</div>';
+            str += '</div>';
+            str += '<div class="item-actions">';
+            str += '<button class="cancel-btn" data-id="' + item.entity_id + '" onclick="cancelItem(' + item.entity_id + ')"><i class="fa fa-times"></i> 취소</button>';
+            str += '</div>';
+            str += '</div>';
+        }
+        document.getElementById("download_list_div").innerHTML = str;
+    }
+
+    function cancelItem(entity_id) {
+        queue_command({'command': 'cancel', 'entity_id': entity_id});
+    }
+
+    $("body").on('click', '#reset_btn', function (e) {
+        e.preventDefault();
+        if (!confirm('정말 큐를 초기화하시겠습니까?')) return;
+        queue_command({'command': 'reset', 'entity_id': -1});
+    });
+
+    $("body").on('click', '#delete_completed_btn', function (e) {
+        e.preventDefault();
+        queue_command({'command': 'delete_completed', 'entity_id': -1});
+    });
+
+    function queue_command(data) {
+        $.ajax({
+            url: '/' + package_name + '/ajax/' + sub + '/queue_command',
+            type: "POST",
+            cache: false,
+            data: data,
+            dataType: "json",
+            success: function (ret) {
+                if (ret.ret == 'notify') {
+                    $.notify('<strong>' + ret.log + '</strong>', {type: 'warning'});
+                }
+                on_start();
+            }
+        });
+    }
+
+    $("body").on('click', '#go_ffmpeg_btn', function (e) {
+        e.preventDefault();
+        $(location).attr('href', '/ffmpeg')
+    });
+</script>
 {% endblock %}
