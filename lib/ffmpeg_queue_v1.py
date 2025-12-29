@@ -327,6 +327,17 @@ class FfmpegQueue(object):
                                 proxy=_proxy
                             )
                         
+                        # 다운로더 인스턴스를 entity에 저장 (취소 시 사용)
+                        entity_ref.downloader = downloader
+                        
+                        # cancel 상태 체크
+                        if entity_ref.cancel:
+                            downloader.cancel()
+                            entity_ref.ffmpeg_status_kor = "취소됨"
+                            entity_ref.refresh_status()
+                            downloader_self.current_ffmpeg_count -= 1
+                            return
+                        
                         success, message = downloader.download()
                         
                         # 다운로드 완료 후 카운트 감소
@@ -399,10 +410,17 @@ class FfmpegQueue(object):
                                 except Exception as sub_err:
                                     logger.error(f"Subtitle download error: {sub_err}")
                         else:
-                            entity_ref.ffmpeg_status = -1
-                            entity_ref.ffmpeg_status_kor = f"실패: {message}"
+                            # 취소된 경우와 실패를 구분
+                            if entity_ref.cancel or "Cancelled" in message:
+                                entity_ref.ffmpeg_status = -1
+                                entity_ref.ffmpeg_status_kor = "취소됨"
+                                entity_ref.ffmpeg_percent = 0
+                                logger.info(f"Download cancelled: {output_file_ref}")
+                            else:
+                                entity_ref.ffmpeg_status = -1
+                                entity_ref.ffmpeg_status_kor = f"실패"
+                                logger.error(f"Download failed: {message}")
                             entity_ref.refresh_status()
-                            logger.error(f"Download failed: {message}")
                     
                     # 스레드 시작
                     download_thread = threading.Thread(
@@ -641,7 +659,13 @@ class FfmpegQueue(object):
                                     ffmpeg.Ffmpeg.stop_by_idx(idx)
                             except Exception as e:
                                 logger.debug(f"ffmpeg stop error (non-critical): {e}")
-                        # 커스텀 다운로더의 경우 cancel 플래그만 설정
+                        # 커스텀 다운로더의 경우 downloader.cancel() 호출
+                        if hasattr(entity, 'downloader') and entity.downloader is not None:
+                            try:
+                                entity.downloader.cancel()
+                                logger.info(f"Called downloader.cancel() for entity {entity_id}")
+                            except Exception as e:
+                                logger.debug(f"downloader cancel error: {e}")
                         entity.cancel = True
                         entity.ffmpeg_status_kor = "취소"
                         entity.refresh_status()
