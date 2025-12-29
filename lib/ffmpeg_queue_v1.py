@@ -258,10 +258,10 @@ class FfmpegQueue(object):
                     # 다운로드 방법 설정 확인
                     download_method = P.ModelSetting.get(f"{self.name}_download_method")
                     
-                    # cdndania.com 감지 시 YtdlpDownloader 사용 (CDN 세션 쿠키 + Impersonate로 보안 우회)
+                    # cdndania.com 감지 시 CdndaniaDownloader 사용 (curl_cffi로 세션 기반 보안 우회)
                     if 'cdndania.com' in video_url:
-                        logger.info("Detected cdndania.com URL - forcing YtdlpDownloader with cookies (CDN security bypass)")
-                        download_method = "ytdlp"
+                        logger.info("Detected cdndania.com URL - using CdndaniaDownloader (curl_cffi session)")
+                        download_method = "cdndania"
                     
                     logger.info(f"Download method: {download_method}")
 
@@ -283,7 +283,24 @@ class FfmpegQueue(object):
                             entity_ref.download_time = elapsed
                             entity_ref.refresh_status()
                         
-                        if method == "ytdlp":
+                        if method == "cdndania":
+                            # cdndania.com 전용 다운로더 사용 (curl_cffi 세션 기반)
+                            from .cdndania_downloader import CdndaniaDownloader
+                            logger.info("Using CdndaniaDownloader (curl_cffi session-based)...")
+                            # 엔티티에서 원본 iframe_src 가져오기
+                            _iframe_src = getattr(entity_ref, 'iframe_src', None)
+                            if not _iframe_src:
+                                # 폴백: headers의 Referer에서 가져오기
+                                _iframe_src = getattr(entity_ref, 'headers', {}).get('Referer', video_url)
+                            logger.info(f"CdndaniaDownloader iframe_src: {_iframe_src}")
+                            downloader = CdndaniaDownloader(
+                                iframe_src=_iframe_src,
+                                output_path=output_file_ref,
+                                referer_url="https://ani.ohli24.com/",
+                                callback=progress_callback,
+                                proxy=_proxy
+                            )
+                        elif method == "ytdlp":
                             # yt-dlp 사용
                             from .ytdlp_downloader import YtdlpDownloader
                             logger.info("Using yt-dlp downloader...")

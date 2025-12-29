@@ -979,7 +979,7 @@ class LogicOhli24(PluginModuleBase):
         for en in self.queue.entity_list:
             if en.info["_id"] == info["_id"]:
                 return True
-        # return False
+        return False
 
     def callback_function(self, **args):
         logger.debug("callback_function============")
@@ -1207,6 +1207,7 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
             self.url = video_url
             self.srt_url = vtt_url
             self.cookies_file = cookies_file  # yt-dlp용 세션 쿠키 파일
+            self.iframe_src = iframe_src  # CdndaniaDownloader용 원본 iframe URL
             logger.info(f"Video URL: {self.url}")
             if self.srt_url:
                 logger.info(f"Subtitle URL: {self.srt_url}")
