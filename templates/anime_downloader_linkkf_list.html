@@ -141,4 +141,44 @@ function make_list(data) {
 
 
 </script>    
+<style>
+    /* Navigation Menu Override */
+    ul.nav.nav-pills.bg-light {
+        background-color: rgba(30, 41, 59, 0.6) !important;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 50rem !important;
+        padding: 6px !important;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2) !important;
+        display: inline-flex !important;
+        flex-wrap: wrap;
+        justify-content: center;
+        width: auto !important;
+        margin-bottom: 20px;
+    }
+
+    ul.nav.nav-pills .nav-item {
+        margin: 0 2px;
+    }
+
+    ul.nav.nav-pills .nav-link {
+        border-radius: 50rem !important;
+        padding: 8px 20px !important;
+        color: #94a3b8 !important;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+
+    ul.nav.nav-pills .nav-link:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+        color: #fff !important;
+        transform: translateY(-1px);
+    }
+
+    ul.nav.nav-pills .nav-link.active {
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+        color: #fff !important;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+    }
+</style>
 {% endblock %}
