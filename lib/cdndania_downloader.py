@@ -20,14 +20,16 @@ logger = logging.getLogger(__name__)
 class CdndaniaDownloader:
     """cdndania.com 전용 다운로더 (세션 기반 보안 우회)"""
     
-    def __init__(self, iframe_src, output_path, referer_url=None, callback=None, proxy=None, threads=16):
+    def __init__(self, iframe_src, output_path, referer_url=None, callback=None, proxy=None, threads=16, on_download_finished=None):
         self.iframe_src = iframe_src  # cdndania.com 플레이어 iframe URL
         self.output_path = output_path
         self.referer_url = referer_url or "https://ani.ohli24.com/"
         self.callback = callback
         self.proxy = proxy
         self.threads = threads
+        self.on_download_finished = on_download_finished
         self.cancelled = False
+        self.released = False  # 조기 반환 여부
         
         # 진행 상황 추적
         self.start_time = None
@@ -92,6 +94,13 @@ class CdndaniaDownloader:
                                 content = f.read().strip()
                                 if content:
                                     progress = json.loads(content)
+                                    # 조기 반환 체크 (merging 상태이면 네트워크 완료로 간주)
+                                    status = progress.get('status', 'downloading')
+                                    if status == 'merging' and not self.released:
+                                        if self.on_download_finished:
+                                            self.on_download_finished()
+                                        self.released = True
+                                        
                                     if self.callback and progress.get('percent', 0) > 0:
                                         self.callback(
                                             percent=progress.get('percent', 0),
@@ -164,17 +173,21 @@ def _download_worker(iframe_src, output_path, referer_url, proxy, progress_path,
     )
     log = logging.getLogger(__name__)
     
-    def update_progress(percent, current, total, speed, elapsed):
+    def update_progress(percent, current, total, speed, elapsed, status=None):
         """진행 상황을 파일에 저장"""
         try:
+            data = {
+                'percent': percent,
+                'current': current,
+                'total': total,
+                'speed': speed,
+                'elapsed': elapsed
+            }
+            if status:
+                data['status'] = status
+            
             with open(progress_path, 'w') as f:
-                json.dump({
-                    'percent': percent,
-                    'current': current,
-                    'total': total,
-                    'speed': speed,
-                    'elapsed': elapsed
-                }, f)
+                json.dump(data, f)
         except:
             pass
     
@@ -350,7 +363,8 @@ def _download_worker(iframe_src, output_path, referer_url, proxy, progress_path,
             total_segments = len(segments)
             
             log.info(f"Temp directory: {temp_dir}")
-            log.info(f"Starting parallel download with {threads} threads for {total_segments} segments...")
+            # 다운로드 worker
+            log.info(f"Starting optimized download: Binary Merge Mode (Threads: {threads})")
             
             # 세그먼트 다운로드 함수
             def download_segment(index, url):
@@ -421,6 +435,9 @@ def _download_worker(iframe_src, output_path, referer_url, proxy, progress_path,
                 sys.exit(1)
             
             log.info("All segments downloaded successfully.")
+            
+            # 조기 반환 신호 (merging 상태 기록)
+            update_progress(100, total_segments, total_segments, "", "", status="merging")
             
             # 7. ffmpeg로 합치기
             log.info("Concatenating segments with ffmpeg...")

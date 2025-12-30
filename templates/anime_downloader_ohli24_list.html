@@ -2,58 +2,52 @@
 {% block content %}
 
     <div class="content-cloak">
-        <form id="form_search" class="form-inline" style="text-align:left">
-            <div class="container-fluid">
-                <div class="row show-grid">
-        <span class="col-md-4">
-          <select id="order" name="order" class="form-control form-control-sm">
-            <option value="desc">최근순</option>
-            <option value="asc">오래된 순</option>
-          </select>
-          <select id="option" name="option" class="form-control form-control-sm">
-            <option value="all">전체</option>
-            <option value="completed">완료</option>
-          </select>
-        </span>
-                    <span class="col-md-8">
-          <input id="search_word" name="search_word" class="form-control form-control-sm w-75" type="text"
-                 placeholder="" aria-label="Search">
-          <button id="search" class="btn btn-sm btn-outline-success">검색</button>
-          <button id="reset_btn" class="btn btn-sm btn-outline-success">리셋</button>
-        </span>
+        <form id="form_search" class="form-inline" style="text-align:left; width:100%;">
+            <div class="search-container">
+                <div class="search-group-left">
+                     <select id="order" name="order" class="form-control custom-select">
+                        <option value="desc">최근순</option>
+                        <option value="asc">오래된 순</option>
+                      </select>
+                      <select id="option" name="option" class="form-control custom-select">
+                        <option value="all">전체</option>
+                        <option value="completed">완료</option>
+                      </select>
+                </div>
+                <div class="search-group-right">
+                      <input id="search_word" name="search_word" class="form-control custom-input" type="text" placeholder="검색어를 입력하세요..." aria-label="Search">
+                      <button id="search" class="btn custom-btn btn-search"><i class="fa fa-search"></i></button>
+                      <button id="reset_btn" class="btn custom-btn btn-reset"><i class="fa fa-refresh"></i></button>
                 </div>
             </div>
         </form>
         <div id='page1'></div>
-        {{ macros.m_hr_head_top() }}
-        {{ macros.m_row_start('0') }}
-        {{ macros.m_col(2,  macros.m_strong('Poster')) }}
-        {{ macros.m_col(10,  macros.m_strong('Info')) }}
-        {{ macros.m_row_end() }}
-        {{ macros.m_hr_head_bottom() }}
+        {# {{ macros.m_hr_head_top() }} #}
+        {# {{ macros.m_row_start('0') }} #}
+        {# {{ macros.m_col(2,  macros.m_strong('Poster')) }} #}
+        {# {{ macros.m_col(10,  macros.m_strong('Info')) }} #}
+        {# {{ macros.m_row_end() }} #}
+        {# {{ macros.m_hr_head_bottom() }} #}
         <div id="list_div"></div>
         <div id='page2'></div>
     </div>
 
-    {#    <script src="{{ url_for('.static', filename='js/sjva_global1.js') }}"></script>#}
-    {#    <script src="{{ url_for('.static', filename='js/sjva_ui14.js') }}"></script>#}
+    <script src="{{ url_for('.static', filename='js/sjva_global1.js') }}"></script>
+    <script src="{{ url_for('.static', filename='js/sjva_ui14.js') }}"></script>
     <script type="text/javascript">
         var package_name = "{{arg['package_name']}}";
         var sub = "{{arg['sub']}}";
         var current_data = null;
 
         $(document).ready(function () {
-            {#global_sub_request_search('1');#}
-            console.log('ready')
-            globalRequestSearchTest('1');
+            global_sub_request_search('1');
         });
 
-        function globalRequestSearchTest(page, move_top = true) {
+        function global_sub_request_search(page, move_top = true) {
             console.log('........................')
             var formData = getFormdata('#form_search')
             formData += '&page=' + page;
             $.ajax({
-                {#url: '/' + PACKAGE_NAME + '/ajax/' + MODULE_NAME + '/web_list2',#}
                 url: '/' + package_name + '/ajax/' + sub + '/web_list3',
                 type: "POST",
                 cache: false,
@@ -62,10 +56,11 @@
                 success: function (data) {
                     console.log(data)
                     current_data = data;
-                    {#if (move_top)#}
-                    {#  window.scrollTo(0,0);#}
-                    {#make_list(data.list)#}
-                    {#make_page_html(data.paging)#}
+                    if (move_top) {
+                         window.scrollTo(0,0);
+                    }
+                    make_list(data.list);
+                    make_page_html(data.paging);
                 }
             });
         }
@@ -107,7 +102,7 @@
             global_sub_request_search('1')
         });
 
-        $("body").on('click', '#remove_btn', function (e) {
+        $("body").on('click', '.btn-remove', function (e) {
             e.preventDefault();
             id = $(this).data('id');
             $.ajax({
@@ -131,35 +126,104 @@
             });
         });
 
-        $("body").on('click', '#request_btn', function (e) {
+        $("body").on('click', '.btn-request', function (e) {
             e.preventDefault();
             var content_code = $(this).data('content_code');
             $(location).attr('href', '/' + package_name + '/' + sub + '/request?content_code=' + content_code)
         });
 
+        $("body").on('click', '.btn-json', function (e) {
+            e.preventDefault();
+            var id = $(this).data('id');
+            for (i in current_data.list) {
+                if (current_data.list[i].id == id) {
+                    m_modal(current_data.list[i])
+                }
+            }
+        });
+
+        $("body").on('click', '.btn-self-search', function (e) {
+            e.preventDefault();
+            var search_word = $(this).data('title');
+            document.getElementById("search_word").value = search_word;
+            global_sub_request_search('1')
+        });
+
 
         function make_list(data) {
-            //console.log(data)
-            str = '';
-            for (i in data) {
-                //console.log(data[i])
-                str += m_row_start();
-                str += m_col(1, data[i].id);
-                tmp = (data[i].status == 'completed') ? '완료' : '미완료';
-                str += m_col(1, tmp);
-                tmp = data[i].created_time + '(추가)';
-                if (data[i].completed_time != null)
-                    tmp += data[i].completed_time + '(완료)';
-                str += m_col(3, tmp)
-                tmp = data[i].savepath + '<br>' + data[i].filename + '<br><br>';
-                tmp2 = m_button('json_btn', 'JSON', [{'key': 'id', 'value': data[i].id}]);
-                tmp2 += m_button('request_btn', '작품 검색', [{'key': 'content_code', 'value': data[i].content_code}]);
-                tmp2 += m_button('self_search_btn', '목록 검색', [{'key': 'title', 'value': data[i].title}]);
-                tmp2 += m_button('remove_btn', '삭제', [{'key': 'id', 'value': data[i].id}]);
-                tmp += m_button_group(tmp2)
-                str += m_col(7, tmp)
-                str += m_row_end();
-                if (i != data.length - 1) str += m_hr();
+            let str = '';
+            for (let i in data) {
+                const item = data[i];
+                const statusClass = (item.status == 'completed') ? 'status-completed' : 
+                                  (item.status == 'downloading') ? 'status-downloading' : 
+                                  (item.status == 'failed') ? 'status-failed' : 'status-wait';
+                const statusText = (item.status == 'completed') ? 'COMPLETED' : 
+                                 (item.status == 'downloading') ? 'DOWNLOADING' : 
+                                 (item.status == 'failed') ? 'FAIL' : 'WAITING';
+                
+                // Thumbnail
+                let imgHtml = '';
+                if (item.thumbnail) {
+                    imgHtml = `<img src="${item.thumbnail}" onerror="this.src='https://via.placeholder.com/60x80?text=No+Img'">`;
+                } else {
+                    imgHtml = `<img src="https://via.placeholder.com/60x80?text=No+Img">`;
+                }
+
+                // Date
+                let createdDate = item.created_time ? item.created_time.split(' ')[0] : '';
+                let completedDate = item.completed_time ? item.completed_time.split(' ')[0] : '';
+                let dateHtml = `<span class="meta-tag" title="요청일: ${item.created_time}"><i class="fa fa-clock-o"></i> ${createdDate}</span>`;
+                if (completedDate) {
+                    dateHtml += `<span class="meta-tag" title="완료일: ${item.completed_time}"><i class="fa fa-check-circle"></i> ${completedDate}</span>`;
+                }
+
+                // Subtitle Line
+                let subtitleHtml = '';
+                if (item.episode_title) {
+                     subtitleHtml = `<div class="episode-subtitle text-muted">${item.episode_title}</div>`;
+                }
+
+                str += `
+                <div class="episode-card">
+                    <div class="episode-card-body">
+                        <!-- Left: Thumb -->
+                        <div class="episode-thumb">${imgHtml}</div>
+                        
+                        <!-- Center: Main Info -->
+                        <div class="episode-main-info">
+                            <div class="episode-title" title="${item.title}">${item.title}</div>
+                            ${subtitleHtml}
+                            <div class="episode-meta">
+                                <span class="status-badge ${statusClass}">${statusText}</span>
+                                <span class="meta-tag">S${item.season}</span>
+                                <span class="meta-tag">E${item.episode_no}</span>
+                            </div>
+                            <div class="file-path" title="${item.savepath}/${item.filename}">
+                                <i class="fa fa-folder-open-o"></i> ${item.filename}
+                            </div>
+                        </div>
+
+                        <!-- Right: Date & Actions -->
+                        <div class="episode-right-col">
+                            <div class="date-info">${dateHtml}</div>
+                            <div class="episode-actions">
+                                <button data-content_code="${item.content_code}" class="btn btn-outline-info btn-request">
+                                    <i class="fa fa-search"></i> 작품보기
+                                </button>
+                                <button data-title="${item.title}" class="btn btn-outline-secondary btn-self-search">
+                                    <i class="fa fa-list"></i> 목록검색
+                                </button>
+                                <button data-id="${item.id}" class="btn btn-outline-dark btn-json">
+                                    <i class="fa fa-code"></i> JSON
+                                </button>
+                                <button data-id="${item.id}" class="btn btn-outline-danger btn-remove">
+                                    <i class="fa fa-trash"></i> 삭제
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                `;
             }
             document.getElementById("list_div").innerHTML = str;
         }
@@ -265,6 +329,311 @@
         color: #fff !important;
         box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
     }
+
+    /* General Layout Tweaks */
+    .container-fluid {
+        padding-left: 10px !important;
+        padding-right: 10px !important; 
+        max-width: 1600px;
+        margin: 0 auto;
+    }
+    
+    .content-cloak {
+        padding-top: 10px;
+    }
+
+    /* Search Bar Design */
+    .search-container {
+        background: rgba(30, 41, 59, 0.7);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        padding: 10px;
+        margin-bottom: 20px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+
+    .search-group-left {
+        display: flex;
+        gap: 8px;
+        flex: 0 0 auto;
+    }
+
+    .search-group-right {
+        display: flex;
+        gap: 8px;
+        flex: 1;
+    }
+
+    /* Custom Form Controls */
+    .custom-select, .custom-input {
+        background-color: rgba(15, 23, 42, 0.6) !important;
+        border: 1px solid rgba(148, 163, 184, 0.2) !important;
+        color: #e2e8f0 !important;
+        border-radius: 8px !important;
+        padding: 6px 12px !important;
+        height: 38px !important;
+        font-size: 13px !important;
+        transition: all 0.2s;
+    }
+    
+    .custom-select:focus, .custom-input:focus {
+        border-color: #3b82f6 !important;
+        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
+        outline: none;
+    }
+
+    .custom-btn {
+        border-radius: 8px !important;
+        padding: 0 16px !important;
+        height: 38px !important;
+        font-weight: 600 !important;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.2s;
+        border: none !important;
+    }
+
+    .btn-search {
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        color: white !important;
+    }
+    .btn-search:hover { box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3); transform: translateY(-1px); }
+
+    .btn-reset {
+        background: rgba(148, 163, 184, 0.1);
+        color: #94a3b8 !important;
+    }
+    .btn-reset:hover { background: rgba(148, 163, 184, 0.2); color: white !important; }
+
+    /* List Container - List View */
+    #list_div {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 0 5px;
+        width: 100%;
+    }
+
+    /* Episode Card Style */
+    .episode-card {
+        display: flex;
+        flex-direction: column;
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.85) 0%, rgba(15, 23, 42, 0.85) 100%);
+        border-radius: 12px;
+        border: 1px solid rgba(148, 163, 184, 0.12);
+        overflow: hidden;
+        transition: all 0.2s ease;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        position: relative;
+    }
+
+    .episode-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        border-color: rgba(96, 165, 250, 0.4);
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%);
+        z-index: 10;
+    }
+    
+    .episode-card-body {
+        padding: 10px;
+        display: flex;
+        flex-direction: row; /* Mobile Default: Row for proper structure */
+        flex-wrap: wrap; /* Allow wrapping on small mobile */
+        width: 100%;
+    }
+
+    /* Inner Components */
+    .episode-thumb {
+        width: 60px;
+        height: 80px;
+        flex-shrink: 0;
+        margin-right: 12px;
+        border-radius: 8px;
+        overflow: hidden;
+        background-color: #1e293b;
+    }
+
+    .episode-thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    
+    .episode-main-info {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+
+    .episode-title {
+        color: #f1f5f9;
+        font-weight: 600;
+        font-size: 14px;
+        line-height: 1.4;
+        margin-bottom: 2px;
+        word-break: break-all;
+    }
+    
+    .episode-subtitle {
+        font-size: 12px;
+        color: #94a3b8;
+        margin-bottom: 4px;
+        line-height: 1.3;
+        display: block;
+    }
+
+    .episode-meta {
+        font-size: 11px;
+        color: #94a3b8;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: center;
+        margin-bottom: 4px;
+    }
+
+    .meta-tag {
+        background: rgba(148, 163, 184, 0.1);
+        padding: 1px 5px;
+        border-radius: 4px;
+        color: #cbd5e1;
+    }
+    
+    .status-badge {
+        font-size: 10px;
+        font-weight: 700;
+        padding: 2px 5px;
+        border-radius: 4px;
+        text-transform: uppercase;
+        min-width: 60px;
+        text-align: center;
+    }
+    .status-completed { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+    .status-wait { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+    .status-downloading { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+    .status-failed { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+
+    .file-path {
+        font-size: 11px;
+        color: #64748b;
+        word-break: break-all;
+        margin-top: 2px;
+        display: block;
+    }
+
+    /* Right Column (Mobile) */
+    .episode-right-col {
+        width: 100%;
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .date-info {
+        font-size: 11px;
+        color: #94a3b8;
+        display: flex;
+        gap: 10px;
+    }
+
+    .episode-actions {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 5px;
+    }
+
+    .episode-actions .btn {
+        font-size: 11px !important;
+        padding: 4px 8px !important;
+        white-space: nowrap;
+        width: 100%;
+    }
+    
+    /* Desktop List View Transformation */
+    @media (min-width: 768px) {
+        .episode-card {
+            flex-direction: row;
+            align-items: center;
+            padding: 10px;
+            min-height: 80px;
+        }
+
+        .episode-card-body {
+            flex-wrap: nowrap;
+            align-items: stretch;
+            padding: 0;
+            width: 100%;
+        }
+
+        .episode-thumb {
+            margin-right: 15px;
+            margin-bottom: 0;
+        }
+
+        .episode-main-info {
+            margin-bottom: 0;
+            justify-content: center;
+        }
+        
+        .episode-title {
+            font-size: 15px;
+            word-break: keep-all; 
+        }
+
+        .episode-right-col {
+            width: auto;
+            margin-top: 0;
+            padding-top: 0;
+            border-top: none;
+            margin-left: auto; /* Push to right */
+            align-items: flex-end;
+            justify-content: center;
+            min-width: 220px;
+        }
+        
+        .date-info {
+             justify-content: flex-end;
+             margin-bottom: 5px;
+             order: -1; 
+        }
+
+        .episode-actions {
+            display: flex;
+            flex-direction: row;
+            gap: 5px;
+        }
+        
+        .episode-actions .btn {
+            width: auto;
+        }
+
+         .episode-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+    }
+
+    /* Hide Original Headers */
+    .show-grid { margin-bottom: 20px; }
+    .container-fluid > div:nth-child(3), /* Head Top HR */
+    .container-fluid > div:nth-child(4), /* Headers Row */
+    .container-fluid > div:nth-child(5)  /* Head Bottom HR */ 
+    {
+        display: none !important;
+    }
 </style>
 
 <script type="text/javascript">
@@ -275,4 +644,59 @@ $(document).ready(function(){
   }, 100);
 });
 </script>
+<style>
+/* Mobile Margin Fix */
+@media (max-width: 768px) {
+    body { overflow-x: hidden !important; padding: 0 !important; margin: 0 !important; }
+    .container, .container-fluid, .row, form, #program_list, #program_auto_form, #episode_list, .queue-container, #yommi_wrapper, #main_container {
+        width: 100% !important; max-width: 100% !important;
+        padding-left: 4px !important; padding-right: 4px !important;
+        margin-left: 0 !important; margin-right: 0 !important;
+        box-sizing: border-box !important;
+    }
+    .form-group, .form-inline, [class*="col-"] {
+        flex: 0 0 100% !important; max-width: 100% !important; width: 100% !important;
+        padding-left: 0 !important; padding-right: 0 !important;
+    }
+    .row { margin-left: 0 !important; margin-right: 0 !important; }
+    .card, .card.p-4, .card.p-lg-5, .card.border-light {
+         width: calc(100% - 8px) !important; max-width: 100% !important;
+         padding: 8px !important; margin: 4px !important;
+         border-radius: 12px !important; box-sizing: border-box !important;
+    }
+    .badge {
+        white-space: normal !important; text-align: left !important;
+        line-height: 1.4 !important; height: auto !important; display: inline-block !important;
+    }
+}
+    /* Pagination Styling */
+    .btn-toolbar {
+        justify-content: center;
+        margin: 20px 0;
+    }
+
+    #page1 .btn-group .btn, #page2 .btn-group .btn {
+        background: rgba(30, 41, 59, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: #94a3b8;
+        padding: 6px 14px;
+        margin: 0 2px;
+        border-radius: 6px;
+        transition: all 0.2s;
+    }
+
+    #page1 .btn-group .btn:hover, #page2 .btn-group .btn:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: white;
+        transform: translateY(-1px);
+    }
+
+    #page1 .btn-group .btn[disabled], #page2 .btn-group .btn[disabled] {
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        color: white;
+        border-color: transparent;
+        opacity: 1;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+    }
+</style>
 {% endblock %}

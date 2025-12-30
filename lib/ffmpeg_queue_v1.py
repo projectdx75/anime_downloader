@@ -265,8 +265,8 @@ class FfmpegQueue(object):
                     # [주의] cdndania는 yt-dlp로 받으면 14B 가짜 파일(보안 차단)이 받아지므로
                     # aria2c 선택 여부와 무관하게 전용 다운로더(CdndaniaDownloader)를 써야 함.
                     # 대신 CdndaniaDownloader 내부에 멀티스레드(16)를 구현하여 속도를 해결함.
-                    if 'cdndania.com' in video_url:
-                        logger.info(f"Detected cdndania.com URL - using Optimized CdndaniaDownloader (curl_cffi + {download_threads} threads)")
+                    if getattr(entity, 'need_special_downloader', False) or 'cdndania.com' in video_url or 'michealcdn.com' in video_url:
+                        logger.info(f"Detected special CDN requirement (flag={getattr(entity, 'need_special_downloader', False)}) - using Optimized CdndaniaDownloader")
                         download_method = "cdndania"
                     
                     logger.info(f"Download method: {download_method}")
@@ -298,6 +298,14 @@ class FfmpegQueue(object):
                             if not _iframe_src:
                                 # 폴백: headers의 Referer에서 가져오기
                                 _iframe_src = getattr(entity_ref, 'headers', {}).get('Referer', video_url)
+                            # 슬롯 조기 반환을 위한 콜백
+                            slot_released = [False]
+                            def release_slot():
+                                if not slot_released[0]:
+                                    downloader_self.current_ffmpeg_count -= 1
+                                    slot_released[0] = True
+                                    logger.info(f"Download slot released early (Network finished), current_ffmpeg_count: {downloader_self.current_ffmpeg_count}/{downloader_self.max_ffmpeg_count}")
+
                             logger.info(f"CdndaniaDownloader iframe_src: {_iframe_src}")
                             downloader = CdndaniaDownloader(
                                 iframe_src=_iframe_src,
@@ -305,10 +313,13 @@ class FfmpegQueue(object):
                                 referer_url="https://ani.ohli24.com/",
                                 callback=progress_callback,
                                 proxy=_proxy,
-                                threads=download_threads
+                                threads=download_threads,
+                                on_download_finished=release_slot  # 조기 반환 콜백 전달
                             )
                         elif method == "ytdlp" or method == "aria2c":
                             # yt-dlp 사용 (aria2c 옵션 포함)
+                            # yt-dlp는 내부적으로 병합 과정을 포함하므로 조기 반환이 어려울 수 있음 (추후 지원 고려)
+                            slot_released = [False]
                             from .ytdlp_downloader import YtdlpDownloader
                             logger.info(f"Using yt-dlp downloader (method={method})...")
                             # 엔티티에서 쿠키 파일 가져오기 (있는 경우)
@@ -323,8 +334,8 @@ class FfmpegQueue(object):
                                 use_aria2c=(method == "aria2c"),
                                 threads=download_threads
                             )
-
                         else:
+                            slot_released = [False]
                             # 기본: HLS 다운로더 사용
                             from .hls_downloader import HlsDownloader
                             logger.info("Using custom HLS downloader for m3u8 URL...")
@@ -344,14 +355,16 @@ class FfmpegQueue(object):
                             downloader.cancel()
                             entity_ref.ffmpeg_status_kor = "취소됨"
                             entity_ref.refresh_status()
-                            downloader_self.current_ffmpeg_count -= 1
+                            if not slot_released[0]:
+                                downloader_self.current_ffmpeg_count -= 1
                             return
                         
                         success, message = downloader.download()
                         
-                        # 다운로드 완료 후 카운트 감소
-                        downloader_self.current_ffmpeg_count -= 1
-                        logger.info(f"Download finished, current_ffmpeg_count: {downloader_self.current_ffmpeg_count}/{downloader_self.max_ffmpeg_count}")
+                        # 다운로드 완료 후 카운트 감소 (이미 반환되었으면 스킵)
+                        if not slot_released[0]:
+                            downloader_self.current_ffmpeg_count -= 1
+                            logger.info(f"Download finished (Slot released normally), current_ffmpeg_count: {downloader_self.current_ffmpeg_count}/{downloader_self.max_ffmpeg_count}")
                         
                         if success:
                             entity_ref.ffmpeg_status = 7  # COMPLETED

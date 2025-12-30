@@ -66,11 +66,23 @@ class LogicOhli24(PluginModuleBase):
     origin_url = None
     episode_url = None
     cookies = None
-    proxy = "http://192.168.0.2:3138"
-    proxies = {
-        "http": proxy,
-        "https": proxy,
-    }
+    
+    # proxy = "http://192.168.0.2:3138"
+    # proxies = {
+    #     "http": proxy,
+    #     "https": proxy,
+    # }
+
+    @classmethod
+    def get_proxy(cls):
+        return P.ModelSetting.get("ohli24_proxy_url")
+
+    @classmethod
+    def get_proxies(cls):
+        proxy = cls.get_proxy()
+        if proxy:
+            return {"http": proxy, "https": proxy}
+        return None
 
     session = requests.Session()
 
@@ -98,6 +110,7 @@ class LogicOhli24(PluginModuleBase):
 
         self.db_default = {
             "ohli24_db_version": "1",
+            "ohli24_proxy_url": "",
             "ohli24_url": "https://ani.ohli24.com",
             "ohli24_download_path": os.path.join(path_data, P.package_name, "ohli24"),
             "ohli24_auto_make_folder": "True",
@@ -252,8 +265,7 @@ class LogicOhli24(PluginModuleBase):
                 P.logger.debug("web_list3")
                 ret = ModelOhli24Item.web_list(req)
                 print(ret)
-                # return jsonify("test")
-                # return jsonify(ModelOhli24Item.web_list(req))
+                return jsonify(ret)
 
             elif sub == "web_list2":
 
@@ -845,7 +857,7 @@ class LogicOhli24(PluginModuleBase):
 
     @staticmethod
     def get_html(url, headers=None, referer=None, stream=False, timeout=60, stealth=False, data=None, method='GET'):
-        """별도 스레드에서 cloudscraper 실행하여 gevent SSL 충돌 및 Cloudflare 우회"""
+        """별도 스레드에서 curl_cffi 실행하여 gevent SSL 충돌 및 Cloudflare 우회"""
         from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
         import time
         from urllib import parse
@@ -861,32 +873,34 @@ class LogicOhli24(PluginModuleBase):
             except:
                 pass
 
-        def fetch_url_with_cloudscraper(url, headers, timeout, data, method):
-            """별도 스레드에서 cloudscraper로 실행"""
-            import cloudscraper
-            scraper = cloudscraper.create_scraper(
-                browser={'browser': 'chrome', 'platform': 'darwin', 'mobile': False},
-                delay=10
-            )
-            # 프록시 설정 (필요시 사용)
-            proxies = LogicOhli24.proxies
-            if method.upper() == 'POST':
-                response = scraper.post(url, headers=headers, data=data, timeout=timeout, proxies=proxies)
-            else:
-                response = scraper.get(url, headers=headers, timeout=timeout, proxies=proxies)
-            return response.text
+        def fetch_url_with_cffi(url, headers, timeout, data, method):
+            """별도 스레드에서 curl_cffi로 실행"""
+            from curl_cffi import requests
+            
+            # 프록시 설정
+            proxies = LogicOhli24.get_proxies()
+            
+            with requests.Session(impersonate="chrome120") as session:
+                # 헤더 설정
+                if headers:
+                    session.headers.update(headers)
+                
+                if method.upper() == 'POST':
+                    response = session.post(url, data=data, timeout=timeout, proxies=proxies)
+                else:
+                    response = session.get(url, timeout=timeout, proxies=proxies)
+                return response.text
         
         response_data = ""
         
         if headers is None:
             headers = {
-                "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-                "accept-language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
             }
         
         if referer:
-            # Referer 인코딩
             if '://' in referer:
                 try:
                     scheme, netloc, path, params, query, fragment = parse.urlparse(referer)
@@ -895,18 +909,18 @@ class LogicOhli24(PluginModuleBase):
                     referer = parse.urlunparse((scheme, netloc, path, params, query, fragment))
                 except:
                     pass
-            headers["referer"] = referer
-        elif "referer" not in headers:
-            headers["referer"] = "https://ani.ohli24.com"
+            headers["Referer"] = referer
+        elif "Referer" not in headers and "referer" not in headers:
+            headers["Referer"] = "https://ani.ohli24.com"
         
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                logger.debug(f"get_html (cloudscraper in thread) {method} attempt {attempt + 1}: {url}")
+                logger.debug(f"get_html (curl_cffi in thread) {method} attempt {attempt + 1}: {url}")
                 
-                # ThreadPoolExecutor로 별도 스레드에서 cloudscraper 실행
+                # ThreadPoolExecutor로 별도 스레드에서 실행
                 with ThreadPoolExecutor(max_workers=1) as executor:
-                    future = executor.submit(fetch_url_with_cloudscraper, url, headers, timeout, data, method)
+                    future = executor.submit(fetch_url_with_cffi, url, headers, timeout, data, method)
                     response_data = future.result(timeout=timeout + 10)
                 
                 if response_data and (len(response_data) > 10 or method.upper() == 'POST'):
@@ -983,8 +997,10 @@ class LogicOhli24(PluginModuleBase):
         return False
 
     def callback_function(self, **args):
-        logger.debug("callback_function============")
-        logger.debug(args)
+        logger.debug(f"callback_function invoked with args: {args}")
+        if 'status' in args:
+            logger.debug(f"Status: {args['status']}")
+            
         refresh_type = None
         if args["type"] == "status_change":
             if args["status"] == SupportFfmpeg.Status.DOWNLOADING:
@@ -1003,11 +1019,15 @@ class LogicOhli24(PluginModuleBase):
                 # socketio.emit("notify", data, namespace='/framework', broadcast=True)
                 refresh_type = "add"
         elif args["type"] == "last":
+            entity = self.queue.get_entity_by_entity_id(args['data']['callback_id'])
+            
             if args["status"] == SupportFfmpeg.Status.WRONG_URL:
+                if entity: entity.download_failed("WRONG_URL")
                 data = {"type": "warning", "msg": "잘못된 URL입니다"}
                 socketio.emit("notify", data, namespace="/framework", broadcast=True)
                 refresh_type = "add"
             elif args["status"] == SupportFfmpeg.Status.WRONG_DIRECTORY:
+                if entity: entity.download_failed("WRONG_DIRECTORY")
                 data = {
                     "type": "warning",
                     "msg": "잘못된 디렉토리입니다.<br>" + args["data"]["save_fullpath"],
@@ -1015,6 +1035,7 @@ class LogicOhli24(PluginModuleBase):
                 socketio.emit("notify", data, namespace="/framework", broadcast=True)
                 refresh_type = "add"
             elif args["status"] == SupportFfmpeg.Status.ERROR or args["status"] == SupportFfmpeg.Status.EXCEPTION:
+                if entity: entity.download_failed("ERROR/EXCEPTION")
                 data = {
                     "type": "warning",
                     "msg": "다운로드 시작 실패.<br>" + args["data"]["save_fullpath"],
@@ -1022,6 +1043,7 @@ class LogicOhli24(PluginModuleBase):
                 socketio.emit("notify", data, namespace="/framework", broadcast=True)
                 refresh_type = "add"
             elif args["status"] == SupportFfmpeg.Status.USER_STOP:
+                if entity: entity.download_failed("USER_STOP")
                 data = {
                     "type": "warning",
                     "msg": "다운로드가 중지 되었습니다.<br>" + args["data"]["save_fullpath"],
@@ -1041,6 +1063,7 @@ class LogicOhli24(PluginModuleBase):
 
                 refresh_type = "last"
             elif args["status"] == SupportFfmpeg.Status.TIME_OVER:
+                if entity: entity.download_failed("TIME_OVER")
                 data = {
                     "type": "warning",
                     "msg": "시간초과로 중단 되었습니다.<br>" + args["data"]["save_fullpath"],
@@ -1049,6 +1072,7 @@ class LogicOhli24(PluginModuleBase):
                 socketio.emit("notify", data, namespace="/framework", broadcast=True)
                 refresh_type = "last"
             elif args["status"] == SupportFfmpeg.Status.PF_STOP:
+                if entity: entity.download_failed("PF_STOP")
                 data = {
                     "type": "warning",
                     "msg": "PF초과로 중단 되었습니다.<br>" + args["data"]["save_fullpath"],
@@ -1057,6 +1081,7 @@ class LogicOhli24(PluginModuleBase):
                 socketio.emit("notify", data, namespace="/framework", broadcast=True)
                 refresh_type = "last"
             elif args["status"] == SupportFfmpeg.Status.FORCE_STOP:
+                if entity: entity.download_failed("FORCE_STOP")
                 data = {
                     "type": "warning",
                     "msg": "강제 중단 되었습니다.<br>" + args["data"]["save_fullpath"],
@@ -1065,6 +1090,7 @@ class LogicOhli24(PluginModuleBase):
                 socketio.emit("notify", data, namespace="/framework", broadcast=True)
                 refresh_type = "last"
             elif args["status"] == SupportFfmpeg.Status.HTTP_FORBIDDEN:
+                if entity: entity.download_failed("HTTP_FORBIDDEN")
                 data = {
                     "type": "warning",
                     "msg": "403에러로 중단 되었습니다.<br>" + args["data"]["save_fullpath"],
@@ -1073,6 +1099,8 @@ class LogicOhli24(PluginModuleBase):
                 socketio.emit("notify", data, namespace="/framework", broadcast=True)
                 refresh_type = "last"
             elif args["status"] == SupportFfmpeg.Status.ALREADY_DOWNLOADING:
+                # Already downloading usually means logic error or race condition, maybe not fail DB?
+                # Keeping as is for now unless requested.
                 data = {
                     "type": "warning",
                     "msg": "임시파일폴더에 파일이 있습니다.<br>" + args["data"]["temp_fullpath"],
@@ -1103,11 +1131,17 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
         self.srt_url = None
         self.headers = None
         self.cookies_file = None  # yt-dlp용 CDN 세션 쿠키 파일 경로
+        self.need_special_downloader = False # CDN 보안 우회 다운로더 필요 여부
         # Todo::: 임시 주석 처리
         self.make_episode_info()
 
 
     def refresh_status(self):
+        # ffmpeg_queue_v1.py에서 실패 처리(-1)된 경우 DB 업데이트 트리거
+        if getattr(self, 'ffmpeg_status', 0) == -1:
+             reason = getattr(self, 'ffmpeg_status_kor', 'Unknown Error')
+             self.download_failed(reason)
+            
         self.module_logic.socketio_callback("status", self.as_dict())
         # 추가: /queue 네임스페이스로도 명시적으로 전송
         try:
@@ -1133,7 +1167,14 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
         db_entity = ModelOhli24Item.get_by_ohli24_id(self.info["_id"])
         if db_entity is not None:
             db_entity.status = "completed"
-            db_entity.complated_time = datetime.now()
+            db_entity.completed_time = datetime.now()
+            db_entity.save()
+
+    def download_failed(self, reason):
+        logger.debug(f"download failed.......!! reason: {reason}")
+        db_entity = ModelOhli24Item.get_by_ohli24_id(self.info["_id"])
+        if db_entity is not None:
+            db_entity.status = "failed"
             db_entity.save()
 
     # Get episode info from OHLI24 site
@@ -1154,74 +1195,10 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
             }
             logger.debug(f"make_episode_info()::url==> {url}")
             logger.info(f"self.info:::> {self.info}")
-            
-            # Step 1: 에피소드 페이지에서 cdndania.com iframe 찾기
-            text = LogicOhli24.get_html(url, headers=headers, referer=f"{ourls.scheme}://{ourls.netloc}")
-            
-            # 디버깅: HTML에 cdndania 있는지 확인
-            if "cdndania" in text:
-                logger.info("cdndania found in HTML")
-            else:
-                logger.warning("cdndania NOT found in HTML - page may be dynamically loaded")
-                logger.debug(f"HTML snippet: {text[:1000]}")
-            
-            soup = BeautifulSoup(text, "lxml")
-            
-            # mcpalyer 클래스 내의 iframe 찾기
-            player_div = soup.find("div", class_="mcpalyer")
-            logger.debug(f"player_div (mcpalyer): {player_div is not None}")
-            
-            if not player_div:
-                player_div = soup.find("div", class_="embed-responsive")
-                logger.debug(f"player_div (embed-responsive): {player_div is not None}")
-            
-            iframe = None
-            if player_div:
-                iframe = player_div.find("iframe")
-                logger.debug(f"iframe in player_div: {iframe is not None}")
-            if not iframe:
-                iframe = soup.find("iframe", src=re.compile(r"cdndania\.com"))
-                logger.debug(f"iframe with cdndania src: {iframe is not None}")
-            if not iframe:
-                # 모든 iframe 찾기
-                all_iframes = soup.find_all("iframe")
-                logger.debug(f"Total iframes found: {len(all_iframes)}")
-                for i, f in enumerate(all_iframes):
-                    logger.debug(f"iframe {i}: src={f.get('src', 'no src')}")
-                if all_iframes:
-                    iframe = all_iframes[0]
-            
-            if not iframe or not iframe.get("src"):
-                logger.error("No iframe found on episode page")
-                return
-            
-            iframe_src = iframe.get("src")
-            logger.info(f"Found cdndania iframe: {iframe_src}")
-            
-            # Step 2: cdndania.com 페이지에서 m3u8 URL 추출
-            video_url, vtt_url, cookies_file = self.extract_video_from_cdndania(iframe_src, url)
-            
-            if not video_url:
-                logger.error("Failed to extract video URL from cdndania")
-                return
-            
-            self.url = video_url
-            self.srt_url = vtt_url
-            self.cookies_file = cookies_file  # yt-dlp용 세션 쿠키 파일
-            self.iframe_src = iframe_src  # CdndaniaDownloader용 원본 iframe URL
-            logger.info(f"Video URL: {self.url}")
-            if self.srt_url:
-                logger.info(f"Subtitle URL: {self.srt_url}")
-            if self.cookies_file:
-                logger.info(f"Cookies file: {self.cookies_file}")
-            
-            # 헤더 설정
-            self.headers = {
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Referer": iframe_src,
-            }
 
-            
+            # ------------------------------------------------------------------
+            # [METADATA PARSING] - Extract title, season, epi info first!
+            # ------------------------------------------------------------------
             # 파일명 생성
             match = re.compile(r"(?P<title>.*?)\s*((?P<season>\d+)%s)?\s*((?P<epi_no>\d+)%s)" % ("기", "화")).search(
                 self.info["title"]
@@ -1250,8 +1227,9 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
             self.epi_queue = epi_no
             self.filename = Util.change_text_for_use_filename(ret)
             logger.info(f"self.filename::> {self.filename}")
+            
+            # Savepath 생성
             self.savepath = P.ModelSetting.get("ohli24_download_path")
-            logger.info(f"self.savepath::> {self.savepath}")
             
             if P.ModelSetting.get_bool("ohli24_auto_make_folder"):
                 if self.info["day"].find("완결") != -1:
@@ -1268,8 +1246,82 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
             self.filepath = os.path.join(self.savepath, self.filename)
             if not os.path.exists(self.savepath):
                 os.makedirs(self.savepath)
+            logger.info(f"self.savepath::> {self.savepath}")
+
+
+            # ------------------------------------------------------------------
+            # [VIDEO EXTRACTION]
+            # ------------------------------------------------------------------
+            # Step 1: 에피소드 페이지에서 cdndania.com iframe 찾기
+            text = LogicOhli24.get_html(url, headers=headers, referer=f"{ourls.scheme}://{ourls.netloc}")
             
-            # 자막 다운로드
+            # 디버깅: HTML에 cdndania 있는지 확인
+            if "cdndania" in text:
+                logger.info("cdndania found in HTML")
+            else:
+                logger.warning("cdndania NOT found in HTML - page may be dynamically loaded")
+                # logger.debug(f"HTML snippet: {text[:1000]}")
+            
+            soup = BeautifulSoup(text, "lxml")
+            
+            # mcpalyer 클래스 내의 iframe 찾기
+            player_div = soup.find("div", class_="mcpalyer")
+            # logger.debug(f"player_div (mcpalyer): {player_div is not None}")
+            
+            if not player_div:
+                player_div = soup.find("div", class_="embed-responsive")
+                # logger.debug(f"player_div (embed-responsive): {player_div is not None}")
+            
+            iframe = None
+            if player_div:
+                iframe = player_div.find("iframe")
+                # logger.debug(f"iframe in player_div: {iframe is not None}")
+            if not iframe:
+                iframe = soup.find("iframe", src=re.compile(r"cdndania\.com"))
+                # logger.debug(f"iframe with cdndania src: {iframe is not None}")
+            if not iframe:
+                # 모든 iframe 찾기
+                all_iframes = soup.find_all("iframe")
+                # logger.debug(f"Total iframes found: {len(all_iframes)}")
+                if all_iframes:
+                    iframe = all_iframes[0]
+            
+            if not iframe or not iframe.get("src"):
+                logger.error("No iframe found on episode page")
+                return
+            
+            iframe_src = iframe.get("src")
+            logger.info(f"Found cdndania iframe: {iframe_src}")
+            self.iframe_src = iframe_src
+            # CDN 보안 우회 다운로더 사용 플래그 설정 (도메인 무관하게 모듈 강제 선택)
+            self.need_special_downloader = True
+            
+            # Step 2: cdndania.com 페이지에서 m3u8 URL 추출
+            video_url, vtt_url, cookies_file = self.extract_video_from_cdndania(iframe_src, url)
+            
+            if not video_url:
+                logger.error("Failed to extract video URL from cdndania")
+                return
+            
+            self.url = video_url
+            self.srt_url = vtt_url
+            self.cookies_file = cookies_file  # yt-dlp용 세션 쿠키 파일
+            self.iframe_src = iframe_src  # CdndaniaDownloader용 원본 iframe URL
+            logger.info(f"Video URL: {self.url}")
+            if self.srt_url:
+                logger.info(f"Subtitle URL: {self.srt_url}")
+            if self.cookies_file:
+                logger.info(f"Cookies file: {self.cookies_file}")
+            
+            # 헤더 설정 (Video Download용)
+            self.headers = {
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Referer": iframe_src,
+            }
+
+            # ------------------------------------------------------------------
+            # [SUBTITLE DOWNLOAD]
+            # ------------------------------------------------------------------
             if self.srt_url and "thumbnails.vtt" not in self.srt_url:
                 try:
                     srt_filepath = os.path.join(self.savepath, self.filename.replace(".mp4", ".ko.srt"))
@@ -1318,16 +1370,20 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
                 browser={'browser': 'chrome', 'platform': 'darwin', 'mobile': False},
                 delay=10
             )
-            proxies = LogicOhli24.proxies
+            proxies = LogicOhli24.get_proxies()
             
             # getVideo API 호출
-            api_url = f"https://cdndania.com/player/index.php?data={video_id}&do=getVideo"
+            # iframe 도메인 자동 감지 (cdndania.com -> michealcdn.com 등)
+            parsed_iframe = parse.urlparse(iframe_src)
+            iframe_domain = f"{parsed_iframe.scheme}://{parsed_iframe.netloc}"
+            
+            api_url = f"{iframe_domain}/player/index.php?data={video_id}&do=getVideo"
             headers = {
                 "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 "x-requested-with": "XMLHttpRequest",
                 "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
                 "referer": iframe_src,
-                "origin": "https://cdndania.com"
+                "origin": iframe_domain
             }
             post_data = {
                 "hash": video_id,
@@ -1375,11 +1431,14 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
                             
                 except Exception as json_err:
                     logger.warning(f"Failed to parse API JSON: {json_err}")
+                    logger.debug(f"API Response Text (First 1000 chars): {json_text[:1000] if json_text else 'Empty'}")
             
             # API 실패 시 기존 방식(정규식)으로 폴백
             if not video_url:
                 logger.info("API extraction failed, falling back to regex")
-                html_response = scraper.get(iframe_src, headers={"referer": referer_url}, timeout=30, proxies=proxies)
+                # Ensure referer is percent-encoded for headers (avoids UnicodeEncodeError)
+                encoded_referer = parse.quote(referer_url, safe=":/?#[]@!$&'()*+,;=%")
+                html_response = scraper.get(iframe_src, headers={"referer": encoded_referer}, timeout=30, proxies=proxies)
                 html_content = html_response.text
                 if html_content:
                     # m3u8 URL 패턴 찾기
@@ -1398,6 +1457,10 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
                             video_url = tmp_url
                             logger.info(f"Found video URL via regex: {video_url}")
                             break
+                    
+                    if not video_url:
+                        logger.warning("Regex extraction failed. Dumping HTML content.")
+                        logger.debug(f"HTML Content (First 2000 chars): {html_content[:2000]}")
                     
                     if not vtt_url:
                         vtt_match = re.search(r"['\"]([^'\"]*\.vtt[^'\"]*)['\"]", html_content)
