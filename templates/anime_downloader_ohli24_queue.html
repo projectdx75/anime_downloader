@@ -33,11 +33,20 @@
 </div>
 
 <style>
+    /* 상위 컨테이너 오버라이드 */
+    .container, .container-fluid, .row {
+        max-width: 100% !important;
+        padding-left: 16px !important;
+        padding-right: 16px !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+    }
+    
     /* 컨테이너 */
     .queue-container {
-        max-width: 1200px;
-        margin: 0 auto;
-        padding: 20px;
+        max-width: 100%;
+        margin: 0;
+        padding: 0;
     }
     
     /* 헤더 */
