@@ -1506,8 +1506,12 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
             # self.need_special_downloader = True  # 설정값 존중 (ffmpeg/ytdlp/aria2c 테스트 가능)
             self.need_special_downloader = False
             
-            # Step 2: cdndania.com 페이지에서 m3u8 URL 추출
-            video_url, vtt_url, cookies_file = self.extract_video_from_cdndania(iframe_src, url)
+            # Step 2: cdndania.com 페이지에서 m3u8 URL 및 해상도 추출
+            video_url, vtt_url, cookies_file, detected_resolution = self.extract_video_from_cdndania(iframe_src, url)
+            
+            # 해상도 설정 (감지된 값 또는 기본값 720)
+            if detected_resolution:
+                self.quality = f"{detected_resolution}P"
             
             if not video_url:
                 logger.error("Failed to extract video URL from cdndania")
@@ -1551,11 +1555,12 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
         """cdndania.com 플레이어에서 API 호출을 통해 비디오(m3u8) 및 자막(vtt) URL 추출
         
         Returns:
-            tuple: (video_url, vtt_url, cookies_file) - cookies_file은 yt-dlp용 쿠키 파일 경로
+            tuple: (video_url, vtt_url, cookies_file, resolution) - resolution은 720, 1080 등
         """
         video_url = None
         vtt_url = None
         cookies_file = None
+        resolution = None  # 해상도 (height: 720, 1080 등)
         
         try:
 
@@ -1685,7 +1690,29 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
             logger.error(f"Error in extract_video_from_cdndania: {e}")
             logger.error(traceback.format_exc())
         
-        return video_url, vtt_url, cookies_file
+        # m3u8 master playlist에서 해상도 파싱 (추가 요청 1회)
+        if video_url and not resolution:
+            try:
+                from curl_cffi import requests as cffi_requests
+                scraper = cffi_requests.Session(impersonate="chrome120")
+                proxies = LogicOhli24.get_proxies()
+                m3u8_headers = {"referer": iframe_src}
+                m3u8_resp = scraper.get(video_url, headers=m3u8_headers, timeout=10, proxies=proxies)
+                m3u8_content = m3u8_resp.text
+                
+                if "#EXT-X-STREAM-INF" in m3u8_content:
+                    # 마지막(최고 품질) 스트림의 해상도 추출
+                    for line in m3u8_content.strip().split('\n'):
+                        if line.startswith('#EXT-X-STREAM-INF'):
+                            res_match = re.search(r'RESOLUTION=(\d+)x(\d+)', line)
+                            if res_match:
+                                resolution = int(res_match.group(2))  # height
+                    if resolution:
+                        logger.info(f"Detected resolution from m3u8: {resolution}p")
+            except Exception as res_err:
+                logger.warning(f"Failed to parse resolution from m3u8: {res_err}")
+        
+        return video_url, vtt_url, cookies_file, resolution
 
 
     # def callback_function(self, **args):

@@ -372,22 +372,36 @@ async def _download_worker_async(
             m3u8_content = m3u8_resp.text
             
             # Master playlist 확인 및 미디어 플레이리스트 추적
+            detected_resolution = None
             if "#EXT-X-STREAM-INF" in m3u8_content:
                 base = video_url.rsplit('/', 1)[0] + '/'
                 last_url = None
+                last_resolution = None
                 for line in m3u8_content.strip().split('\n'):
                     line = line.strip()
-                    if line and not line.startswith('#'):
+                    # RESOLUTION 파싱: #EXT-X-STREAM-INF:...,RESOLUTION=1280x720,...
+                    if line.startswith('#EXT-X-STREAM-INF'):
+                        res_match = re.search(r'RESOLUTION=(\d+)x(\d+)', line)
+                        if res_match:
+                            last_resolution = int(res_match.group(2))  # height (720, 1080 등)
+                    elif line and not line.startswith('#'):
                         if line.startswith('http'):
                             last_url = line
                         else:
                             last_url = urljoin(base, line)
+                        # 마지막(최고 품질) 스트림의 해상도 저장
+                        if last_resolution:
+                            detected_resolution = last_resolution
                 
                 if last_url:
                     log.info(f"Following media playlist: {last_url}")
                     m3u8_resp = await session.get(last_url, headers=m3u8_headers)
                     m3u8_content = m3u8_resp.text
                     video_url = last_url
+            
+            # 해상도 로깅 (참고용 - 이미 mod_ohli24.py에서 파일명 생성 전 처리됨)
+            if detected_resolution:
+                log.info(f"Detected resolution: {detected_resolution}p")
             
             # 5. 세그먼트 파싱
             base = video_url.rsplit('/', 1)[0] + '/'
