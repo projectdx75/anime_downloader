@@ -160,3 +160,4 @@ unanalyzed.py
 test.ipynb
 .DS_Store
 test*.py
+bin/
