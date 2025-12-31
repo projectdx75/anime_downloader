@@ -26,7 +26,7 @@ from urllib import parse
 import requests
 
 # third-party
-from flask import request, render_template, jsonify
+from flask import request, render_template, jsonify, Response
 from lxml import html
 from sqlalchemy import or_, desc
 
@@ -854,67 +854,92 @@ class LogicOhli24(PluginModuleBase):
                 
                 # [FILE EXISTENCE CHECK FOR UI PLAY BUTTON]
                 try:
-                    # 1. Calculate Save Path (Replicating Ohli24QueueEntity logic)
-                    save_path = P.ModelSetting.get("ohli24_download_path")
-                    content_title = data["title"]
-                    # Season info might be embedded in title or handled elsewhere, but here we use the base title from analysis
-                    # Note: Ohli24QueueEntity extracts season from title regex. We should try that too.
+                    import glob
                     
+                    # 1. Savepath Calculation
+                    savepath = P.ModelSetting.get("ohli24_download_path")
+                    logger.warning(f"[DEBUG_FILE_CHECK] Base savepath: {savepath}")
+                    
+                    # Season Parsing
                     season = 1
+                    content_title = data["title"]
+                    # Clean title by removing Season/Episode info for folder name (e.g. "원펀맨 3기" -> "원펀맨")
+                    # This must match Ohli24QueueEntity logic
+                    content_title_clean = content_title
                     match = re.compile(r"(?P<title>.*?)\s*((?P<season>\d+)%s)?\s*((?P<epi_no>\d+)%s)" % ("기", "화")).search(content_title)
                     if match:
-                        content_title_clean = match.group("title").strip()
                         if "season" in match.groupdict() and match.group("season") is not None:
                             season = int(match.group("season"))
-                    else:
-                        content_title_clean = content_title
+                            content_title_clean = match.group("title").strip()
 
                     if P.ModelSetting.get_bool("ohli24_auto_make_folder"):
-                        folder_name = content_title_clean
-                        if data.get("day", "").find("완결") != -1:
-                             folder_name = "%s %s" % (P.ModelSetting.get("ohli24_finished_insert"), content_title_clean)
-                        
-                        folder_name = Util.change_text_for_use_filename(folder_name.strip())
-                        save_path = os.path.join(save_path, folder_name)
+                        # Use clean title for folder if season detected, otherwise full title
+                        folder_name = Util.change_text_for_use_filename(content_title_clean)
+                        savepath = os.path.join(savepath, folder_name)
                         
                         if P.ModelSetting.get_bool("ohli24_auto_make_season_folder"):
-                            save_path = os.path.join(save_path, "Season %s" % int(season))
-                            
-                    # 2. Check for first available file
-                    if os.path.exists(save_path):
-                        import glob
-                        # Pattern: Title.S01E01.*.mp4 (Ohli24QueueEntity format)
-                        # We need to check available episodes. Let's check the first few to be safe.
-                        # Note: file pattern uses content_title_clean
+                            season_str = str(int(season))
+                            savepath = os.path.join(savepath, "Season %s" % season_str)
+                    
+                    # logger.warning(f"[DEBUG_FILE_CHECK] Final savepath: {savepath}")
+                    
+                    if not os.path.exists(savepath):
+                        # logger.warning(f"[DEBUG_FILE_CHECK] Path does not exist: {savepath}")
+                        pass
+                    else:
+                        # 2. File Search using Glob
+                        # Pattern: Title.SxxExx.*-OHNI24.mp4
                         
-                        for ep in data["episode"]:
-                            # Parse episode number from title (e.g., "1화")
-                            ep_num = 1
-                            ep_match = re.search(r"(\d+)화", ep["title"])
-                            if ep_match:
-                                ep_num = int(ep_match.group(1))
+                        # Use the SAME cleaned title for filename matching as we did for folder name
+                        # e.g. "원펀맨 3기" -> folder "원펀맨", filename "원펀맨.S03..."
+                        title_clean = Util.change_text_for_use_filename(content_title_clean)
+                        season_str = "0%s" % season if season < 10 else str(season)
+                        
+                        # Check first few episodes or just iterate all until found
+                        # Check first few episodes or just iterate all until found
+                        for episode in data["episode"]:
+                            # Parse episode number from title
+                            epi_no = 1
+                            try:
+                                # First try explicit 'no' field if it exists and is clean
+                                if "no" in episode and episode["no"]:
+                                    epi_no = float(episode["no"])
+                                    if epi_no.is_integer():
+                                        epi_no = int(epi_no)
+                                else:
+                                    # Parse from title: e.g. "도원암귀 24화(完)" -> 24
+                                    ematch = re.search(r"(\d+(?:\.\d+)?)(?:화|회)", episode["title"])
+                                    if ematch:
+                                        epi_no_float = float(ematch.group(1))
+                                        epi_no = int(epi_no_float) if epi_no_float.is_integer() else epi_no_float
+                            except Exception as parse_e:
+                                # logger.debug(f"[DEBUG_FILE_CHECK] Episode parse error: {parse_e}")
+                                pass
+
+                            epi_no_str = "0%s" % epi_no if isinstance(epi_no, int) and epi_no < 10 else str(epi_no)
                             
-                            # Construct glob pattern
-                            # Pattern from Entity: "%s.S%sE%s.%s-OHNI24.mp4"
-                            season_str = "0%s" % season if season < 10 else season
-                            ep_str = "0%s" % ep_num if ep_num < 10 else ep_num
+                            # Glob pattern matching Ohli24QueueEntity format
+                            glob_pattern = f"{title_clean}.S{season_str}E{epi_no_str}.*-OHNI24.mp4"
+                            full_pattern = os.path.join(savepath, glob_pattern)
                             
-                            # Use glob to match any quality
-                            glob_pattern = f"{Util.change_text_for_use_filename(content_title_clean)}.S{season_str}E{ep_str}.*-OHNI24.mp4"
-                            search_path = os.path.join(save_path, glob_pattern)
-                            files = glob.glob(search_path)
+                            # logger.warning(f"[DEBUG_FILE_CHECK] Trying pattern: {glob_pattern}")
+                            # logger.warning(f"[DEBUG_FILE_CHECK] Trying pattern: {glob_pattern}")
                             
+                            files = glob.glob(full_pattern)
+                            if not files and episode == data["episode"][0]:
+                                # If first episode check fails, debug what IS in the folder
+                                # logger.warning(f"[DEBUG_FILE_CHECK] Listing all files in {savepath}: {glob.glob(os.path.join(savepath, '*'))}")
+                                pass
                             if files:
-                                # Found a file!
-                                valid_file = files[0] # Pick first match
+                                valid_file = files[0]
                                 data["first_exist_filepath"] = valid_file
                                 data["first_exist_filename"] = os.path.basename(valid_file)
                                 logger.info(f"Play button enabled: Found {data['first_exist_filename']}")
-                                break # Stop after finding one
-                                
+                                break
+                            
                 except Exception as e:
                     logger.error(f"Error checking file existence: {e}")
-                    # Don't fail the whole analysis, just skip play button
+                    logger.error(traceback.format_exc())
             
             self.current_data = data
             return data
@@ -1017,6 +1042,7 @@ class LogicOhli24(PluginModuleBase):
             data["anime_count"] = len(tmp_items)
             data["anime_list"] = []
 
+            # Clean up nested mess
             for item in tmp_items:
                 entity = {}
                 entity["link"] = item.xpath(".//a/@href")[0]
@@ -1024,8 +1050,16 @@ class LogicOhli24(PluginModuleBase):
                 entity["wr_id"] = entity["link"].split("=")[-1]
                 # logger.debug(item.xpath(".//div[@class='post-title']/text()").join())
                 entity["title"] = "".join(item.xpath(".//div[@class='post-title']/text()")).strip()
-                entity["image_link"] = item.xpath(".//div[@class='img-item']/img/@src")[0].replace(
+                
+                original_img = item.xpath(".//div[@class='img-item']/img/@src")[0].replace(
                     "..", P.ModelSetting.get("ohli24_url")
+                )
+                
+                # Use Image Proxy
+                entity["image_link"] = "/%s/api/%s/image_proxy?url=%s" % (
+                    P.package_name,
+                    self.name,
+                    urllib.parse.quote(original_img)
                 )
 
                 entity["code"] = item.xpath(".//div[@class='img-item']/img/@alt")[0]
@@ -1038,6 +1072,33 @@ class LogicOhli24(PluginModuleBase):
             P.logger.error(f"Exception: {str(e)}")
             P.logger.error(traceback.format_exc())
             return {"ret": "exception", "log": str(e)}
+
+    def process_api(self, sub: str, req: Any) -> Any:
+        try:
+            if sub == "image_proxy":
+                image_url = req.args.get("url")
+                if not image_url:
+                    return Response("No URL provided", status=400)
+                
+                # Fetch image with referer
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Referer": P.ModelSetting.get("ohli24_url") + "/",
+                }
+                
+                # Use stream=True to handle binary data efficiently
+                try:
+                    r = requests.get(image_url, headers=headers, stream=True, timeout=10)
+                    excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
+                    headers = [(name, value) for (name, value) in r.raw.headers.items()
+                               if name.lower() not in excluded_headers]
+                    return Response(r.content, r.status_code, headers)
+                except Exception as e:
+                    return Response(f"Error fetching image: {e}", status=500)
+                    
+        except Exception as e:
+            logger.error(f"process_api error: {e}")
+            logger.error(traceback.format_exc())
 
     # @staticmethod
     def plugin_load(self) -> None:
