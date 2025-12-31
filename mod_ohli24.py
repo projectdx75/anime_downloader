@@ -381,6 +381,72 @@ class LogicOhli24(PluginModuleBase):
                     logger.error(f"Stream video error: {e}")
                     logger.error(traceback.format_exc())
                     return jsonify({"error": str(e)}), 500
+            
+            elif sub == "get_playlist":
+                # 현재 파일과 같은 폴더에서 다음 에피소드들 찾기
+                try:
+                    file_path = request.args.get("path", "")
+                    if not file_path or not os.path.exists(file_path):
+                        return jsonify({"error": "File not found", "playlist": [], "current_index": 0}), 404
+                    
+                    # 보안 체크
+                    download_path = P.ModelSetting.get("ohli24_download_path")
+                    if not file_path.startswith(download_path):
+                        return jsonify({"error": "Access denied", "playlist": [], "current_index": 0}), 403
+                    
+                    folder = os.path.dirname(file_path)
+                    current_file = os.path.basename(file_path)
+                    
+                    # 파일명에서 SxxExx 패턴 추출
+                    ep_match = re.search(r'\.S(\d+)E(\d+)\.', current_file, re.IGNORECASE)
+                    if not ep_match:
+                        # 패턴 없으면 현재 파일만 반환
+                        return jsonify({
+                            "playlist": [{"path": file_path, "name": current_file}],
+                            "current_index": 0
+                        })
+                    
+                    current_season = int(ep_match.group(1))
+                    current_episode = int(ep_match.group(2))
+                    
+                    # 같은 폴더의 모든 mp4 파일 가져오기
+                    all_files = []
+                    for f in os.listdir(folder):
+                        if f.endswith('.mp4'):
+                            match = re.search(r'\.S(\d+)E(\d+)\.', f, re.IGNORECASE)
+                            if match:
+                                s = int(match.group(1))
+                                e = int(match.group(2))
+                                all_files.append({
+                                    "path": os.path.join(folder, f),
+                                    "name": f,
+                                    "season": s,
+                                    "episode": e
+                                })
+                    
+                    # 시즌/에피소드 순으로 정렬
+                    all_files.sort(key=lambda x: (x["season"], x["episode"]))
+                    
+                    # 현재 에피소드 이상인 것만 필터링 (현재 + 다음 에피소드들)
+                    playlist = []
+                    current_index = 0
+                    for i, f in enumerate(all_files):
+                        if f["season"] == current_season and f["episode"] >= current_episode:
+                            entry = {"path": f["path"], "name": f["name"]}
+                            if f["episode"] == current_episode:
+                                current_index = len(playlist)
+                            playlist.append(entry)
+                    
+                    logger.info(f"Playlist: {len(playlist)} items, current_index: {current_index}")
+                    return jsonify({
+                        "playlist": playlist,
+                        "current_index": current_index
+                    })
+                    
+                except Exception as e:
+                    logger.error(f"Get playlist error: {e}")
+                    logger.error(traceback.format_exc())
+                    return jsonify({"error": str(e), "playlist": [], "current_index": 0}), 500
                     
         except Exception as e:
             P.logger.error(f"Exception: {e}")

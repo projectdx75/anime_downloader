@@ -50,7 +50,67 @@
                     <video id="video-player" class="video-js vjs-big-play-centered vjs-theme-fantasy" controls preload="auto" style="width: 100%; height: auto; max-height: 75vh;">
                         <p class="vjs-no-js">JavaScript가 필요합니다.</p>
                     </video>
+                    <!-- 플레이리스트 컨트롤 UI -->
+                    <div class="playlist-controls" style="padding: 12px 16px; background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.95) 100%); border-top: 1px solid rgba(255,255,255,0.1);">
+                        <!-- 현재 재생 정보 + 버튼 -->
+                        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                            <button id="btn-prev-ep" class="playlist-nav-btn" style="display: none;" title="이전 에피소드">
+                                <i class="fa fa-step-backward"></i>
+                            </button>
+                            <div style="flex: 1; min-width: 200px;">
+                                <div id="current-video-title" style="color: #fbbf24; font-weight: 600; font-size: 14px;"></div>
+                                <div id="playlist-progress" style="color: #64748b; font-size: 12px; margin-top: 2px;"></div>
+                            </div>
+                            <button id="btn-next-ep" class="playlist-nav-btn" style="display: none;" title="다음 에피소드">
+                                <i class="fa fa-step-forward"></i>
+                            </button>
+                            <button id="btn-toggle-playlist" class="playlist-toggle-btn" title="에피소드 목록">
+                                <i class="fa fa-list"></i>
+                            </button>
+                        </div>
+                        
+                        <!-- 에피소드 목록 (접히는) -->
+                        <div id="playlist-list-container" style="display: none; margin-top: 12px; max-height: 200px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 8px; padding: 8px;">
+                            <div id="playlist-list"></div>
+                        </div>
+                    </div>
                 </div>
+                
+    <style>
+        .playlist-nav-btn {
+            width: 40px; height: 40px;
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            border: none; border-radius: 50%;
+            color: white; font-size: 14px;
+            cursor: pointer; transition: all 0.2s ease;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .playlist-nav-btn:hover { transform: scale(1.1); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); }
+        .playlist-nav-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+        
+        .playlist-toggle-btn {
+            padding: 8px 14px;
+            background: rgba(100, 116, 139, 0.3);
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            border-radius: 8px;
+            color: #94a3b8; font-size: 13px;
+            cursor: pointer; transition: all 0.2s ease;
+        }
+        .playlist-toggle-btn:hover { background: rgba(100, 116, 139, 0.5); color: #e2e8f0; }
+        .playlist-toggle-btn.active { background: rgba(59, 130, 246, 0.3); border-color: #3b82f6; color: #60a5fa; }
+        
+        .playlist-item {
+            padding: 8px 12px; margin: 4px 0;
+            background: rgba(255,255,255,0.05);
+            border-radius: 6px; cursor: pointer;
+            color: #cbd5e1; font-size: 13px;
+            transition: all 0.2s ease;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .playlist-item:hover { background: rgba(59, 130, 246, 0.2); }
+        .playlist-item.active { background: linear-gradient(135deg, rgba(59, 130, 246, 0.4), rgba(37, 99, 235, 0.4)); color: #fbbf24; font-weight: 600; }
+        .playlist-item .ep-num { color: #64748b; font-size: 11px; min-width: 40px; }
+    </style>
             </div>
         </div>
     </div>
@@ -172,45 +232,199 @@
             global_sub_request_search('1')
         });
 
-        // 비디오 보기 버튼 클릭 핸들러
+        // 비디오 보기 버튼 클릭 핸들러 (플레이리스트 지원)
         var videoPlayer = null;
+        var playlist = [];
+        var currentPlaylistIndex = 0;
+        
+        function playVideoAtIndex(index) {
+            if (index < 0 || index >= playlist.length) return;
+            currentPlaylistIndex = index;
+            var item = playlist[index];
+            var streamUrl = '/' + package_name + '/ajax/' + sub + '/stream_video?path=' + encodeURIComponent(item.path);
+            
+            if (videoPlayer) {
+                videoPlayer.src({ type: 'video/mp4', src: streamUrl });
+                videoPlayer.play();
+            }
+            
+            // 플레이리스트 UI 업데이트 (현재 파일명, 버튼 상태, 목록 표시)
+            updatePlaylistUI();
+        }
         
         $("body").on('click', '.btn-watch', function (e) {
             e.preventDefault();
             var filePath = $(this).data('path');
-            var streamUrl = '/' + package_name + '/ajax/' + sub + '/stream_video?path=' + encodeURIComponent(filePath);
             
-            // Video.js 초기화 또는 소스 변경
-            if (videoPlayer) {
-                videoPlayer.src({ type: 'video/mp4', src: streamUrl });
-            } else {
-                videoPlayer = videojs('video-player', {
-                    controls: true,
-                    autoplay: false,
-                    preload: 'auto',
-                    fluid: true,
-                    playbackRates: [0.5, 1, 1.5, 2],
-                    controlBar: {
-                        skipButtons: { forward: 10, backward: 10 }
+            // 플레이리스트 API 호출
+            $.ajax({
+                url: '/' + package_name + '/ajax/' + sub + '/get_playlist?path=' + encodeURIComponent(filePath),
+                type: 'GET',
+                dataType: 'json',
+                success: function(data) {
+                    playlist = data.playlist || [];
+                    currentPlaylistIndex = data.current_index || 0;
+                    currentPlayingPath = filePath;  // 실시간 갱신용 경로 저장
+                    
+                    var streamUrl = '/' + package_name + '/ajax/' + sub + '/stream_video?path=' + encodeURIComponent(filePath);
+                    
+                    // Video.js 초기화
+                    if (!videoPlayer) {
+                        videoPlayer = videojs('video-player', {
+                            controls: true,
+                            autoplay: false,
+                            preload: 'auto',
+                            fluid: true,
+                            playbackRates: [0.5, 1, 1.5, 2],
+                            controlBar: {
+                                skipButtons: { forward: 10, backward: 10 }
+                            }
+                        });
+                        
+                        // 비디오 종료 시 다음 에피소드 자동 재생
+                        videoPlayer.on('ended', function() {
+                            if (currentPlaylistIndex < playlist.length - 1) {
+                                currentPlaylistIndex++;
+                                playVideoAtIndex(currentPlaylistIndex);
+                            }
+                        });
                     }
-                });
-                videoPlayer.src({ type: 'video/mp4', src: streamUrl });
+                    
+                    videoPlayer.src({ type: 'video/mp4', src: streamUrl });
+                    
+                    // 플레이리스트 UI 업데이트
+                    updatePlaylistUI();
+                    
+                    // 모달 열기
+                    $('#videoModal').modal('show');
+                },
+                error: function() {
+                    // 에러 시 기본 동작
+                    var streamUrl = '/' + package_name + '/ajax/' + sub + '/stream_video?path=' + encodeURIComponent(filePath);
+                    if (!videoPlayer) {
+                        videoPlayer = videojs('video-player', { controls: true, fluid: true });
+                    }
+                    videoPlayer.src({ type: 'video/mp4', src: streamUrl });
+                    $('#videoModal').modal('show');
+                }
+            });
+        });
+        
+        // 플레이리스트 UI 업데이트 함수
+        function updatePlaylistUI() {
+            if (!playlist || playlist.length === 0) return;
+            
+            var currentFile = playlist[currentPlaylistIndex];
+            $('#current-video-title').text(currentFile ? currentFile.name : '');
+            $('#playlist-progress').text((currentPlaylistIndex + 1) + ' / ' + playlist.length + ' 에피소드');
+            
+            // 이전/다음 버튼 표시
+            if (currentPlaylistIndex > 0) {
+                $('#btn-prev-ep').show();
+            } else {
+                $('#btn-prev-ep').hide();
+            }
+            if (currentPlaylistIndex < playlist.length - 1) {
+                $('#btn-next-ep').show();
+            } else {
+                $('#btn-next-ep').hide();
             }
             
-            // 모달 열기
-            $('#videoModal').modal('show');
+            // 에피소드 목록 렌더링
+            var listHtml = '';
+            for (var i = 0; i < playlist.length; i++) {
+                var isActive = (i === currentPlaylistIndex) ? 'active' : '';
+                listHtml += '<div class="playlist-item ' + isActive + '" data-index="' + i + '">';
+                listHtml += '<span class="ep-num">E' + (i + 1) + '</span>';
+                listHtml += '<span>' + playlist[i].name + '</span>';
+                listHtml += '</div>';
+            }
+            $('#playlist-list').html(listHtml);
+        }
+        
+        // 이전 에피소드 버튼
+        $('#btn-prev-ep').click(function() {
+            if (currentPlaylistIndex > 0) {
+                currentPlaylistIndex--;
+                playVideoAtIndex(currentPlaylistIndex);
+            }
+        });
+        
+        // 다음 에피소드 버튼
+        $('#btn-next-ep').click(function() {
+            if (currentPlaylistIndex < playlist.length - 1) {
+                currentPlaylistIndex++;
+                playVideoAtIndex(currentPlaylistIndex);
+            }
+        });
+        
+        // 목록 토글 버튼
+        $('#btn-toggle-playlist').click(function() {
+            $(this).toggleClass('active');
+            $('#playlist-list-container').slideToggle(200);
+        });
+        
+        // 목록 아이템 클릭
+        $(document).on('click', '.playlist-item', function() {
+            var index = parseInt($(this).data('index'));
+            if (index !== currentPlaylistIndex) {
+                currentPlaylistIndex = index;
+                playVideoAtIndex(index);
+            }
         });
         
         // 모달 닫을 때 비디오 정지 + 포커스 해제 (aria-hidden 경고 방지)
+        var playlistRefreshInterval = null;
+        var currentPlayingPath = null;  // 현재 재생 중인 파일 경로 저장
+        
+        function startPlaylistRefresh() {
+            if (playlistRefreshInterval) return;
+            playlistRefreshInterval = setInterval(function() {
+                if (!currentPlayingPath) return;
+                $.ajax({
+                    url: '/' + package_name + '/ajax/' + sub + '/get_playlist?path=' + encodeURIComponent(currentPlayingPath),
+                    type: 'GET',
+                    dataType: 'json',
+                    success: function(data) {
+                        var newPlaylist = data.playlist || [];
+                        // 새 에피소드 추가됐는지 확인
+                        if (newPlaylist.length > playlist.length) {
+                            var addedCount = newPlaylist.length - playlist.length;
+                            playlist = newPlaylist;
+                            updatePlaylistUI();
+                            // 알림 표시
+                            $.notify('<i class="fa fa-download"></i> ' + addedCount + '개 에피소드 추가됨!', {type: 'success'});
+                        }
+                    }
+                });
+            }, 10000);  // 10초마다 체크
+        }
+        
+        function stopPlaylistRefresh() {
+            if (playlistRefreshInterval) {
+                clearInterval(playlistRefreshInterval);
+                playlistRefreshInterval = null;
+            }
+        }
+        
+        $('#videoModal').on('show.bs.modal', function() {
+            startPlaylistRefresh();
+        });
+        
         $('#videoModal').on('hide.bs.modal', function () {
+            stopPlaylistRefresh();
             // 포커스된 요소에서 포커스 해제 (aria-hidden 경고 방지)
             document.activeElement.blur();
+            // 목록 닫기
+            $('#playlist-list-container').hide();
+            $('#btn-toggle-playlist').removeClass('active');
         });
         
         $('#videoModal').on('hidden.bs.modal', function () {
             if (videoPlayer) {
                 videoPlayer.pause();
             }
+            currentPlayingPath = null;
         });
 
         function make_list(data) {
