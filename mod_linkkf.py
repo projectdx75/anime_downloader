@@ -1011,50 +1011,73 @@ class LogicLinkkf(PluginModuleBase):
 
             if cate == "ing":
                 # url = f"{P.ModelSetting.get('linkkf_url')}/airing/page/{page}"
-                url = "https://linkkf.5imgdarr.top/api/singlefilter.php?categorytagid=1970&page=1&limit=20"
-                items_xpath = '//div[@class="ext-json-item"]'
-                title_xpath = './/a[@class="text-fff"]//text()'
+                # User requested to use 'anime-list' ID (categorytagid=2) for 'ing'
+                url = "https://linkkf.5imgdarr.top/api/singlefilter.php?categorytagid=2&page={}&limit=20".format(page)
+                items_xpath = None # JSON fetching
+                title_xpath = None
             elif cate == "movie":
-                url = f"{P.ModelSetting.get('linkkf_url')}/ani/page/{page}"
-                items_xpath = '//div[@class="myui-vodlist__box"]'
-                title_xpath = './/a[@class="text-fff"]//text()'
+                # url = f"{P.ModelSetting.get('linkkf_url')}/ani/page/{page}"
+                # items_xpath = '//div[@class="myui-vodlist__box"]'
+                # title_xpath = './/a[@class="text-fff"]//text()'
+                
+                # API Spec: categorytagid=5061 (Movie)
+                url = "https://linkkf.5imgdarr.top/api/singlefilter.php?categorytagid=5061&page={}&limit=20".format(page)
+                items_xpath = None
+                title_xpath = None
+
             elif cate == "complete":
-                url = f"{P.ModelSetting.get('linkkf_url')}/anime-list/page/{page}"
-                items_xpath = '//div[@class="myui-vodlist__box"]'
-                title_xpath = './/a[@class="text-fff"]//text()'
+                # User requested to comment out for now (25-12-31)
+                # url = "https://linkkf.5imgdarr.top/api/singlefilter.php?categorytagid=2&page={}&limit=20".format(page)
+                url = "" # Disable
+                items_xpath = None
+                title_xpath = None
             elif cate == "top_view":
-                url = f"{P.ModelSetting.get('linkkf_url')}/topview/page/{page}"
-                items_xpath = '//div[@class="ext-json-item"]'
-                title_xpath = './/a[@class="text-fff"]//text()'
+                # API Spec: type=month|week|day, page=1
+                url = "https://linkkf.5imgdarr.top/api/apiview.php?type=month&page={}".format(page)
+                items_xpath = None # JSON fetching
+                title_xpath = None
             else:
                 url = "https://linkkf.5imgdarr.top/api/singlefilter.php?categorytagid=1970&page=1&limit=20"
 
             logger.info("url:::> %s", url)
-            logger.info("test..........................")
-            # logger.info("test..........................")
+            
             if self.referer is None:
                 self.referer = "https://linkkf.live"
 
             data = {"ret": "success", "page": page}
             response_data = LogicLinkkf.get_html(url, timeout=10)
-            # P.logger.debug(response_data)
-            # P.logger.debug("debug.....................")
-            # P.logger.debug(response_data)
-
-            # JSON 응답인지 확인
+            
+            # JSON 응답 처리 (Top View 포함)
             try:
                 json_data = json.loads(response_data)
-                P.logger.debug("Response is JSON format")
-                P.logger.debug(json_data)
-                # JSON 데이터를 그대로 반환하거나 필요한 형태로 가공
+                # P.logger.debug(json_data)
+                
+                # top_view 처리는 별도 로직 (구조가 다름)
+                if cate == "top_view":
+                    items = json_data if isinstance(json_data, list) else []
+                    data["episode_count"] = len(items)
+                    data["total_page"] = 100 # API limits unclear, defaulting to enough
+                    data["episode"] = []
+                    
+                    for item in items:
+                        entity = {}
+                        # API: postid, postname, postthum, postdate, ...
+                        entity["code"] = str(item.get("postid"))
+                        entity["title"] = item.get("postname")
+                        entity["image_link"] = item.get("postthum")
+                        entity["link"] = f"https://linkkf.live/{entity['code']}"
+                        entity["chapter"] = "Top" # Rank or simple tag
+                        
+                        data["episode"].append(entity)
+                    return data
+                
+                # 기존 JSON 처리 (ing 등)
                 if isinstance(json_data, dict):
                     return json_data
                 else:
                     data["episode"] = json_data if isinstance(json_data, list) else []
                     return data
             except (json.JSONDecodeError, ValueError):
-                # HTML 응답인 경우
-                P.logger.debug("Response is HTML format, parsing...")
                 pass
 
             tree = html.fromstring(response_data)
@@ -1317,6 +1340,16 @@ class LogicLinkkf(PluginModuleBase):
                         entity["filename"] = LogicLinkkf.get_filename(
                             data["save_folder"], data["season"], ep_name
                         )
+
+                        # Check for existing file (for Play button)
+                        entity["filepath"] = os.path.join(entity["save_path"], entity["filename"])
+                        if os.path.exists(entity["filepath"]):
+                            entity["exist_video"] = True
+                            if "first_exist_filepath" not in data:
+                                data["first_exist_filepath"] = entity["filepath"]
+                                data["first_exist_filename"] = entity["filename"]
+                        else:
+                            entity["exist_video"] = False
                         
                         data["episode"].append(entity)
                         

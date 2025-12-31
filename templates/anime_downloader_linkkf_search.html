@@ -29,8 +29,9 @@
         placeholder="Search"
         aria-label="Search"
         aria-describedby="search-addon"
+        style="height: 46px;"
       />
-      <button id="btn_search" type="button" class="btn btn-primary">
+      <button id="btn_search" type="button" class="btn btn-primary" style="height: 46px; display: flex; align-items: center; justify-content: center; padding: 0 20px; line-height: normal; margin: 0;">
         search
       </button>
     </div>
@@ -41,12 +42,12 @@
       role="group"
       aria-label="Linkkf Button"
     >
-      <button id="ing" type="button" class="btn btn-success">방영중</button>
-      <button id="movie" type="button" class="btn btn-primary">극장판</button>
-      <button id="complete_anilist" type="button" class="btn btn-dark">
+      <button id="ing" type="button" class="btn btn-elegant-ing">방영중</button>
+      <button id="movie" type="button" class="btn btn-elegant-movie">극장판</button>
+      <button id="complete_anilist" type="button" class="btn btn-dark" style="display:none;">
         완결
       </button>
-      <button id="top_view" type="button" class="btn btn-yellow">Top</button>
+      <button id="top_view" type="button" class="btn btn-elegant-top">Top</button>
     </div>
     <form id="airing_list_form">
       <div id="airing_list"></div>
@@ -151,7 +152,7 @@
               current_cate = 'ing'
               break;
           case 'movie':
-              url = '/' + package_name + '/ajax/' + sub + '/screen_movie_list'
+              url = '/' + package_name + '/ajax/' + sub + '/anime_list'
               current_cate = 'movie'
               break;
           case 'complete':
@@ -159,8 +160,8 @@
               current_cate = 'complete'
               break;
           case 'top_view':
-              url = '/' + package_name + '/ajax/' + sub + '/complete_list'
-              current_cate = 'complete'
+              url = '/' + package_name + '/ajax/' + sub + '/anime_list'
+              current_cate = 'top_view'
               break
           default:
               break;
@@ -478,22 +479,22 @@
 
           // spinner_loading.style.display = "block";
               current_cate = "ing";
-              get_anime_list(1, "ing");
+              get_anime_list("ing", 1);
               break;
           case "movie":
               // console.log("movie")
               current_cate = "movie";
-              get_anime_screen_movie(1);
+              get_anime_list("movie", 1);
               break;
           case "complete_anilist":
               // console.log("complete")
               current_cate = "complete";
-              get_complete_anilist(1);
+              get_anime_list("complete", 1);
               break;
           case "top_view":
               // console.log("top_view")
               current_cate = "top_view";
-              get_anime_list(1, "top_view");
+              get_anime_list("top_view", 1);
               break;
           default:
               // console.log("default")
@@ -834,34 +835,38 @@
    }
 
    /* Navigation (Tabs) Optimization */
-   .nav-pills {
-       background: rgba(6, 78, 59, 0.4) !important;
+   /* Navigation Menu Override */
+   ul.nav.nav-pills.bg-light {
+       background-color: rgba(6, 78, 59, 0.4) !important;
+       backdrop-filter: blur(10px);
+       border: 1px solid rgba(16, 185, 129, 0.1);
+       border-radius: 50rem !important;
        padding: 6px !important;
-       border-radius: 12px !important;
-       border: 1px solid rgba(16, 185, 129, 0.1) !important;
-       margin-bottom: 20px !important;
+       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2) !important;
        display: inline-flex !important;
-       gap: 4px !important;
-       box-shadow: 0 4px 15px rgba(0,0,0,0.2) !important;
+       gap: 4px;
+       margin-bottom: 20px;
    }
-   .nav-pills .nav-link {
+
+   ul.nav.nav-pills .nav-link {
        color: #d1fae5 !important;
        font-weight: 600 !important;
        padding: 8px 20px !important;
-       border-radius: 8px !important;
+       border-radius: 50rem !important;
        transition: all 0.3s ease !important;
        border: 1px solid transparent !important;
    }
-   .nav-pills .nav-link:hover {
-       background: rgba(16, 185, 129, 0.1) !important;
+
+   ul.nav.nav-pills .nav-link:hover {
+       background-color: rgba(16, 185, 129, 0.1) !important;
        color: #fff !important;
        transform: translateY(-1px);
    }
-   .nav-pills .nav-link.active {
+
+   ul.nav.nav-pills .nav-link.active {
        background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
        color: #fff !important;
        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3) !important;
-       border: 1px solid rgba(255,255,255,0.1) !important;
    }
 
   .input-group {
@@ -1109,7 +1114,36 @@
   ::-webkit-scrollbar-track { background: var(--bg-primary); }
   ::-webkit-scrollbar-thumb { background: var(--accent-primary); border-radius: 4px; }
   ::-webkit-scrollbar-thumb:hover { background: var(--accent-secondary); }
-    /* Navigation Menu Override */
+  /* Elegant Button Styles */
+  .btn-elegant-ing, .btn-elegant-movie, .btn-elegant-top {
+      color: white;
+      border: none;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      transition: all 0.3s ease;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+  }
+  .btn-elegant-ing {
+      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+  }
+  .btn-elegant-movie {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  }
+  .btn-elegant-top {
+      background: linear-gradient(135deg, #f09819 0%, #edde5d 100%);
+      color: #333; /* Darker text for visibility on yellow */
+  }
+  .btn-elegant-ing:hover, .btn-elegant-movie:hover, .btn-elegant-top:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+      color: white;
+      filter: brightness(1.1);
+  }
+  .btn-elegant-top:hover {
+      color: #fff;
+  }
+
+  /* Navigation Menu Override */
     ul.nav.nav-pills.bg-light {
         background-color: rgba(30, 41, 59, 0.6) !important;
         backdrop-filter: blur(10px);
@@ -1209,6 +1243,12 @@
         color: #fff !important;
         box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
     }
+</style>
+
+<style>
+    /* Smooth Load */
+    .content-cloak, #menu_module_div, #menu_page_div { opacity: 0; transition: opacity 0.5s ease-out; }
+    .content-cloak.visible, #menu_module_div.visible, #menu_page_div.visible { opacity: 1; }
 </style>
 
 <script type="text/javascript">

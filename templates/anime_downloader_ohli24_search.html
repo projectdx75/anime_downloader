@@ -817,4 +817,18 @@ $(document).ready(function(){
     }
 }
 </style>
+<style>
+    /* Smooth Load */
+    .content-cloak, #menu_module_div, #menu_page_div { opacity: 0; transition: opacity 0.5s ease-out; }
+    .content-cloak.visible, #menu_module_div.visible, #menu_page_div.visible { opacity: 1; }
+</style>
+
+<script type="text/javascript">
+$(document).ready(function(){
+  // Smooth Load Trigger
+  setTimeout(function() {
+      $('.content-cloak, #menu_module_div, #menu_page_div').addClass('visible');
+  }, 100);
+});
+</script>
 {% endblock %}

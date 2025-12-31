@@ -851,6 +851,70 @@ class LogicOhli24(PluginModuleBase):
             
             if data["episode"]:
                 logger.info(f"Final episode list range: {data['episode'][0]['title']} ~ {data['episode'][-1]['title']}")
+                
+                # [FILE EXISTENCE CHECK FOR UI PLAY BUTTON]
+                try:
+                    # 1. Calculate Save Path (Replicating Ohli24QueueEntity logic)
+                    save_path = P.ModelSetting.get("ohli24_download_path")
+                    content_title = data["title"]
+                    # Season info might be embedded in title or handled elsewhere, but here we use the base title from analysis
+                    # Note: Ohli24QueueEntity extracts season from title regex. We should try that too.
+                    
+                    season = 1
+                    match = re.compile(r"(?P<title>.*?)\s*((?P<season>\d+)%s)?\s*((?P<epi_no>\d+)%s)" % ("기", "화")).search(content_title)
+                    if match:
+                        content_title_clean = match.group("title").strip()
+                        if "season" in match.groupdict() and match.group("season") is not None:
+                            season = int(match.group("season"))
+                    else:
+                        content_title_clean = content_title
+
+                    if P.ModelSetting.get_bool("ohli24_auto_make_folder"):
+                        folder_name = content_title_clean
+                        if data.get("day", "").find("완결") != -1:
+                             folder_name = "%s %s" % (P.ModelSetting.get("ohli24_finished_insert"), content_title_clean)
+                        
+                        folder_name = Util.change_text_for_use_filename(folder_name.strip())
+                        save_path = os.path.join(save_path, folder_name)
+                        
+                        if P.ModelSetting.get_bool("ohli24_auto_make_season_folder"):
+                            save_path = os.path.join(save_path, "Season %s" % int(season))
+                            
+                    # 2. Check for first available file
+                    if os.path.exists(save_path):
+                        import glob
+                        # Pattern: Title.S01E01.*.mp4 (Ohli24QueueEntity format)
+                        # We need to check available episodes. Let's check the first few to be safe.
+                        # Note: file pattern uses content_title_clean
+                        
+                        for ep in data["episode"]:
+                            # Parse episode number from title (e.g., "1화")
+                            ep_num = 1
+                            ep_match = re.search(r"(\d+)화", ep["title"])
+                            if ep_match:
+                                ep_num = int(ep_match.group(1))
+                            
+                            # Construct glob pattern
+                            # Pattern from Entity: "%s.S%sE%s.%s-OHNI24.mp4"
+                            season_str = "0%s" % season if season < 10 else season
+                            ep_str = "0%s" % ep_num if ep_num < 10 else ep_num
+                            
+                            # Use glob to match any quality
+                            glob_pattern = f"{Util.change_text_for_use_filename(content_title_clean)}.S{season_str}E{ep_str}.*-OHNI24.mp4"
+                            search_path = os.path.join(save_path, glob_pattern)
+                            files = glob.glob(search_path)
+                            
+                            if files:
+                                # Found a file!
+                                valid_file = files[0] # Pick first match
+                                data["first_exist_filepath"] = valid_file
+                                data["first_exist_filename"] = os.path.basename(valid_file)
+                                logger.info(f"Play button enabled: Found {data['first_exist_filename']}")
+                                break # Stop after finding one
+                                
+                except Exception as e:
+                    logger.error(f"Error checking file existence: {e}")
+                    # Don't fail the whole analysis, just skip play button
             
             self.current_data = data
             return data

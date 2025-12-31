@@ -140,6 +140,9 @@
             str += `<div class="d-flex flex-wrap align-items-center gap-2 p-3 rounded" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05);">`;
             
             // Standard Actions
+            if (data.first_exist_filepath) {
+                str += `<button class="btn btn-success btn-sm mr-2" onclick="play_video('${data.first_exist_filepath.replace(/\\/g, '\\\\')}', '${data.first_exist_filename}')"><i class="fa fa-play"></i> 재생</button>`;
+            }
             str += `<button id="check_download_btn" class="btn btn-primary btn-sm mr-2"><i class="fa fa-download"></i> 선택 다운로드</button>`;
             str += `<button id="all_check_on_btn" class="btn btn-outline-light btn-sm mr-1">전체 선택</button>`;
             str += `<button id="all_check_off_btn" class="btn btn-outline-secondary btn-sm mr-3">해제</button>`;
@@ -364,34 +367,38 @@
         }
 
         /* Navigation (Tabs) Optimization */
-        .nav-pills {
-            background: rgba(6, 78, 59, 0.4) !important;
+        /* Navigation Menu Override */
+        ul.nav.nav-pills.bg-light {
+            background-color: rgba(6, 78, 59, 0.4) !important;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(16, 185, 129, 0.1);
+            border-radius: 50rem !important;
             padding: 6px !important;
-            border-radius: 12px !important;
-            border: 1px solid rgba(16, 185, 129, 0.1) !important;
-            margin-bottom: 20px !important;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2) !important;
             display: inline-flex !important;
-            gap: 4px !important;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2) !important;
+            gap: 4px;
+            margin-bottom: 20px;
         }
-        .nav-pills .nav-link {
+
+        ul.nav.nav-pills .nav-link {
             color: #d1fae5 !important;
             font-weight: 600 !important;
             padding: 8px 20px !important;
-            border-radius: 8px !important;
+            border-radius: 50rem !important;
             transition: all 0.3s ease !important;
             border: 1px solid transparent !important;
         }
-        .nav-pills .nav-link:hover {
-            background: rgba(16, 185, 129, 0.1) !important;
+
+        ul.nav.nav-pills .nav-link:hover {
+            background-color: rgba(16, 185, 129, 0.1) !important;
             color: #fff !important;
             transform: translateY(-1px);
         }
-        .nav-pills .nav-link.active {
+
+        ul.nav.nav-pills .nav-link.active {
             background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
             color: #fff !important;
             box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3) !important;
-            border: 1px solid rgba(255,255,255,0.1) !important;
         }
 
         /* Search Input Polishing */
@@ -1249,6 +1256,12 @@
     }
 </style>
 
+<style>
+    /* Smooth Load */
+    .content-cloak, #menu_module_div, #menu_page_div { opacity: 0; transition: opacity 0.5s ease-out; }
+    .content-cloak.visible, #menu_module_div.visible, #menu_page_div.visible { opacity: 1; }
+</style>
+
 <script type="text/javascript">
 $(document).ready(function(){
   // Smooth Load Trigger
@@ -1283,4 +1296,213 @@ $(document).ready(function(){
     }
 }
 </style>
+
+<!-- Video Player Modal (Copied from List page) -->
+<div class="modal fade" id="videoModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg" style="max-width: 90%; margin: 1.75rem auto;">
+        <div class="modal-content" style="background: #0f172a; border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 16px;">
+            <div class="modal-header" style="border-bottom: 1px solid rgba(255,255,255,0.05); padding: 15px 20px;">
+                <h5 class="modal-title" style="color: #ecfdf5; font-weight: 700; display: flex; align-items: center; gap: 10px;">
+                    <i class="fa fa-youtube-play" style="color: #10b981;"></i> 
+                    <span id="current-video-title">Video Player</span>
+                </h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close" style="color: #94a3b8; text-shadow: none; opacity: 1;">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body p-0" style="display: flex; flex-direction: column; height: 80vh;">
+                <div style="flex-grow: 1; background: black; position: relative;">
+                    <video id="video-player" class="video-js vjs-big-play-centered vjs-theme-forest" controls preload="auto" style="width: 100%; height: 100%;"></video>
+                </div>
+                
+                <!-- Playlist Control Bar -->
+                <div style="height: 60px; background: rgba(6, 78, 59, 0.3); border-top: 1px solid rgba(16, 185, 129, 0.1); display: flex; align-items: center; justify-content: space-between; padding: 0 20px;">
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <button id="btn-prev-ep" class="playlist-nav-btn" title="이전 에피소드"><i class="fa fa-step-backward"></i></button>
+                        <button id="btn-next-ep" class="playlist-nav-btn" title="다음 에피소드"><i class="fa fa-step-forward"></i></button>
+                        <span id="playlist-progress" style="color: #d1fae5; font-weight: 600; font-size: 14px;"></span>
+                    </div>
+                    <button id="btn-toggle-playlist" class="playlist-toggle-btn active">
+                        <i class="fa fa-list"></i> 플레이리스트
+                    </button>
+                </div>
+
+                <!-- Playlist Drawer -->
+                <div id="playlist-list-container" style="height: 0px; background: rgba(2, 44, 34, 0.95); transition: height 0.3s ease; overflow-y: auto; border-top: 1px solid rgba(16, 185, 129, 0.1); display: none;">
+                    <div id="playlist-list" style="padding: 10px;">
+                        <!-- JS generated items -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<link href="https://vjs.zencdn.net/7.20.3/video-js.css" rel="stylesheet" />
+<script src="https://vjs.zencdn.net/7.20.3/video.min.js"></script>
+
+<style>
+/* VideoJS Customization */
+.vjs-theme-forest { --vjs-theme-forest--emerald: #10b981; }
+.video-js.vjs-theme-forest .vjs-big-play-button { background-color: #10b981; border-color: #34d399; }
+
+.playlist-nav-btn {
+    width: 40px; height: 40px; background: linear-gradient(135deg, #10b981, #059669);
+    border: none; border-radius: 50%; color: white; font-size: 14px;
+    cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center;
+}
+.playlist-nav-btn:hover { transform: scale(1.1); box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4); }
+.playlist-nav-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+.playlist-toggle-btn {
+    padding: 8px 14px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2);
+    border-radius: 8px; color: #6ee7b7; font-size: 13px; cursor: pointer; transition: all 0.2s ease;
+}
+.playlist-toggle-btn:hover { background: rgba(16, 185, 129, 0.2); color: #ecfdf5; }
+.playlist-toggle-btn.active { background: rgba(16, 185, 129, 0.3); border-color: #10b981; color: #10b981; }
+
+.playlist-item {
+    padding: 10px 12px; border-radius: 6px; cursor: pointer; transition: all 0.2s;
+    color: #d1fae5; font-size: 13px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid rgba(16, 185, 129, 0.05);
+}
+.playlist-item:hover { background: rgba(16, 185, 129, 0.1); color: #fff; }
+.playlist-item.active { background: rgba(16, 185, 129, 0.2); color: #10b981; font-weight: 600; border-left: 3px solid #10b981; }
+</style>
+
+<script>
+var videoPlayer = null;
+var playlist = [];
+var currentPlaylistIndex = 0;
+var currentPlayingPath = null;
+var playlistRefreshInterval = null;
+
+function play_video(path, filename) {
+    if (!path) {
+        $.notify('파일 경로를 찾을 수 없습니다.', { type: 'warning' });
+        return;
+    }
+
+    // 플레이리스트 정보 가져오기
+    $.get('/' + package_name + '/ajax/' + sub + '/get_playlist?path=' + encodeURIComponent(path), function(data) {
+        playlist = data.playlist || [{path: path, name: filename}];
+        currentPlaylistIndex = data.current_index || 0;
+        currentPlayingPath = path;
+
+        $('#videoModal').modal('show');
+        
+        if (!videoPlayer) {
+            videoPlayer = videojs('video-player', {
+                fluid: true,
+                playbackRates: [0.5, 1, 1.25, 1.5, 2]
+            });
+            
+            videoPlayer.on('ended', function() {
+                if (currentPlaylistIndex < playlist.length - 1) {
+                    playVideoAtIndex(currentPlaylistIndex + 1);
+                }
+            });
+        }
+        
+        playVideoAtIndex(currentPlaylistIndex);
+        renderPlaylistItems();
+        
+        // 실시간 갱신 시작 (10초)
+        if (playlistRefreshInterval) clearInterval(playlistRefreshInterval);
+        playlistRefreshInterval = setInterval(refreshPlaylistData, 10000);
+        
+        // Open playlist drawer by default
+        $('#playlist-list-container').show().css('height', '200px');
+    });
+}
+
+function playVideoAtIndex(index) {
+    if (index < 0 || index >= playlist.length) return;
+    currentPlaylistIndex = index;
+    var item = playlist[index];
+    currentPlayingPath = item.path;
+    
+    var streamUrl = '/' + package_name + '/ajax/' + sub + '/stream_video?path=' + encodeURIComponent(item.path);
+    
+    if (videoPlayer) {
+        videoPlayer.src({ type: 'video/mp4', src: streamUrl });
+        videoPlayer.play();
+    }
+    
+    $('#current-video-title').text(item.name);
+    updatePlaylistUI();
+}
+
+function updatePlaylistUI() {
+    var total = playlist.length;
+    var current = currentPlaylistIndex + 1;
+    $('#playlist-progress').text(current + ' / ' + total + ' 에피소드');
+    
+    // 버튼 활성/비활성
+    $('#btn-prev-ep').toggle(currentPlaylistIndex > 0);
+    $('#btn-next-ep').toggle(currentPlaylistIndex < playlist.length - 1);
+    
+    // 리스트 하이라이트
+    $('#playlist-list .playlist-item').removeClass('active');
+    $('#playlist-list .playlist-item').eq(currentPlaylistIndex).addClass('active');
+}
+
+function refreshPlaylistData(slient = true) {
+    if (!currentPlayingPath || !$('#videoModal').is(':visible')) return;
+    
+    $.get('/' + package_name + '/ajax/' + sub + '/get_playlist?path=' + encodeURIComponent(currentPlayingPath), function(data) {
+        if (data.playlist && data.playlist.length > 0) {
+            var oldLength = playlist.length;
+            playlist = data.playlist;
+            currentPlaylistIndex = data.current_index;
+            
+            if (playlist.length > oldLength) {
+                $.notify('새로운 에피소드가 감지되어 플레이리스트가 업데이트되었습니다.', { type: 'success' });
+            }
+            
+            renderPlaylistItems();
+            updatePlaylistUI();
+        }
+    });
+}
+
+function renderPlaylistItems() {
+    var str = '';
+    for (var i = 0; i < playlist.length; i++) {
+        var item = playlist[i];
+        var isActive = (i === currentPlaylistIndex) ? 'active' : '';
+        str += '<div class="playlist-item ' + isActive + '" onclick="playVideoAtIndex(' + i + ')">';
+        str += '<i class="fa ' + (isActive ? 'fa-play-circle' : 'fa-play') + '"></i>';
+        str += '<span>' + item.name + '</span>';
+        str += '</div>';
+    }
+    $('#playlist-list').html(str);
+}
+
+// 모달 닫힐 때 중지
+$('#videoModal').on('hidden.bs.modal', function () {
+    if (videoPlayer) {
+        videoPlayer.pause();
+    }
+    if (playlistRefreshInterval) {
+        clearInterval(playlistRefreshInterval);
+        playlistRefreshInterval = null;
+    }
+    currentPlayingPath = null;
+});
+
+// 플레이리스트 컨트롤러 핸들러
+$('#btn-prev-ep').click(function() { playVideoAtIndex(currentPlaylistIndex - 1); });
+$('#btn-next-ep').click(function() { playVideoAtIndex(currentPlaylistIndex + 1); });
+$('#btn-toggle-playlist').click(function() {
+    $(this).toggleClass('active');
+    var container = $('#playlist-list-container');
+    if (container.is(':visible')) {
+        container.css('height', '0');
+        setTimeout(function() { container.hide(); }, 300);
+    } else {
+        container.show();
+        setTimeout(function() { container.css('height', '200px'); }, 10);
+    }
+});
+</script>
 {% endblock %}
