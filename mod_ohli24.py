@@ -1266,32 +1266,36 @@ class LogicOhli24(PluginModuleBase):
                 author_name = f"{season_ep_str} • Ohli24"
 
             embed = {
-                "title": title,
+                "title": f"📺 {title}",
                 "description": desc,
-                "color": 5763719, # Green (0x57F287)
+                "color": 0x5865F2,  # Discord Blurple
                 "author": {
                     "name": author_name,
-                    "icon_url": "https://i.imgur.com/4M34hi2.png" # Optional generic icon
+                    "icon_url": "https://i.imgur.com/4M34hi2.png"
                 },
                 "fields": [
                     {
-                        "name": "파일명",
-                        "value": filename if filename else "알 수 없음",
+                        "name": "📁 파일명",
+                        "value": f"`{filename}`" if filename else "알 수 없음",
                         "inline": False
                     }
                 ],
                 "footer": {
-                    "text": f"FlaskFarm Ohli24 • {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-                }
+                    "text": "FlaskFarm Ohli24",
+                    "icon_url": "https://i.imgur.com/4M34hi2.png"
+                },
+                "timestamp": datetime.now().isoformat()
             }
             
             if image_url:
-                embed["thumbnail"] = {
-                    "url": image_url
-                }
+                # image는 큰 이미지 (하단 전체 너비)
+                embed["image"] = {"url": image_url}
+                # thumbnail은 작은 우측 상단 이미지 (선택적)
+                # embed["thumbnail"] = {"url": image_url}
 
             message = {
                 "username": "Ohli24 Downloader",
+                "avatar_url": "https://i.imgur.com/4M34hi2.png",
                 "embeds": [embed]
             }
 
@@ -1593,11 +1597,21 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
             if proxies:
                 scraper.proxies = {"http": proxies["http"], "https": proxies["https"]}
             
-            # getVideo API 호출
             # iframe 도메인 자동 감지 (cdndania.com -> michealcdn.com 등)
             parsed_iframe = parse.urlparse(iframe_src)
             iframe_domain = f"{parsed_iframe.scheme}://{parsed_iframe.netloc}"
             
+            # [CRITICAL] iframe 페이지 먼저 방문하여 세션 쿠키 획득
+            encoded_referer = parse.quote(referer_url, safe=":/?#[]@!$&'()*+,;=%")
+            iframe_headers = {
+                "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "referer": encoded_referer,
+            }
+            logger.debug(f"Visiting iframe page for cookies: {iframe_src}")
+            scraper.get(iframe_src, headers=iframe_headers, timeout=30, proxies=proxies)
+            
+            # getVideo API 호출
             api_url = f"{iframe_domain}/player/index.php?data={video_id}&do=getVideo"
             headers = {
                 "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -1624,6 +1638,28 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
                     
                     if video_url:
                         logger.info(f"Found video URL via API: {video_url}")
+                        
+                        # [RESOLUTION PARSING] - 같은 세션으로 m3u8 파싱 (쿠키 유지)
+                        try:
+                            m3u8_headers = {
+                                "referer": iframe_src,
+                                "origin": iframe_domain,
+                                "accept": "*/*",
+                            }
+                            m3u8_resp = scraper.get(video_url, headers=m3u8_headers, timeout=10, proxies=proxies)
+                            m3u8_content = m3u8_resp.text
+                            logger.debug(f"m3u8 content (first 300 chars): {m3u8_content[:300]}")
+                            
+                            if "#EXT-X-STREAM-INF" in m3u8_content:
+                                for line in m3u8_content.strip().split('\n'):
+                                    if line.startswith('#EXT-X-STREAM-INF'):
+                                        res_match = re.search(r'RESOLUTION=(\d+)x(\d+)', line)
+                                        if res_match:
+                                            resolution = int(res_match.group(2))  # height
+                                if resolution:
+                                    logger.info(f"Detected resolution from m3u8: {resolution}p")
+                        except Exception as res_err:
+                            logger.warning(f"Resolution parsing failed: {res_err}")
                         
                         # VTT 자막 확인 (있는 경우)
                         vtt_url = data.get("videoSubtitle")
@@ -1695,28 +1731,6 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
         except Exception as e:
             logger.error(f"Error in extract_video_from_cdndania: {e}")
             logger.error(traceback.format_exc())
-        
-        # m3u8 master playlist에서 해상도 파싱 (추가 요청 1회)
-        if video_url and not resolution:
-            try:
-                from curl_cffi import requests as cffi_requests
-                scraper = cffi_requests.Session(impersonate="chrome120")
-                proxies = LogicOhli24.get_proxies()
-                m3u8_headers = {"referer": iframe_src}
-                m3u8_resp = scraper.get(video_url, headers=m3u8_headers, timeout=10, proxies=proxies)
-                m3u8_content = m3u8_resp.text
-                
-                if "#EXT-X-STREAM-INF" in m3u8_content:
-                    # 마지막(최고 품질) 스트림의 해상도 추출
-                    for line in m3u8_content.strip().split('\n'):
-                        if line.startswith('#EXT-X-STREAM-INF'):
-                            res_match = re.search(r'RESOLUTION=(\d+)x(\d+)', line)
-                            if res_match:
-                                resolution = int(res_match.group(2))  # height
-                    if resolution:
-                        logger.info(f"Detected resolution from m3u8: {resolution}p")
-            except Exception as res_err:
-                logger.warning(f"Failed to parse resolution from m3u8: {res_err}")
         
         return video_url, vtt_url, cookies_file, resolution
 
