@@ -159,3 +159,4 @@ test.ipynb
 unanalyzed.py
 test.ipynb
 .DS_Store
+test*.py

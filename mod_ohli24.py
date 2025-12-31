@@ -286,12 +286,12 @@ class LogicOhli24(PluginModuleBase):
                 thread.start()
                 return jsonify("")
             elif sub == "web_list3":
-                print("web_list3")
-                print(request)
-                P.logger.debug(req)
-                P.logger.debug("web_list3")
+                # print("web_list3")
+                # print(request)
+                # P.logger.debug(req)
+                # P.logger.debug("web_list3")
                 ret = ModelOhli24Item.web_list(req)
-                print(ret)
+                # print(ret)
                 return jsonify(ret)
 
             elif sub == "web_list2":
@@ -318,6 +318,70 @@ class LogicOhli24(PluginModuleBase):
                 except Exception as e:
                     logger.error(f"Exception: {e}")
                     logger.error(traceback.format_exc())
+            
+            elif sub == "stream_video":
+                # 비디오 스트리밍 (MP4 파일 직접 서빙)
+                try:
+                    from flask import send_file, Response
+                    import mimetypes
+                    
+                    file_path = request.args.get("path", "")
+                    logger.info(f"Stream video request: {file_path}")
+                    
+                    if not file_path or not os.path.exists(file_path):
+                        return jsonify({"error": "File not found"}), 404
+                    
+                    # 보안 체크: 다운로드 폴더 내부인지 확인
+                    download_path = P.ModelSetting.get("ohli24_download_path")
+                    if not file_path.startswith(download_path):
+                        return jsonify({"error": "Access denied"}), 403
+                    
+                    # Range 요청 지원 (비디오 시킹)
+                    file_size = os.path.getsize(file_path)
+                    range_header = request.headers.get('Range', None)
+                    
+                    if range_header:
+                        byte_start, byte_end = 0, None
+                        match = re.search(r'bytes=(\d+)-(\d*)', range_header)
+                        if match:
+                            byte_start = int(match.group(1))
+                            byte_end = int(match.group(2)) if match.group(2) else file_size - 1
+                        
+                        if byte_end is None or byte_end >= file_size:
+                            byte_end = file_size - 1
+                        
+                        length = byte_end - byte_start + 1
+                        
+                        def generate():
+                            with open(file_path, 'rb') as f:
+                                f.seek(byte_start)
+                                remaining = length
+                                while remaining > 0:
+                                    chunk_size = min(8192, remaining)
+                                    data = f.read(chunk_size)
+                                    if not data:
+                                        break
+                                    remaining -= len(data)
+                                    yield data
+                        
+                        resp = Response(
+                            generate(),
+                            status=206,
+                            mimetype=mimetypes.guess_type(file_path)[0] or 'video/mp4',
+                            direct_passthrough=True
+                        )
+                        resp.headers.add('Content-Range', f'bytes {byte_start}-{byte_end}/{file_size}')
+                        resp.headers.add('Accept-Ranges', 'bytes')
+                        resp.headers.add('Content-Length', length)
+                        return resp
+                    else:
+                        return send_file(file_path, mimetype=mimetypes.guess_type(file_path)[0] or 'video/mp4')
+                        
+                except Exception as e:
+                    logger.error(f"Stream video error: {e}")
+                    logger.error(traceback.format_exc())
+                    return jsonify({"error": str(e)}), 500
+                    
         except Exception as e:
             P.logger.error(f"Exception: {e}")
             P.logger.error(traceback.format_exc())

@@ -31,6 +31,29 @@
         <div id="list_div"></div>
         <div id='page2'></div>
     </div>
+    
+    <!-- Video.js CDN -->
+    <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet" />
+    <script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
+    
+    <!-- Video Player Modal -->
+    <div class="modal fade" id="videoModal" tabindex="-1" role="dialog" aria-labelledby="videoModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl" role="document">
+            <div class="modal-content" style="background: #0f172a; border-radius: 12px;">
+                <div class="modal-header" style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                    <h5 class="modal-title" id="videoModalLabel" style="color: #f1f5f9;">비디오 플레이어</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close" style="color: #f1f5f9;">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body" style="padding: 0;">
+                    <video id="video-player" class="video-js vjs-big-play-centered vjs-theme-fantasy" controls preload="auto" style="width: 100%; height: auto; max-height: 75vh;">
+                        <p class="vjs-no-js">JavaScript가 필요합니다.</p>
+                    </video>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="{{ url_for('.static', filename='js/sjva_global1.js') }}"></script>
     <script src="{{ url_for('.static', filename='js/sjva_ui14.js') }}"></script>
@@ -149,6 +172,46 @@
             global_sub_request_search('1')
         });
 
+        // 비디오 보기 버튼 클릭 핸들러
+        var videoPlayer = null;
+        
+        $("body").on('click', '.btn-watch', function (e) {
+            e.preventDefault();
+            var filePath = $(this).data('path');
+            var streamUrl = '/' + package_name + '/ajax/' + sub + '/stream_video?path=' + encodeURIComponent(filePath);
+            
+            // Video.js 초기화 또는 소스 변경
+            if (videoPlayer) {
+                videoPlayer.src({ type: 'video/mp4', src: streamUrl });
+            } else {
+                videoPlayer = videojs('video-player', {
+                    controls: true,
+                    autoplay: false,
+                    preload: 'auto',
+                    fluid: true,
+                    playbackRates: [0.5, 1, 1.5, 2],
+                    controlBar: {
+                        skipButtons: { forward: 10, backward: 10 }
+                    }
+                });
+                videoPlayer.src({ type: 'video/mp4', src: streamUrl });
+            }
+            
+            // 모달 열기
+            $('#videoModal').modal('show');
+        });
+        
+        // 모달 닫을 때 비디오 정지 + 포커스 해제 (aria-hidden 경고 방지)
+        $('#videoModal').on('hide.bs.modal', function () {
+            // 포커스된 요소에서 포커스 해제 (aria-hidden 경고 방지)
+            document.activeElement.blur();
+        });
+        
+        $('#videoModal').on('hidden.bs.modal', function () {
+            if (videoPlayer) {
+                videoPlayer.pause();
+            }
+        });
 
         function make_list(data) {
             let str = '';
@@ -219,6 +282,7 @@
                                 <button data-id="${item.id}" class="btn btn-outline-danger btn-remove">
                                     <i class="fa fa-trash"></i> 삭제
                                 </button>
+                                ${item.status == 'completed' ? `<button data-path="${item.savepath}/${item.filename}" class="btn btn-outline-success btn-watch"><i class="fa fa-play"></i> 보기</button>` : ''}
                             </div>
                         </div>
                     </div>
@@ -332,9 +396,9 @@
 
     /* General Layout Tweaks */
     .container-fluid {
-        padding-left: 10px !important;
-        padding-right: 10px !important; 
-        max-width: 1600px;
+        padding-left: 4px !important;
+        padding-right: 4px !important; 
+        max-width: 100%;
         margin: 0 auto;
     }
     
@@ -645,6 +709,13 @@ $(document).ready(function(){
 });
 </script>
 <style>
+/* Desktop Full Width Override - .container max-width 제거 */
+#main_container.container {
+    max-width: 100% !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+}
+
 /* Mobile Margin Fix */
 @media (max-width: 768px) {
     body { overflow-x: hidden !important; padding: 0 !important; margin: 0 !important; }
@@ -667,6 +738,22 @@ $(document).ready(function(){
     .badge {
         white-space: normal !important; text-align: left !important;
         line-height: 1.4 !important; height: auto !important; display: inline-block !important;
+    }
+    
+    /* Mobile Nav Pills - blur 제거하고 solid background 사용 */
+    ul.nav.nav-pills.bg-light {
+        background-color: #1e293b !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        border-radius: 12px !important;
+        padding: 4px !important;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+    
+    ul.nav.nav-pills .nav-link {
+        padding: 6px 12px !important;
+        font-size: 12px !important;
     }
 }
     /* Pagination Styling */
@@ -697,6 +784,28 @@ $(document).ready(function(){
         border-color: transparent;
         opacity: 1;
         box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+    }
+
+    /* JSON Modal 팝업 폭 확대 */
+    .modal-dialog {
+        max-width: 90% !important;
+        width: 900px !important;
+    }
+    
+    .modal-content {
+        background: rgba(15, 23, 42, 0.95) !important;
+        border: 1px solid rgba(148, 163, 184, 0.2) !important;
+        border-radius: 12px !important;
+    }
+    
+    .modal-body pre {
+        background: rgba(0, 0, 0, 0.5) !important;
+        color: #4ade80 !important;
+        padding: 15px !important;
+        border-radius: 8px !important;
+        max-height: 70vh !important;
+        overflow: auto !important;
+        font-size: 12px !important;
     }
 </style>
 {% endblock %}
