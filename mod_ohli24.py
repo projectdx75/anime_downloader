@@ -136,6 +136,7 @@ class LogicOhli24(PluginModuleBase):
         }
         self.queue = None
         # default_route_socketio(P, self)
+        self.web_list_model = ModelOhli24Item
         default_route_socketio_module(self, attach="/queue")
 
     def cleanup_stale_temps(self) -> None:
@@ -300,7 +301,10 @@ class LogicOhli24(PluginModuleBase):
                 return jsonify(ModelOhli24Item.web_list(request))
 
             elif sub == "db_remove":
-                return jsonify(ModelOhli24Item.delete_by_id(req.form["id"]))
+                db_id = request.form.get("id")
+                if not db_id:
+                    return jsonify({"ret": "error", "log": "No ID provided"})
+                return jsonify(ModelOhli24Item.delete_by_id(db_id))
             elif sub == "add_whitelist":
                 try:
                     # params = request.get_data()
@@ -318,6 +322,7 @@ class LogicOhli24(PluginModuleBase):
                 except Exception as e:
                     logger.error(f"Exception: {e}")
                     logger.error(traceback.format_exc())
+                    return jsonify({"error": str(e)}), 500
             
             elif sub == "stream_video":
                 # 비디오 스트리밍 (MP4 파일 직접 서빙)
@@ -451,6 +456,10 @@ class LogicOhli24(PluginModuleBase):
         except Exception as e:
             P.logger.error(f"Exception: {e}")
             P.logger.error(traceback.format_exc())
+            return jsonify({"error": str(e)}), 500
+        
+        # 매칭되지 않는 sub 요청에 대한 기본 응답
+        return jsonify({"error": f"Unknown sub: {sub}"}), 404
 
     def get_episode(self, clip_id):
         for _ in self.current_data["episode"]:

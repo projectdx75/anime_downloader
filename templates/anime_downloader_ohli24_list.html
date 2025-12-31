@@ -31,8 +31,28 @@
         <div id="list_div"></div>
         <div id='page2'></div>
     </div>
+
+    <!-- Custom Confirmation Modal -->
+    <div class="modal fade" id="confirmModal" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content animate__animated animate__zoomIn" style="background: #1e293b; border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 20px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);">
+                <div class="modal-body text-center" style="padding: 40px 30px;">
+                    <div style="width: 70px; height: 70px; background: rgba(239, 68, 68, 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 24px;">
+                        <i class="fa fa-trash animate__animated animate__shakeX animate__infinite" style="color: #ef4444; font-size: 30px;"></i>
+                    </div>
+                    <h4 style="color: #f1f5f9; font-weight: 700; margin-bottom: 12px;">정말 삭제하시겠습니까?</h4>
+                    <p style="color: #94a3b8; font-size: 15px; margin-bottom: 32px;">한 번 삭제된 기록은 다시 복구할 수 없습니다.</p>
+                    <div style="display: flex; gap: 12px; justify-content: center;">
+                        <button type="button" class="custom-btn btn-reset" data-dismiss="modal" style="width: 120px;">취소</button>
+                        <button type="button" id="confirmDeleteBtn" class="custom-btn" style="width: 120px; background: #ef4444; color: white;">삭제하기</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
     
-    <!-- Video.js CDN -->
+    <!-- Animate.css & Video.js -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
     <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet" />
     <script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
     
@@ -128,7 +148,7 @@
 
         function global_sub_request_search(page, move_top = true) {
             console.log('........................')
-            var formData = getFormdata('#form_search')
+            var formData = get_formdata('#form_search')
             formData += '&page=' + page;
             $.ajax({
                 url: '/' + package_name + '/ajax/' + sub + '/web_list3',
@@ -150,8 +170,7 @@
 
         $("#search").click(function (e) {
             e.preventDefault();
-            {#global_sub_request_search('1');#}
-            globalRequestSearch('1');
+            global_sub_request_search('1');
         });
 
         $("body").on('click', '#page', function (e) {
@@ -185,18 +204,27 @@
             global_sub_request_search('1')
         });
 
+        var targetDeleteId = null;
+
         $("body").on('click', '.btn-remove', function (e) {
             e.preventDefault();
-            id = $(this).data('id');
+            targetDeleteId = $(this).data('id');
+            $('#confirmModal').modal('show');
+        });
+
+        $('#confirmDeleteBtn').click(function() {
+            if (!targetDeleteId) return;
+            
             $.ajax({
                 url: '/' + package_name + '/ajax/' + sub + '/db_remove',
                 type: "POST",
                 cache: false,
-                data: {id: id},
+                data: {id: targetDeleteId},
                 dataType: "json",
                 success: function (data) {
+                    $('#confirmModal').modal('hide');
                     if (data) {
-                        $.notify('<strong>삭제되었습니다.</strong>', {
+                        $.notify('<strong>성공적으로 삭제되었습니다.</strong>', {
                             type: 'success'
                         });
                         global_sub_request_search(current_data.paging.current_page, false)

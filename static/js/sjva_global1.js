@@ -47,7 +47,7 @@ function get_formdata(form_id) {
 }
 
 function globalRequestSearch2(page, move_top = true) {
-  var formData = getFormdata("#form_search")
+  var formData = get_formdata("#form_search")
   formData += "&page=" + page
   console.log(formData)
   $.ajax({

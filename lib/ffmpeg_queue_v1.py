@@ -199,15 +199,20 @@ class FfmpegQueue(object):
                 # except:
                 #    logger.debug('program path make fail!!')
                 # 파일 존재여부 체크
-                print("here...................")
-                P.logger.info(entity.info)
                 filepath = entity.get_video_filepath()
                 P.logger.debug(f"filepath:: {filepath}")
-                if os.path.exists(filepath):
+                
+                # 다운로드 방법 확인
+                download_method = P.ModelSetting.get(f"{self.name}_download_method")
+                
+                # .ytdl 파일이 있거나, ytdlp/aria2c 모드인 경우 '파일 있음'으로 건너뛰지 않음 (이어받기 허용)
+                is_ytdlp = download_method in ['ytdlp', 'aria2c']
+                has_ytdl_file = os.path.exists(filepath + ".ytdl")
+                
+                if os.path.exists(filepath) and not (is_ytdlp or has_ytdl_file):
                     entity.ffmpeg_status_kor = "파일 있음"
                     entity.ffmpeg_percent = 100
                     entity.refresh_status()
-                    # plugin.socketio_list_refresh()
                     continue
                 dirname = os.path.dirname(filepath)
                 filename = os.path.basename(filepath)

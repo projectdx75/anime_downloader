@@ -1,503 +1,407 @@
 {% extends "base.html" %}
 {% block content %}
 
-
-
 <div class="content-cloak">
-<table id="result_table" class="table table-sm tableRowHover">
-  <thead class="thead-dark">
-    <tr>
-      <th style="width:5%; text-align:center;">IDX</th>
-      <th style="width:8%; text-align:center;">Plugin</th>
-      <th style="width:10%; text-align:center;">시작시간</th>
-      <th style="width:20%; text-align:center;">파일명</th>
-      <th style="width:8%; text-align:center;">상태</th>
-      <th style="width:15%; text-align:center;">진행률</th>
-      <th style="width:5%; text-align:center;">길이</th>
-      <th style="width:5%; text-align:center;">PF</th>
-      <th style="width:8%; text-align:center;">배속</th>
-      <th style="width:8%; text-align:center;">진행시간</th>
-      <th style="width:8%; text-align:center;">Action</th>
-    </tr>
-  </thead>
-  <tbody id="list"></tbody>
-</table>
+    <div class="queue-header-container">
+        <h4 class="queue-title"><i class="fa fa-download"></i> 다운로드 큐</h4>
+        <div class="header-buttons">
+            <button id="reset_btn" class="queue-btn-top btn-danger">
+                <i class="fa fa-refresh"></i> 초기화
+            </button>
+            <button id="delete_completed_btn" class="queue-btn-top btn-warning">
+                <i class="fa fa-trash"></i> 완료 삭제
+            </button>
+        </div>
+        <div class="queue-meta">실시간 동기화 활성화됨 (3초 주기)</div>
+    </div>
+
+    <div class="table-responsive-custom">
+        <table id="result_table" class="table custom-queue-table tableRowHover">
+            <thead>
+                <tr>
+                    <th style="width:5%;">IDX</th>
+                    <th style="width:8%;">Plugin</th>
+                    <th style="width:10%;">시작시간</th>
+                    <th style="width:25%;">파일명</th>
+                    <th style="width:8%;">상태</th>
+                    <th style="width:18%;">진행률</th>
+                    <th style="width:6%;">길이</th>
+                    <th style="width:5%;">PF</th>
+                    <th style="width:10%;">현재 상태</th>
+                    <th style="width:5%;">Action</th>
+                </tr>
+            </thead>
+            <tbody id="list"></tbody>
+        </table>
+    </div>
+</div>
 
 <script type="text/javascript">
-
 $(document).ready(function(){
-  console.log('Queue page loaded, connecting to sockets...');
-  
-  var protocol = location.protocol;
-  var socketUrl = protocol + "//" + document.domain + ":" + location.port;
-  
-  // Queue 페이지 전용 namespace 연결
-  var queueSocket = null;
-  try {
-    queueSocket = io.connect(socketUrl + '/anime_downloader/linkkf/queue');
-    console.log('Queue socket connecting to:', socketUrl + '/anime_downloader/linkkf/queue');
-  } catch (e) {
-    console.error('Queue socket connect error:', e);
-  }
-  
-  // /framework namespace 연결 (FlaskFarm 기본 알림용)
-  var frameworkSocket = null;
-  try {
-    frameworkSocket = io.connect(socketUrl + '/framework');
-    console.log('Framework socket connecting to:', socketUrl + '/framework');
+    var protocol = location.protocol;
+    var socketUrl = protocol + "//" + document.domain + ":" + location.port;
     
-    frameworkSocket.on('connect', function() {
-      console.log('Framework socket connected!');
-    });
-    
-    // linkkf_status 이벤트로 다운로드 상태 업데이트 수신
-    frameworkSocket.on('linkkf_status', function(data) {
-      status_html(data);
-    });
-  } catch (e) {
-    console.error('Framework socket connect error:', e);
-  }
-  
-  // Queue socket으로 직접 이벤트 받기
-  var socket = queueSocket;
-  
-  if (socket) {
-    socket.on('connect', function() {
-      console.log('Socket connected! socket.id:', socket.id);
-    });
-  
-    socket.on('disconnect', function() {
-      console.log('Socket disconnected!');
-    });
-  
-    socket.on('connect_error', function(err) {
-      console.log('Socket connect error:', err);
-    });
-  
-    // 모든 이벤트 수신 테스트
-    socket.onAny(function(event, ...args) {
-      console.log('Socket event received:', event, args);
-    });
-
-    socket.on('on_start', function(data){
-      console.log('on_start received:', data);
-      document.getElementById("log").innerHTML += data.data;
-      document.getElementById("log").scrollTop = document.getElementById("log").scrollHeight;
-      document.getElementById("log").style.visibility = 'visible';
-      $('#loading').hide();
-    });
-
-    socket.on('add', function(data){
-      str = make_item(data);
-      if (current_data == null || current_data.length == 0) {
-        current_data = Array();
-        $("#list").html(str);
-      } else {
-        $("#list").html($("#list").html() + str);
-      }
-      current_data.push(data);
-    });
-
-    socket.on('status_change', function(data) {
-      button_html(data);
-    });
-
-    socket.on('status', function(data){
-      console.log('status received:', data);
-      status_html(data);
-    });
-
-    socket.on('last', function(data){
-      status_html(data);
-      button_html(data);
-    });
-  }
-
-  var refreshIntervalId = null;
-  
-  // 로딩 인디케이터 없이 조용히 목록 가져오기
-  function silentFetchList(callback) {
-    $.ajax({
-      url: '/' + PACKAGE_NAME + '/ajax/' + MODULE_NAME + '/command',
-      type: 'POST',
-      cache: false,
-      global: false,  // 로딩 인디케이터 표시 안함
-      data: {command: 'list'},
-      dataType: 'json',
-      success: function(data) {
-        if (callback) callback(data);
-      },
-      error: function(xhr, status, error) {
-        // 에러 무시
-      }
-    });
-  }
-  
-  // 자동 새로고침 (로딩 인디케이터 없음)
-  function autoRefreshList() {
-    silentFetchList(function(data) {
-      // 새 아이템이 추가되었는지 확인
-      if (!current_data || data.length !== current_data.length) {
-        current_data = data;
-        $("#list").html('');
-        console.log('Refreshed list:', data.length, 'items');
-        if (data.length == 0) {
-          str = "<tr><td colspan='10'><h4>작업이 없습니다.</h4><td><tr>";
-        } else {
-          str = ''
-          for(i in data) {
-            str += make_item(data[i]);
-          }
-        }
-        $("#list").html(str);
-      }
-      
-      // 진행 중인 다운로드가 있는지 확인
-      var hasActiveDownload = false;
-      if (data && data.length > 0) {
-        for (var j = 0; j < data.length; j++) {
-          if (data[j].status_str === 'DOWNLOADING' || data[j].status_str === 'WAITING') {
-            hasActiveDownload = true;
-            break;
-          }
-        }
-      }
-      
-      // 모든 다운로드 완료 시 자동 새로고침 중지
-      if (!hasActiveDownload && refreshIntervalId) {
-        console.log('All downloads completed, stopping auto-refresh');
-        clearInterval(refreshIntervalId);
-        refreshIntervalId = null;
-      }
-      
-      // 활성 다운로드가 있고 새로고침이 중지된 경우 재시작
-      if (hasActiveDownload && !refreshIntervalId) {
-        console.log('Active downloads detected, starting auto-refresh');
-        refreshIntervalId = setInterval(autoRefreshList, 3000);
-      }
-    });
-  }
-  
-  // 초기 로드 (로딩 인디케이터 표시)
-  globalSendCommand('list', null, null, null, function(data) {
-    current_data = data;
-    $("#list").html('');
-    if (data.length == 0) {
-      str = "<tr><td colspan='10'><h4>작업이 없습니다.</h4><td><tr>";
-    } else {
-      str = ''
-      for(i in data) {
-        str += make_item(data[i]);
-      }
+    // Queue 전용 소켓 시도
+    var queueSocket = null;
+    try {
+        queueSocket = io.connect(socketUrl + '/anime_downloader/linkkf/queue');
+    } catch (e) {
+        console.error('Queue socket error:', e);
     }
-    $("#list").html(str);
-  });
-  
-  // 3초마다 자동 새로고침 (로딩 인디케이터 없음)
-  refreshIntervalId = setInterval(autoRefreshList, 3000);
-});
+    
+    var frameworkSocket = null;
+    try {
+        frameworkSocket = io.connect(socketUrl + '/framework');
+        frameworkSocket.on('linkkf_status', function(data) {
+            status_html(data);
+        });
+    } catch (e) {
+        console.error('Framework socket error:', e);
+    }
+    
+    var socket = queueSocket;
+    if (socket) {
+        socket.on('status_change', function(data) { button_html(data); });
+        socket.on('status', function(data){ status_html(data); });
+        socket.on('last', function(data){ status_html(data); button_html(data); });
+    }
 
+    var refreshIntervalId = null;
+    function silentFetchList(callback) {
+        $.ajax({
+            url: '/' + PACKAGE_NAME + '/ajax/' + MODULE_NAME + '/command',
+            type: 'POST',
+            cache: false,
+            global: false,
+            data: {command: 'list'},
+            dataType: 'json',
+            success: function(data) { if (callback) callback(data); }
+        });
+    }
+    
+    function autoRefreshList() {
+        silentFetchList(function(data) {
+            if (!current_data || data.length !== current_data.length) {
+                current_data = data;
+                renderList(data);
+            }
+            
+            var hasActiveDownload = false;
+            if (data && data.length > 0) {
+                for (var j = 0; j < data.length; j++) {
+                    if (data[j].status_str === 'DOWNLOADING' || data[j].status_str === 'WAITING') {
+                        hasActiveDownload = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (!hasActiveDownload && refreshIntervalId) {
+                clearInterval(refreshIntervalId);
+                refreshIntervalId = null;
+            }
+            if (hasActiveDownload && !refreshIntervalId) {
+                refreshIntervalId = setInterval(autoRefreshList, 3000);
+            }
+        });
+    }
+    
+    function renderList(data) {
+        $("#list").html('');
+        if (!data || data.length == 0) {
+            $("#list").html("<tr><td colspan='10' style='text-align:center; padding: 40px; color: #6ee7b7;'>다운로드 대기 중인 작업이 없습니다.</td></tr>");
+        } else {
+            var str = '';
+            for(var i in data) {
+                str += make_item(data[i]);
+            }
+            $("#list").html(str);
+        }
+    }
+
+    globalSendCommand('list', null, null, null, function(data) {
+        current_data = data;
+        renderList(data);
+    });
+    
+    refreshIntervalId = setInterval(autoRefreshList, 3000);
+});
 
 $("body").on('click', '#stop_btn', function(e){
-  e.stopPropagation();
-  e.preventDefault();
-  globalSendCommand('stop', $(this).data('idx'), null, null, function(ret){
-    refresh_item(ret.data);
-  });
+    e.stopPropagation(); e.preventDefault();
+    globalSendCommand('stop', $(this).data('idx'), null, null, function(ret){
+        refresh_item(ret.data);
+    });
 });
 
+$("body").on('click', '#reset_btn', function(e){
+    e.preventDefault();
+    globalConfirmModal('초기화 하시겠습니까?', function(){
+        globalSendCommand('reset', null, null, null, function(ret){
+            autoRefreshList();
+        });
+    });
+});
+
+$("body").on('click', '#delete_completed_btn', function(e){
+    e.preventDefault();
+    globalSendCommand('delete_completed', null, null, null, function(ret){
+        autoRefreshList();
+    });
+});
+
+$("body").on('click', '#delete_btn', function(e){
+    e.stopPropagation(); e.preventDefault();
+    let idx = $(this).data('idx');
+    globalSendCommand('remove', idx, null, null, function(ret){
+        autoRefreshList();
+    });
+});
 
 function refresh_item(data) {
-  $('#tr1_'+data.idx).html(make_item1(data));
-  $('#collapse_'+data.idx).html(make_item2(data));
+    $('#tr1_'+data.idx).html(make_item1(data));
+    $('#collapse_'+data.idx).html(make_item2(data));
 }
 
 function make_item(data) {
-  str = '<tr id="tr1_'+data.idx+'" style="cursor: pointer;" data-toggle="collapse" data-target="#collapse_'+ data.idx + '" aria-expanded="true" >';
-  str += make_item1(data);
-  str += '</tr>';
-  str += '<tr class="collapse tableRowHoverOff" style="cursor: pointer;"  id="collapse_' + data.idx + '">';
-  str += make_item2(data);
-  str += '</tr>';
-  return str;
+    var str = '<tr id="tr1_'+data.idx+'" style="cursor: pointer;" data-toggle="collapse" data-target="#collapse_'+ data.idx + '" aria-expanded="false" >';
+    str += make_item1(data);
+    str += '</tr>';
+    str += '<tr class="collapse tableRowHoverOff" id="collapse_' + data.idx + '">';
+    str += make_item2(data);
+    str += '</tr>';
+    return str;
 }
 
 function make_item1(data) {
-  //console.log(data);
-  str = '';
-  str += '<td scope="col" style="width:5%; text-align:center;">'+ data.idx + '</td>';
-  str += '<td scope="col" style="width:8%; text-align:center;">'+ data.callback_id + '</td>';
-  str += '<td scope="col" style="width:10%; text-align:center;">'+ data.start_time + '</td>';
-  str += '<td scope="col" style="width:20%; text-align:center;">'+ data.filename + '</td>';
-  str += '<td id="status_'+data.idx+'" scope="col" style="width:8%; text-align:center;">'+ data.status_kor + '</td>';
-  var visi = 'hidden';
-  if (parseInt(data.percent) > 0) {
-    visi = 'visible';
-  }
-  str += '<td scope="col" style="width:20%; text-align:center;"><div class="progress"><div id="progress_'+data.idx+'" class="progress-bar" style="visibility: '+visi+'; width:'+data.percent+'%">'+data.percent +'%</div></div></td>';
-  str += '<td scope="col" style="width:5%; text-align:center;">'+ data.duration_str + '</td>';
-  str += '<td id="current_pf_count_'+data.idx+'" scope="col" style="width:5%; text-align:center;">'+ data.current_pf_count + '</td>';
-  str += '<td id="current_speed_'+data.idx+'" scope="col" style="width:8%; text-align:center;">'+ data.current_speed + '</td>';
-  str += '<td id="download_time_'+data.idx+'" scope="col" style="width:8%; text-align:center;">'+ data.download_time + '</td>';
-  str += '<td id="button_'+data.idx+'" scope="col" style="width:8%; text-align:center;">';
-  if (data.status_str == 'DOWNLOADING') {
-    str += j_button('stop_btn', '중지', {'idx':data.idx}, 'danger', false, false);
-  }
-  str += '</td>'
-  return str;
+    var str = '<td style="text-align:center;">'+ data.idx + '</td>';
+    str += '<td style="text-align:center;"><span class="badge badge-info">'+ data.callback_id + '</span></td>';
+    str += '<td style="text-align:center; font-size: 12px; color: #6ee7b7;">'+ data.start_time + '</td>';
+    str += '<td style="font-weight: 600;">'+ data.filename + '</td>';
+    
+    var status_class = 'status-wait';
+    if (data.status_str === 'DOWNLOADING') status_class = 'status-downloading';
+    else if (data.status_str === 'COMPLETED') status_class = 'status-completed';
+    else if (data.status_str === 'STOP') status_class = 'status-fail';
+
+    str += '<td id="status_'+data.idx+'" style="text-align:center;"><span class="badge-status ' + status_class + '">'+ data.status_kor + '</span></td>';
+    
+    var visi = (parseInt(data.percent) > 0) ? 'visible' : 'hidden';
+    str += '<td><div class="progress custom-progress"><div id="progress_'+data.idx+'" class="progress-bar" style="visibility: '+visi+'; width:'+data.percent+'%">'+data.percent +'%</div></div></td>';
+    
+    str += '<td style="text-align:center;">'+ data.duration_str + '</td>';
+    str += '<td id="current_pf_count_'+data.idx+'" style="text-align:center; color: #f87171;">'+ data.current_pf_count + '</td>';
+    str += '<td style="text-align:center; font-size: 13px;"><div id="current_speed_'+data.idx+'">'+ data.current_speed + '</div><div id="download_time_'+data.idx+'" style="font-size: 11px; opacity: 0.6;">'+ data.download_time + '</div></td>';
+    
+    str += '<td id="button_'+data.idx+'" style="text-align:center; padding: 10px 4px !important;">';
+    str += '<div class="action-btn-group">';
+    if (data.status_str == 'DOWNLOADING' || data.status_str == 'WAITING') {
+        str += '<button id="stop_btn" class="action-btn-mini btn-danger" data-idx="'+data.idx+'" title="중지"><i class="fa fa-stop"></i></button>';
+    } else {
+        str += '<button id="delete_btn" class="action-btn-mini btn-warning" data-idx="'+data.idx+'" title="삭제"><i class="fa fa-times"></i></button>';
+    }
+    str += '</div>';
+    str += '</td>';
+    return str;
 }
 
 function make_item2(data) {
-  str = '';
-  str += '<td colspan="11">';
-  str += '<div id="detail_'+data.idx+'">';
-  str += get_detail(data);
-  str += '</div>';
-  str += '</td>';
-  return str
+    var str = '<td colspan="10" style="background: rgba(0,0,0,0.2); padding: 15px !important;">';
+    str += '<div id="detail_'+data.idx+'" class="queue-detail-container">';
+    str += get_detail(data);
+    str += '</div>';
+    str += '</td>';
+    return str;
 }
 
-
 function get_detail(data) {
-  var str = j_row_info('URL', data.url);
-  str += j_row_info('임시경로', data.temp_fullpath);
-  str += j_row_info('저장경로', data.save_fullpath);
-  str += j_row_info('진행률(current/total)', data.percent+ '% (' + data.current_duration + ' / ' + data.duration + ')');
-  str += j_row_info('현재 비트레이트', data.current_bitrate);
-  str += j_row_info('종료시간', data.end_time);
-  str += j_row_info('허용 Packet Fail 수', data.max_pf_count);
-  str += j_row_info('파일 Exist', data.exist);
-  if (data.status_str == 'COMPLETED') {
-    str += j_row_info('파일 크기', data.filesize_str);
-    str += j_row_info('다운 속도', data.download_speed);
-  }
-  return str;
+    var str = '<div class="detail-grid">';
+    str += '<div class="detail-item"><span class="label">파일 경로</span><span class="value">' + data.save_fullpath + '</span></div>';
+    str += '<div class="detail-item"><span class="label">URL</span><span class="value text-truncate">' + data.url + '</span></div>';
+    str += '<div class="detail-item"><span class="label">진행 상황</span><span class="value">' + data.percent+ '% (' + data.current_duration + ' / ' + data.duration + ')</span></div>';
+    str += '<div class="detail-item"><span class="label">비트레이트</span><span class="value">' + data.current_bitrate + '</span></div>';
+    str += '<div class="detail-item"><span class="label">허용 에러(PF)</span><span class="value">' + data.max_pf_count + '</span></div>';
+    if (data.status_str == 'COMPLETED') {
+        str += '<div class="detail-item"><span class="label">파일 크기</span><span class="value">' + data.filesize_str + '</span></div>';
+        str += '<div class="detail-item"><span class="label">최종 속도</span><span class="value">' + (data.download_speed || 'N/A') + '</span></div>';
+    }
+    str += '</div>';
+    return str;
 }
 
 function button_html(data) {
-  //console.log(data)
-  str = '';
-  if (data.status_str == 'DOWNLOADING') {
-    str = j_button('stop_btn', '중지', {'idx':data.idx}, 'danger', false, false);
-  }
-  $("#button_" + data.idx).html(str);
+    var str = '<div class="action-btn-group">';
+    if (data.status_str == 'DOWNLOADING' || data.status_str == 'WAITING') {
+        str += '<button id="stop_btn" class="action-btn-mini btn-danger" data-idx="'+data.idx+'" title="중지"><i class="fa fa-stop"></i></button>';
+    } else {
+        str += '<button id="delete_btn" class="action-btn-mini btn-warning" data-idx="'+data.idx+'" title="삭제"><i class="fa fa-times"></i></button>';
+    }
+    str += '</div>';
+    $("#button_" + data.idx).html(str);
 }
 
 function status_html(data) {
-  var progress = document.getElementById("progress_" + data.idx);
-  if (!progress) {
-    return;
-  }
-  progress.style.width = data.percent+ '%';
-  progress.innerHTML = data.percent+ '%';
-  progress.style.visibility = 'visible';
-  
-  var statusEl = document.getElementById("status_" + data.idx);
-  if (statusEl) statusEl.innerHTML = data.status_kor;
-  
-  var pfEl = document.getElementById("current_pf_count_" + data.idx);
-  if (pfEl) pfEl.innerHTML = data.current_pf_count;
-  
-  var speedEl = document.getElementById("current_speed_" + data.idx);
-  if (speedEl) speedEl.innerHTML = data.current_speed;
-  
-  var timeEl = document.getElementById("download_time_" + data.idx);
-  if (timeEl) timeEl.innerHTML = data.download_time;
-  
-  var detailEl = document.getElementById("detail_" + data.idx);
-  if (detailEl) detailEl.innerHTML = get_detail(data);
+    var progress = document.getElementById("progress_" + data.idx);
+    if (!progress) return;
+    
+    progress.style.width = data.percent+ '%';
+    progress.innerHTML = data.percent+ '%';
+    progress.style.visibility = 'visible';
+    
+    var statusEl = document.getElementById("status_" + data.idx);
+    if (statusEl) {
+        var status_class = 'status-wait';
+        if (data.status_str === 'DOWNLOADING') status_class = 'status-downloading';
+        else if (data.status_str === 'COMPLETED') status_class = 'status-completed';
+        else if (data.status_str === 'STOP') status_class = 'status-fail';
+        statusEl.innerHTML = '<span class="badge-status ' + status_class + '">'+ data.status_kor + '</span>';
+    }
+    
+    var pfEl = document.getElementById("current_pf_count_" + data.idx);
+    if (pfEl) pfEl.innerHTML = data.current_pf_count;
+    
+    var speedEl = document.getElementById("current_speed_" + data.idx);
+    if (speedEl) speedEl.innerHTML = data.current_speed;
+    
+    var timeEl = document.getElementById("download_time_" + data.idx);
+    if (timeEl) timeEl.innerHTML = data.download_time;
+    
+    var detailEl = document.getElementById("detail_" + data.idx);
+    if (detailEl) detailEl.innerHTML = get_detail(data);
 }
-
 </script>
+
 <style>
-    /* 로딩 인디케이터 오버라이드 */
-    #loading {
-        background: rgba(15, 23, 42, 0.85) !important;
-        backdrop-filter: blur(8px) !important;
+    :root {
+        --forest-950: #022c22;
+        --forest-900: #064e3b;
+        --forest-800: #065f46;
+        --forest-500: #10b981;
+        --forest-400: #34d399;
+        --forest-accent: #6ee7b7;
     }
+
+    body { background-color: var(--forest-950) !important; color: #ecfdf5; }
     
-    #loading img,
-    #loading svg {
-        display: none !important;
-        visibility: hidden !important;
-        width: 0 !important;
-        height: 0 !important;
+    /* Layout Expansion */
+    #main_container, .container, .container-fluid, #anime_downloader_wrapper {
+      max-width: 100% !important;
+      padding-left: 5px !important;
+      padding-right: 5px !important;
+      margin: 0 auto !important;
     }
-    
-    #loading::before {
-        content: '';
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width: 50px;
-        height: 50px;
-        border: 4px solid rgba(96, 165, 250, 0.2);
-        border-top-color: #60a5fa;
-        border-radius: 50%;
-        animation: spin 0.8s linear infinite;
-        z-index: 100001;
-    }
-    
-    @keyframes spin {
-        to { transform: translate(-50%, -50%) rotate(360deg); }
-    }
-    
-    #modal_loading img,
-    #modal_loading svg {
-        display: none !important;
-        visibility: hidden !important;
-        width: 0 !important;
-        height: 0 !important;
-    }
-    
-    #modal_loading::before {
-        content: '';
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width: 40px;
-        height: 40px;
-        border: 3px solid rgba(96, 165, 250, 0.2);
-        border-top-color: #60a5fa;
-        border-radius: 50%;
-        animation: spin 0.8s linear infinite;
-    }
-    /* Navigation Menu Override */
-    ul.nav.nav-pills.bg-light {
-        background-color: rgba(30, 41, 59, 0.6) !important;
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 50rem !important;
+
+    /* Navigation (Tabs) Optimization */
+    .nav-pills {
+        background: rgba(6, 78, 59, 0.4) !important;
         padding: 6px !important;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2) !important;
+        border-radius: 12px !important;
+        border: 1px solid rgba(16, 185, 129, 0.1) !important;
+        margin-bottom: 20px !important;
         display: inline-flex !important;
-        flex-wrap: wrap;
-        justify-content: center;
-        width: auto !important;
-        margin-bottom: 20px;
+        gap: 4px !important;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2) !important;
     }
-
-    ul.nav.nav-pills .nav-item {
-        margin: 0 2px;
-    }
-
-    ul.nav.nav-pills .nav-link {
-        border-radius: 50rem !important;
+    .nav-pills .nav-link {
+        color: #d1fae5 !important;
+        font-weight: 600 !important;
         padding: 8px 20px !important;
-        color: #94a3b8 !important;
-        font-weight: 600;
-        transition: all 0.3s ease;
+        border-radius: 8px !important;
+        transition: all 0.3s ease !important;
+        border: 1px solid transparent !important;
     }
-
-    ul.nav.nav-pills .nav-link:hover {
-        background-color: rgba(255, 255, 255, 0.1);
+    .nav-pills .nav-link:hover {
+        background: rgba(16, 185, 129, 0.1) !important;
         color: #fff !important;
         transform: translateY(-1px);
     }
-
-    ul.nav.nav-pills .nav-link.active {
-        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+    .nav-pills .nav-link.active {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
         color: #fff !important;
-        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3) !important;
+        border: 1px solid rgba(255,255,255,0.1) !important;
     }
-</style>
 
-</div>
-
-<style>
-    /* Smooth Load Transition */
-    .content-cloak, 
-    #menu_module_div, 
-    #menu_page_div {
-        opacity: 0;
-        transition: opacity 0.5s ease-out;
+    .queue-header-container {
+        display: flex; justify-content: space-between; align-items: flex-end;
+        margin-bottom: 20px; border-bottom: 1px solid rgba(16, 185, 129, 0.2); padding-bottom: 10px;
     }
+    .queue-title { color: var(--forest-accent); font-weight: 700; margin: 0; }
+    .queue-meta { font-size: 12px; color: #6ee7b7; opacity: 0.6; }
+
+    .custom-queue-table {
+        background: rgba(6, 78, 59, 0.2); border-collapse: separate; border-spacing: 0 4px; color: #ecfdf5;
+    }
+    .custom-queue-table thead th {
+        background: rgba(2, 44, 34, 0.8) !important; color: #6ee7b7; font-size: 13px;
+        text-transform: uppercase; border: none !important; padding: 12px 8px !important;
+        text-align: center;
+    }
+    .custom-queue-table tbody tr {
+        background: rgba(6, 78, 59, 0.3); transition: all 0.2s;
+    }
+    .custom-queue-table tbody tr:hover { background: rgba(6, 78, 59, 0.5) !important; }
+    .custom-queue-table td { border: none !important; vertical-align: middle !important; padding: 14px 8px !important; }
+
+    /* Badges & Status */
+    .badge-status {
+        padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700;
+        display: inline-block; min-width: 60px; text-align: center;
+    }
+    .status-downloading { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .status-wait { background: rgba(251, 191, 36, 0.1); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.2); }
+    .status-completed { background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+    .status-fail { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+
+    /* Progress Bar */
+    .custom-progress { height: 18px; background: rgba(0,0,0,0.4); border-radius: 9px; overflow: hidden; border: 1px solid rgba(16, 185, 129, 0.1); }
+    .custom-progress .progress-bar {
+        background: linear-gradient(90deg, #10b981, #059669) !important;
+        font-weight: 700; font-size: 11px;
+        transition: width 0.4s ease-out;
+        box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
+    }
+
+    /* Action Buttons */
+    .action-btn-mini {
+        width: 32px; height: 32px; border-radius: 8px; border: none; font-size: 14px;
+        display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s;
+    }
+    .action-btn-mini.btn-danger { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+    .action-btn-mini.btn-danger:hover { background: #ef4444; color: white; transform: scale(1.1); }
+    .action-btn-mini.btn-warning { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+    .action-btn-mini.btn-warning:hover { background: #f59e0b; color: white; transform: scale(1.1); }
     
-    /* Staggered Delays for Natural Top-Down Flow */
-    #menu_module_div.visible {
-        opacity: 1;
-        transition-delay: 0ms;
-    }
+    .action-btn-group { display: flex; justify-content: center; gap: 4px; }
 
-    #menu_page_div.visible {
-        opacity: 1;
-        transition-delay: 150ms;
+    .header-buttons { display: flex; gap: 10px; align-items: center; }
+    .queue-btn-top {
+        display: flex; align-items: center; gap: 6px; padding: 6px 14px;
+        border: none; border-radius: 8px; font-weight: 600; font-size: 13px;
+        cursor: pointer; transition: all 0.3s ease;
     }
+    .queue-btn-top.btn-danger { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+    .queue-btn-top.btn-danger:hover { background: #ef4444; color: white; box-shadow: 0 0 15px rgba(239, 68, 68, 0.4); }
+    .queue-btn-top.btn-warning { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+    .queue-btn-top.btn-warning:hover { background: #f59e0b; color: white; box-shadow: 0 0 15px rgba(245, 158, 11, 0.4); }
 
-    .content-cloak.visible {
-        opacity: 1;
-        transition-delay: 300ms;
-    }
-    
-    /* Navigation Menu Override (Top Sub-menu) */
-    ul.nav.nav-pills.bg-light {
-        background-color: rgba(30, 41, 59, 0.6) !important;
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 50rem !important;
-        padding: 6px !important;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2) !important;
-        display: inline-flex !important;
-        flex-wrap: wrap;
-        justify-content: center;
-        width: auto !important;
-        margin-bottom: 20px;
-    }
+    /* Details */
+    .queue-detail-container { color: #d1fae5; font-size: 13px; }
+    .detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px 20px; }
+    .detail-item { display: flex; gap: 10px; align-items: flex-start; }
+    .detail-item .label { color: #6ee7b7; font-weight: 700; min-width: 100px; opacity: 0.7; font-size: 11px; text-transform: uppercase; }
+    .detail-item .value { color: #ecfdf5; word-break: break-all; }
 
-    ul.nav.nav-pills .nav-item { margin: 0 2px; }
-    ul.nav.nav-pills .nav-link {
-        border-radius: 50rem !important;
-        padding: 8px 20px !important;
-        color: #94a3b8 !important;
-        font-weight: 600;
-        transition: all 0.3s ease;
-    }
-    ul.nav.nav-pills .nav-link:hover {
-        background-color: rgba(255, 255, 255, 0.1);
-        color: #fff !important;
-        transform: translateY(-1px);
-    }
-    ul.nav.nav-pills .nav-link.active {
-        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
-        color: #fff !important;
-        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
-    }
+    /* Smooth Load */
+    .content-cloak { opacity: 0; transition: opacity 0.5s ease-out; }
+    .content-cloak.visible { opacity: 1; }
 </style>
 
 <script type="text/javascript">
 $(document).ready(function(){
-  // Smooth Load Trigger
-  setTimeout(function() {
-      $('.content-cloak, #menu_module_div, #menu_page_div').addClass('visible');
-  }, 100);
+    setTimeout(function() { $('.content-cloak').addClass('visible'); }, 100);
 });
 </script>
-<style>
-/* Mobile Margin Fix */
-@media (max-width: 768px) {
-    body { overflow-x: hidden !important; padding: 0 !important; margin: 0 !important; }
-    .container, .container-fluid, .row, form, #program_list, #program_auto_form, #episode_list, .queue-container, #yommi_wrapper, #main_container {
-        width: 100% !important; max-width: 100% !important;
-        padding-left: 4px !important; padding-right: 4px !important;
-        margin-left: 0 !important; margin-right: 0 !important;
-        box-sizing: border-box !important;
-    }
-    .form-group, .form-inline, [class*="col-"] {
-        flex: 0 0 100% !important; max-width: 100% !important; width: 100% !important;
-        padding-left: 0 !important; padding-right: 0 !important;
-    }
-    .row { margin-left: 0 !important; margin-right: 0 !important; }
-    .card, .card.p-4, .card.p-lg-5, .card.border-light {
-         width: calc(100% - 8px) !important; max-width: 100% !important;
-         padding: 8px !important; margin: 4px !important;
-         border-radius: 12px !important; box-sizing: border-box !important;
-    }
-    .badge {
-        white-space: normal !important; text-align: left !important;
-        line-height: 1.4 !important; height: auto !important; display: inline-block !important;
-    }
-}
-</style>
+
 {% endblock %}
+

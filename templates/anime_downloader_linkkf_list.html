@@ -1,279 +1,512 @@
 {% extends "base.html" %}
 {% block content %}
- 
-<div class="content-cloak">
-  <form id="form_search" class="form-inline" style="text-align:left">
-    <div class="container-fluid">
-      <div class="row show-grid">
-        <span class="col-md-4">
-          <select id="order" name="order" class="form-control form-control-sm">
-            <option value="desc">최근순</option>
-            <option value="asc">오래된순</option>
-          </select>
-          <select id="option" name="option" class="form-control form-control-sm">
-            <option value="all">전체</option>
-            <option value="completed">완료</option>
-          </select>
-        </span>
-        <span class="col-md-8">
-          <input id="search_word" name="search_word" class="form-control form-control-sm w-75" type="text" placeholder="" aria-label="Search">
-          <button id="search" class="btn btn-sm btn-outline-success">검색</button>
-          <button id="reset_btn" class="btn btn-sm btn-outline-success">리셋</button>
-        </span>
-      </div>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+    <div class="content-cloak">
+        <form id="form_search" class="form-inline" style="text-align:left; width:100%;">
+            <div class="search-container">
+                <div class="search-group-left">
+                     <select id="order" name="order" class="form-control custom-select">
+                        <option value="desc">최근순</option>
+                        <option value="asc">오래된 순</option>
+                      </select>
+                      <select id="option" name="option" class="form-control custom-select">
+                        <option value="all">전체</option>
+                        <option value="completed">완료</option>
+                      </select>
+                </div>
+                <div class="search-group-right">
+                      <input id="search_word" name="search_word" class="form-control custom-input" type="text" placeholder="링크애니 검색..." aria-label="Search">
+                      <button id="search" class="btn custom-btn btn-search"><i class="fa fa-search"></i></button>
+                      <button id="reset_btn" class="btn custom-btn btn-reset"><i class="fa fa-refresh"></i></button>
+                </div>
+            </div>
+        </form>
+        <div id='page1'></div>
+        <div id="list_div"></div>
+        <div id='page2'></div>
     </div>
-  </form>
-  <div id='page1'></div>
-  {{ macros.m_hr_head_top() }}
-  {{ macros.m_row_start('0') }}
-  {{ macros.m_col(2,  macros.m_strong('Poster')) }}
-  {{ macros.m_col(10,  macros.m_strong('Info')) }}
-  {{ macros.m_row_end() }}
-  {{ macros.m_hr_head_bottom() }}
-  <div id="list_div"></div>
-  <div id='page2'></div>
-</div>
 
-<script type="text/javascript">
-var package_name = "{{arg['package_name']}}";
-var sub = "{{arg['sub']}}";
-var current_data = null;
-
-$(document).ready(function(){
-  global_sub_request_search('1');
-});
-
-$("#search").click(function(e) {
-  e.preventDefault();
-  global_sub_request_search('1');
-});
-
-$("body").on('click', '#page', function(e){
-  e.preventDefault();
-  global_sub_request_search($(this).data('page'));
-});
-
-$("#reset_btn").click(function(e) {
-  e.preventDefault();
-  document.getElementById("order").value = 'desc';
-  document.getElementById("option").value = 'all';
-  document.getElementById("search_word").value = '';
-  global_sub_request_search('1')
-});
-
-
-$("body").on('click', '#json_btn', function(e){
-  e.preventDefault();
-  var id = $(this).data('id');
-  for (i in current_data.list) {
-    if (current_data.list[i].id == id) {
-      m_modal(current_data.list[i])
-    }
-  }
-});
-
-$("body").on('click', '#self_search_btn', function(e){
-  e.preventDefault();
-  var search_word = $(this).data('title');
-  document.getElementById("search_word").value = search_word;
-  global_sub_request_search('1')
-});
-
-$("body").on('click', '#remove_btn', function(e) {
-  e.preventDefault();
-  id = $(this).data('id');
-  $.ajax({
-    url: '/'+package_name+'/ajax/'+sub+ '/db_remove',
-    type: "POST", 
-    cache: false,
-    data: {id:id},
-    dataType: "json",
-    success: function (data) {
-      if (data) {
-        $.notify('<strong>삭제되었습니다.</strong>', {
-          type: 'success'
-        });
-        global_sub_request_search(current_data.paging.current_page, false)
-      } else {
-        $.notify('<strong>삭제 실패</strong>', {
-          type: 'warning'
-        });
-      }
-    }
-  });
-});
-
-$("body").on('click', '#request_btn', function(e){
-  e.preventDefault();
-  var content_code = $(this).data('content_code');
-  $(location).attr('href', '/' + package_name + '/' + sub + '/request?content_code=' + content_code)
-});
-
-
-
-function make_list(data) {
-  //console.log(data)
-  str = '';
-  for (i in data) {
-    //console.log(data[i])
-    str += m_row_start();
-    str += m_col(1, data[i].id);
-    tmp = (data[i].status == 'completed') ? '완료' : '미완료';
-    str += m_col(1, tmp);
-    tmp = data[i].created_time + '(추가)';
-    if (data[i].completed_time != null)
-      tmp += data[i].completed_time + '(완료)';
-    str += m_col(3, tmp)
-    tmp = data[i].savepath + '<br>' + data[i].filename + '<br><br>';
-    tmp2 = m_button('json_btn', 'JSON', [{'key':'id', 'value':data[i].id}]);
-    tmp2 += m_button('request_btn', '작품 검색', [{'key':'content_code', 'value':data[i].content_code}]);
-    tmp2 += m_button('self_search_btn', '목록 검색', [{'key':'title', 'value':data[i].title}]);
-    tmp2 += m_button('remove_btn', '삭제', [{'key':'id', 'value':data[i].id}]);
-    tmp += m_button_group(tmp2)
-    str += m_col(7, tmp)
-    str += m_row_end();
-    if (i != data.length -1) str += m_hr();
-  }
-  document.getElementById("list_div").innerHTML = str;
-}
-
-
-
-
-</script>    
-<style>
-    /* Navigation Menu Override */
-    ul.nav.nav-pills.bg-light {
-        background-color: rgba(30, 41, 59, 0.6) !important;
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 50rem !important;
-        padding: 6px !important;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2) !important;
-        display: inline-flex !important;
-        flex-wrap: wrap;
-        justify-content: center;
-        width: auto !important;
-        margin-bottom: 20px;
-    }
-
-    ul.nav.nav-pills .nav-item {
-        margin: 0 2px;
-    }
-
-    ul.nav.nav-pills .nav-link {
-        border-radius: 50rem !important;
-        padding: 8px 20px !important;
-        color: #94a3b8 !important;
-        font-weight: 600;
-        transition: all 0.3s ease;
-    }
-
-    ul.nav.nav-pills .nav-link:hover {
-        background-color: rgba(255, 255, 255, 0.1);
-        color: #fff !important;
-        transform: translateY(-1px);
-    }
-
-    ul.nav.nav-pills .nav-link.active {
-        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
-        color: #fff !important;
-        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
-    }
-</style>
-
-<style>
-    /* Smooth Load Transition */
-    .content-cloak, 
-    #menu_module_div, 
-    #menu_page_div {
-        opacity: 0;
-        transition: opacity 0.5s ease-out;
-    }
+    <!-- Custom Confirmation Modal -->
+    <div class="modal fade" id="confirmModal" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content animate__animated animate__zoomIn" style="background: #022c22; border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 20px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);">
+                <div class="modal-body text-center" style="padding: 40px 30px;">
+                    <div style="width: 70px; height: 70px; background: rgba(239, 68, 68, 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 24px;">
+                        <i class="fa fa-trash animate__animated animate__shakeX animate__infinite" style="color: #ef4444; font-size: 30px;"></i>
+                    </div>
+                    <h4 style="color: #fff; font-weight: 700; margin-bottom: 12px;">정말 삭제하시겠습니까?</h4>
+                    <p style="color: #6ee7b7; font-size: 15px; margin-bottom: 32px;">한 번 삭제된 기록은 다시 복구할 수 없습니다.</p>
+                    <div style="display: flex; gap: 12px; justify-content: center;">
+                        <button type="button" class="custom-btn btn-reset" data-dismiss="modal" style="width: 120px;">취소</button>
+                        <button type="button" id="confirmDeleteBtn" class="custom-btn" style="width: 120px; background: #ef4444; color: white;">삭제하기</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
     
-    /* Staggered Delays for Natural Top-Down Flow */
-    #menu_module_div.visible {
-        opacity: 1;
-        transition-delay: 0ms;
-    }
-
-    #menu_page_div.visible {
-        opacity: 1;
-        transition-delay: 150ms;
-    }
-
-    .content-cloak.visible {
-        opacity: 1;
-        transition-delay: 300ms;
-    }
+    <script src="{{ url_for('.static', filename='js/sjva_global1.js') }}"></script>
+    <script src="{{ url_for('.static', filename='js/sjva_ui14.js') }}"></script>
     
-    /* Navigation Menu Override (Top Sub-menu) */
-    ul.nav.nav-pills.bg-light {
-        background-color: rgba(30, 41, 59, 0.6) !important;
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 50rem !important;
-        padding: 6px !important;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2) !important;
-        display: inline-flex !important;
-        flex-wrap: wrap;
-        justify-content: center;
-        width: auto !important;
-        margin-bottom: 20px;
-    }
+    <!-- Video.js -->
+    <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet" />
+    <script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
+    
+    <!-- Video Player Modal -->
+    <div class="modal fade" id="videoModal" tabindex="-1" role="dialog" aria-labelledby="videoModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl" role="document">
+            <div class="modal-content" style="background: #022c22; border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.2);">
+                <div class="modal-header" style="border-bottom: 1px solid rgba(16, 185, 129, 0.1);">
+                    <h5 class="modal-title" id="videoModalLabel" style="color: #ecfdf5;">링크애니 시청</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close" style="color: #ecfdf5;">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body" style="padding: 0;">
+                    <video id="video-player" class="video-js vjs-big-play-centered vjs-theme-forest" controls preload="auto" style="width: 100%; height: auto; max-height: 75vh;">
+                        <p class="vjs-no-js">JavaScript가 필요합니다.</p>
+                    </video>
+                    <!-- 플레이리스트 컨트롤 UI -->
+                    <div class="playlist-controls" style="padding: 12px 16px; background: linear-gradient(135deg, rgba(2, 44, 34, 0.95) 0%, rgba(6, 78, 59, 0.95) 100%); border-top: 1px solid rgba(16, 185, 129, 0.1);">
+                        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                            <button id="btn-prev-ep" class="playlist-nav-btn" style="display: none;" title="이전 에피소드">
+                                <i class="fa fa-step-backward"></i>
+                            </button>
+                            <div style="flex: 1; min-width: 200px;">
+                                <div id="current-video-title" style="color: #10b981; font-weight: 600; font-size: 14px;"></div>
+                                <div id="playlist-progress" style="color: #6ee7b7; font-size: 12px; margin-top: 2px;"></div>
+                            </div>
+                            <button id="btn-next-ep" class="playlist-nav-btn" style="display: none;" title="다음 에피소드">
+                                <i class="fa fa-step-forward"></i>
+                            </button>
+                            <button id="btn-toggle-playlist" class="playlist-toggle-btn" title="에피소드 목록">
+                                <i class="fa fa-list"></i>
+                            </button>
+                        </div>
+                        
+                        <div id="playlist-list-container" style="display: none; margin-top: 12px; max-height: 200px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 8px; padding: 8px;">
+                            <div id="playlist-list"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-    ul.nav.nav-pills .nav-item { margin: 0 2px; }
-    ul.nav.nav-pills .nav-link {
-        border-radius: 50rem !important;
-        padding: 8px 20px !important;
-        color: #94a3b8 !important;
-        font-weight: 600;
-        transition: all 0.3s ease;
-    }
-    ul.nav.nav-pills .nav-link:hover {
-        background-color: rgba(255, 255, 255, 0.1);
-        color: #fff !important;
-        transform: translateY(-1px);
-    }
-    ul.nav.nav-pills .nav-link.active {
-        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
-        color: #fff !important;
-        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
-    }
-</style>
+    <style>
+        :root {
+            --forest-950: #022c22;
+            --forest-900: #064e3b;
+            --forest-800: #065f46;
+            --forest-500: #10b981;
+            --forest-400: #34d399;
+            --forest-100: #d1fae5;
+            --accent-amber: #fbbf24;
+        }
 
-<script type="text/javascript">
-$(document).ready(function(){
-  // Smooth Load Trigger
-  setTimeout(function() {
-      $('.content-cloak, #menu_module_div, #menu_page_div').addClass('visible');
-  }, 100);
-});
-</script>
-<style>
-/* Mobile Margin Fix */
-@media (max-width: 768px) {
-    body { overflow-x: hidden !important; padding: 0 !important; margin: 0 !important; }
-    .container, .container-fluid, .row, form, #program_list, #program_auto_form, #episode_list, .queue-container, #yommi_wrapper, #main_container {
-        width: 100% !important; max-width: 100% !important;
-        padding-left: 4px !important; padding-right: 4px !important;
-        margin-left: 0 !important; margin-right: 0 !important;
-        box-sizing: border-box !important;
-    }
-    .form-group, .form-inline, [class*="col-"] {
-        flex: 0 0 100% !important; max-width: 100% !important; width: 100% !important;
-        padding-left: 0 !important; padding-right: 0 !important;
-    }
-    .row { margin-left: 0 !important; margin-right: 0 !important; }
-    .card, .card.p-4, .card.p-lg-5, .card.border-light {
-         width: calc(100% - 8px) !important; max-width: 100% !important;
-         padding: 8px !important; margin: 4px !important;
-         border-radius: 12px !important; box-sizing: border-box !important;
-    }
-    .badge {
-        white-space: normal !important; text-align: left !important;
-        line-height: 1.4 !important; height: auto !important; display: inline-block !important;
-    }
-}
-</style>
+        body { background-color: var(--forest-950); color: #ecfdf5; font-family: 'Inter', 'Noto Sans KR', sans-serif; }
+        
+        /* Layout Expansion */
+        #main_container, .container, .container-fluid, .content-cloak {
+            max-width: 100% !important;
+            padding-left: 5px !important;
+            padding-right: 5px !important;
+            margin: 0 auto !important;
+        }
+        
+        .content-cloak { padding-top: 10px; }
+
+        /* Navigation (Tabs) Optimization */
+        .nav-pills {
+            background: rgba(6, 78, 59, 0.4) !important;
+            padding: 6px !important;
+            border-radius: 12px !important;
+            border: 1px solid rgba(16, 185, 129, 0.1) !important;
+            margin-bottom: 20px !important;
+            display: inline-flex !important;
+            gap: 4px !important;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2) !important;
+        }
+        .nav-pills .nav-link {
+            color: #d1fae5 !important;
+            font-weight: 600 !important;
+            padding: 8px 20px !important;
+            border-radius: 8px !important;
+            transition: all 0.3s ease !important;
+            border: 1px solid transparent !important;
+        }
+        .nav-pills .nav-link:hover {
+            background: rgba(16, 185, 129, 0.1) !important;
+            color: #fff !important;
+            transform: translateY(-1px);
+        }
+        .nav-pills .nav-link.active {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+            color: #fff !important;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3) !important;
+            border: 1px solid rgba(255,255,255,0.1) !important;
+        }
+
+        /* Search Container */
+        .search-container {
+            display: flex; justify-content: space-between; align-items: center;
+            background: rgba(6, 78, 59, 0.4); backdrop-filter: blur(12px);
+            padding: 12px 20px; border-radius: 16px; border: 1px solid rgba(16, 185, 129, 0.1);
+            margin-bottom: 24px; gap: 16px; flex-wrap: wrap; box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        }
+        .search-group-left, .search-group-right { display: flex; align-items: center; gap: 10px; }
+        .search-group-right { flex-grow: 1; justify-content: flex-end; }
+
+        .custom-select {
+            background-color: rgba(2, 44, 34, 0.6); border: 1px solid rgba(16, 185, 129, 0.2);
+            color: var(--forest-100); border-radius: 10px; padding: 6px 32px 6px 12px; height: 40px;
+            font-size: 14px; transition: all 0.2s;
+        }
+        .custom-select:focus { border-color: var(--forest-500); box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2); outline: none; }
+
+        .custom-input {
+            background-color: rgba(2, 44, 34, 0.6); border: 1px solid rgba(16, 185, 129, 0.2);
+            color: #fff; border-radius: 10px; padding: 6px 16px; height: 40px;
+            width: 100%; max-width: 400px; font-size: 14px; transition: all 0.2s;
+        }
+        .custom-input:focus { border-color: var(--forest-500); box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2); outline: none; background-color: rgba(2, 44, 34, 0.8); }
+
+        .custom-btn {
+            height: 40px; padding: 0 16px; border-radius: 10px; display: flex; align-items: center;
+            justify-content: center; font-weight: 600; cursor: pointer; transition: all 0.2s; border: none;
+        }
+        .btn-search { background: linear-gradient(135deg, #10b981, #059669); color: white; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3); }
+        .btn-search:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4); }
+        .btn-reset { background: rgba(100, 116, 139, 0.1); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.1); }
+        .btn-reset:hover { background: rgba(100, 116, 139, 0.2); color: #e2e8f0; }
+
+        /* Item Row Design */
+        .item-row {
+            background: rgba(6, 78, 59, 0.3); border-radius: 16px; margin-bottom: 12px;
+            padding: 16px; display: flex; gap: 20px; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid rgba(16, 185, 129, 0.05); cursor: default; position: relative; overflow: hidden;
+        }
+        .item-row:hover { background: rgba(6, 78, 59, 0.5); transform: translateY(-2px); border-color: rgba(16, 185, 129, 0.2); box-shadow: 0 12px 24px rgba(0,0,0,0.3); }
+        
+        .poster-container { width: 120px; flex-shrink: 0; position: relative; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.3); background: #000; }
+        .poster-img { width: 100%; height: 160px; object-fit: cover; transition: transform 0.5s ease; }
+        .item-row:hover .poster-img { transform: scale(1.1); }
+        .episode-badge {
+            position: absolute; top: 8px; left: 8px; z-index: 10;
+            background: rgba(16, 185, 129, 0.9); color: #fff;
+            padding: 2px 8px; border-radius: 6px; font-size: 11px;
+            font-weight: 700; box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            backdrop-filter: blur(4px); border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .info-container { flex-grow: 1; display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+        .item-title { font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 6px; line-height: 1.4; display: flex; align-items: center; gap: 8px; }
+        .item-title span.badge { font-size: 11px; padding: 3px 8px; border-radius: 6px; font-weight: 600; }
+        .status-completed { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.2); }
+        .status-wait { background: rgba(251, 191, 36, 0.1); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.2); }
+        .status-fail { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(248, 113, 113, 0.2); }
+
+        .item-meta { font-size: 13px; color: #6ee7b7; margin-bottom: 8px; display: flex; flex-wrap: wrap; gap: 12px; opacity: 0.8; }
+        .item-path { font-size: 13px; color: #34d399; background: rgba(2, 44, 34, 0.4); padding: 8px 12px; border-radius: 8px; word-break: break-all; margin-bottom: 12px; border: 1px solid rgba(16, 185, 129, 0.1); }
+
+        .item-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .action-btn { 
+            padding: 6px 14px; font-size: 13px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.05); color: #ecfdf5; cursor: pointer; transition: all 0.2s;
+            font-weight: 500; display: inline-flex; align-items: center; gap: 6px;
+        }
+        .action-btn:hover { background: rgba(255,255,255,0.1); color: #fff; transform: translateY(-1px); border-color: rgba(255,255,255,0.2); }
+        .action-btn.btn-play { background: linear-gradient(135deg, #10b981, #059669); color: #fff; border: none; font-weight: 700; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); }
+        .action-btn.btn-play:hover { background: linear-gradient(135deg, #34d399, #10b981); box-shadow: 0 6px 16px rgba(16, 185, 129, 0.3); }
+
+        /* VideoJS Customization */
+        .vjs-theme-forest { --vjs-theme-forest--emerald: #10b981; }
+        .video-js.vjs-theme-forest .vjs-big-play-button { background-color: var(--forest-500); border-color: var(--forest-400); }
+        
+        .playlist-nav-btn {
+            width: 40px; height: 40px; background: linear-gradient(135deg, #10b981, #059669);
+            border: none; border-radius: 50%; color: white; font-size: 14px;
+            cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center;
+        }
+        .playlist-nav-btn:hover { transform: scale(1.1); box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4); }
+        .playlist-nav-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+        
+        .playlist-toggle-btn {
+            padding: 8px 14px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2);
+            border-radius: 8px; color: #6ee7b7; font-size: 13px; cursor: pointer; transition: all 0.2s ease;
+        }
+        .playlist-toggle-btn:hover { background: rgba(16, 185, 129, 0.2); color: #ecfdf5; }
+        .playlist-toggle-btn.active { background: rgba(16, 185, 129, 0.3); border-color: #10b981; color: #10b981; }
+
+        .playlist-item {
+            padding: 10px 12px; border-radius: 6px; cursor: pointer; transition: all 0.2s;
+            color: #d1fae5; font-size: 13px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid rgba(16, 185, 129, 0.05);
+        }
+        .playlist-item:hover { background: rgba(16, 185, 129, 0.1); color: #fff; }
+        .playlist-item.active { background: rgba(16, 185, 129, 0.2); color: #10b981; font-weight: 600; border-left: 3px solid #10b981; }
+    </style>
+
+    <script type="text/javascript">
+        var package_name = "{{arg['package_name']}}";
+        var sub = "{{arg['sub']}}";
+        var current_data = null;
+        var videoPlayer = null;
+        var playlist = [];
+        var currentPlaylistIndex = 0;
+        var currentPlayingPath = null;
+        var playlistRefreshInterval = null;
+
+        $(document).ready(function () {
+            global_sub_request_search('1');
+        });
+
+        function global_sub_request_search(page, move_top = true) {
+            var formData = get_formdata('#form_search')
+            formData += '&page=' + page;
+            $.ajax({
+                url: '/' + package_name + '/ajax/' + sub + '/web_list',
+                type: "POST",
+                cache: false,
+                data: formData,
+                dataType: "json",
+                success: function (data) {
+                    current_data = data;
+                    if (move_top) window.scrollTo(0,0);
+                    make_list(data.list);
+                    make_page_html(data.paging);
+                }
+            });
+        }
+
+        $("#search").click(function (e) {
+            e.preventDefault();
+            global_sub_request_search('1');
+        });
+
+        $("body").on('click', '#page', function (e) {
+            e.preventDefault();
+            global_sub_request_search($(this).data('page'));
+        });
+
+        $("#reset_btn").click(function (e) {
+            e.preventDefault();
+            document.getElementById("order").value = 'desc';
+            document.getElementById("option").value = 'all';
+            document.getElementById("search_word").value = '';
+            global_sub_request_search('1');
+        });
+
+        // 비디오 재생 UI 핵심 로직
+        function playVideoAtIndex(index) {
+            if (index < 0 || index >= playlist.length) return;
+            currentPlaylistIndex = index;
+            var item = playlist[index];
+            currentPlayingPath = item.path;
+            
+            var streamUrl = '/' + package_name + '/ajax/' + sub + '/stream_video?path=' + encodeURIComponent(item.path);
+            
+            if (videoPlayer) {
+                videoPlayer.src({ type: 'video/mp4', src: streamUrl });
+                videoPlayer.play();
+            }
+            
+            $('#current-video-title').text(item.name);
+            updatePlaylistUI();
+        }
+
+        function updatePlaylistUI() {
+            var total = playlist.length;
+            var current = currentPlaylistIndex + 1;
+            $('#playlist-progress').text(current + ' / ' + total + ' 에피소드');
+            
+            // 버튼 활성/비활성
+            $('#btn-prev-ep').toggle(currentPlaylistIndex > 0);
+            $('#btn-next-ep').toggle(currentPlaylistIndex < playlist.length - 1);
+            
+            // 리스트 하이라이트
+            $('#playlist-list .playlist-item').removeClass('active');
+            $('#playlist-list .playlist-item').eq(currentPlaylistIndex).addClass('active');
+        }
+
+        function refreshPlaylistData(slient = true) {
+            if (!currentPlayingPath || !$('#videoModal').is(':visible')) return;
+            
+            $.get('/' + package_name + '/ajax/' + sub + '/get_playlist?path=' + encodeURIComponent(currentPlayingPath), function(data) {
+                if (data.playlist && data.playlist.length > 0) {
+                    var oldLength = playlist.length;
+                    playlist = data.playlist;
+                    currentPlaylistIndex = data.current_index;
+                    
+                    // 새 에피소드 감지
+                    if (playlist.length > oldLength) {
+                        $.notify('새로운 에피소드가 감지되어 플레이리스트가 업데이트되었습니다.', { type: 'success' });
+                    }
+                    
+                    renderPlaylistItems();
+                    updatePlaylistUI();
+                }
+            });
+        }
+
+        function renderPlaylistItems() {
+            var str = '';
+            for (var i = 0; i < playlist.length; i++) {
+                var item = playlist[i];
+                var isActive = (i === currentPlaylistIndex) ? 'active' : '';
+                str += '<div class="playlist-item ' + isActive + '" onclick="playVideoAtIndex(' + i + ')">';
+                str += '<i class="fa ' + (isActive ? 'fa-play-circle' : 'fa-play') + '"></i>';
+                str += '<span>' + item.name + '</span>';
+                str += '</div>';
+            }
+            $('#playlist-list').html(str);
+        }
+
+        // 재생 버튼 클릭
+        $("body").on('click', '.btn-play', function (e) {
+            var path = $(this).data('path');
+            var filename = $(this).data('filename');
+            
+            if (!path) {
+                $.notify('파일 경로를 찾을 수 없습니다.', { type: 'warning' });
+                return;
+            }
+
+            // 플레이리스트 정보 가져오기
+            $.get('/' + package_name + '/ajax/' + sub + '/get_playlist?path=' + encodeURIComponent(path), function(data) {
+                playlist = data.playlist || [{path: path, name: filename}];
+                currentPlaylistIndex = data.current_index || 0;
+                currentPlayingPath = path;
+
+                $('#videoModal').modal('show');
+                
+                if (!videoPlayer) {
+                    videoPlayer = videojs('video-player', {
+                        fluid: true,
+                        playbackRates: [0.5, 1, 1.25, 1.5, 2]
+                    });
+                    
+                    videoPlayer.on('ended', function() {
+                        if (currentPlaylistIndex < playlist.length - 1) {
+                            playVideoAtIndex(currentPlaylistIndex + 1);
+                        }
+                    });
+                }
+                
+                playVideoAtIndex(currentPlaylistIndex);
+                renderPlaylistItems();
+                
+                // 실시간 갱신 시작 (10초)
+                if (playlistRefreshInterval) clearInterval(playlistRefreshInterval);
+                playlistRefreshInterval = setInterval(refreshPlaylistData, 10000);
+            });
+        });
+
+        // 모달 닫힐 때 중지
+        $('#videoModal').on('hidden.bs.modal', function () {
+            if (videoPlayer) {
+                videoPlayer.pause();
+            }
+            if (playlistRefreshInterval) {
+                clearInterval(playlistRefreshInterval);
+                playlistRefreshInterval = null;
+            }
+            currentPlayingPath = null;
+        });
+
+        // 플레이리스트 컨트롤러 핸들러
+        $('#btn-prev-ep').click(function() { playVideoAtIndex(currentPlaylistIndex - 1); });
+        $('#btn-next-ep').click(function() { playVideoAtIndex(currentPlaylistIndex + 1); });
+        $('#btn-toggle-playlist').click(function() {
+            $(this).toggleClass('active');
+            $('#playlist-list-container').slideToggle(200);
+        });
+
+        // 목록 생성 함수
+        function make_list(data) {
+            var str = '';
+            for (var i = 0; i < data.length; i++) {
+                var item = data[i];
+                var statusClass = 'status-wait';
+                var statusText = '대기';
+                if (item.status === 'completed') { statusClass = 'status-completed'; statusText = '완료'; }
+                else if (item.status === 'fail') { statusClass = 'status-fail'; statusText = '실패'; }
+
+                str += '<div class="item-row">';
+                
+                // Poster
+                str += '<div class="poster-container">';
+                if (item.episode_title) {
+                    str += '<div class="episode-badge">' + item.episode_title + '</div>';
+                }
+                var thumb = item.thumbnail;
+                if (!thumb || thumb.length <= 1) {
+                    if (item.linkkf_info && item.linkkf_info.image) {
+                        thumb = item.linkkf_info.image;
+                    }
+                }
+                thumb = thumb || '';
+                str += '<img class="poster-img" src="' + thumb + '" onerror="this.src=\'https://placehold.co/120x160?text=No+Poster\'">';
+                str += '</div>';
+
+                // Info
+                str += '<div class="info-container">';
+                str += '<div class="item-title">' + (item.title || 'Untitled') + ' <span class="badge ' + statusClass + '">' + statusText + '</span></div>';
+                
+                var meta = '';
+                meta += '<span><i class="fa fa-clock-o"></i> ' + item.created_time + '</span>';
+                if (item.completed_time) meta += '<span><i class="fa fa-check-circle"></i> ' + item.completed_time + '</span>';
+                str += '<div class="item-meta">' + meta + '</span></div>';
+                
+                str += '<div class="item-path">' + item.filename + '</div>';
+
+                // Actions
+                str += '<div class="item-actions">';
+                if (item.status === 'completed') {
+                    str += '<button class="action-btn btn-play" data-path="' + item.filepath + '" data-filename="' + item.filename + '"><i class="fa fa-play"></i> 재생</button>';
+                }
+                str += '<button class="action-btn" onclick="m_modal(current_data.list[' + i + '])"><i class="fa fa-code"></i> JSON</button>';
+                str += '<button class="action-btn" onclick="search_item(\'' + (item.title || '') + '\')"><i class="fa fa-search"></i> 검색</button>';
+                str += '<button class="action-btn" onclick="db_remove(' + item.id + ')"><i class="fa fa-trash"></i> 삭제</button>';
+                str += '</div>';
+
+                str += '</div>'; // End info-container
+                str += '</div>'; // End item-row
+            }
+            $('#list_div').html(str || '<div style="text-align:center; padding: 40px; color: #6ee7b7;">결과가 없습니다.</div>');
+        }
+
+        function search_item(title) {
+            $('#search_word').val(title);
+            global_sub_request_search('1');
+        }
+
+        var targetDeleteId = null;
+
+        function db_remove(id) {
+            targetDeleteId = id;
+            $('#confirmModal').modal('show');
+        }
+
+        $('#confirmDeleteBtn').click(function() {
+            if (!targetDeleteId) return;
+            
+            $.ajax({
+                url: '/' + package_name + '/ajax/' + sub + '/db_remove',
+                type: "POST",
+                data: { id: targetDeleteId },
+                dataType: "json",
+                success: function (data) {
+                    $('#confirmModal').modal('hide');
+                    if (data) {
+                        $.notify('성공적으로 삭제되었습니다.', { type: 'success' });
+                        global_sub_request_search(current_data.paging.current_page, false);
+                    } else {
+                        $.notify('삭제에 실패했습니다.', { type: 'warning' });
+                    }
+                }
+            });
+        });
+    </script>
+
 {% endblock %}

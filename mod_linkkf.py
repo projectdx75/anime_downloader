@@ -103,9 +103,11 @@ class LogicLinkkf(PluginModuleBase):
             "linkkf_image_url_prefix_series": "",
             "linkkf_image_url_prefix_episode": "",
             "linkkf_discord_notify": "True",
-            "linkkf_download_method": "ffmpeg",  # ffmpeg or ytdlp
+            "linkkf_download_method": "ffmpeg",  # ffmpeg, ytdlp, aria2c
+            "linkkf_download_threads": "16",     # yt-dlp/aria2c 병렬 쓰레드 수
         }
         # default_route_socketio(P, self)
+        self.web_list_model = ModelLinkkfItem
         default_route_socketio_module(self, attach="/setting")
         self.current_data = None
 
@@ -154,7 +156,7 @@ class LogicLinkkf(PluginModuleBase):
                 )
             elif sub == "screen_movie_list":
                 try:
-                    logger.debug("request:::> %s", request.form["page"])
+                    # logger.debug("request:::> %s", request.form["page"])
                     page = request.form["page"]
                     data = self.get_screen_movie_info(page)
                     dummy_data = {"ret": "success", "data": data}
@@ -270,46 +272,128 @@ class LogicLinkkf(PluginModuleBase):
                     ret["log"] = str(e)
                 return jsonify(ret)
             elif sub == "web_list":
-                return jsonify({"ret": "not_implemented"})
-            elif sub == "db_remove":
-                return jsonify({"ret": "not_implemented"})
-            elif sub == "add_whitelist":
-                try:
-                    params = request.get_json()
-                    logger.debug(f"add_whitelist params: {params}")
-                    if params and "data_code" in params:
-                        code = params["data_code"]
-                        ret = LogicLinkkf.add_whitelist(code)
-                    else:
-                        ret = LogicLinkkf.add_whitelist()
-                    return jsonify(ret)
-                except Exception as e:
-                    logger.error(f"Exception: {e}")
-                    logger.error(traceback.format_exc())
-                    return jsonify({"ret": False, "log": str(e)})
-            elif sub == "command":
-                # command = queue_command와 동일
-                cmd = request.form.get("cmd", "")
-                entity_id = request.form.get("entity_id", "")
-                
-                logger.debug(f"command endpoint - cmd: {cmd}, entity_id: {entity_id}")
-                
-                # list 명령 처리
-                if cmd == "list":
-                    if self.queue:
-                        return jsonify(self.queue.get_entity_list())
-                    else:
-                        return jsonify([])
-                
-                # 기타 명령 처리
-                if self.queue:
-                    ret = self.queue.command(cmd, int(entity_id) if entity_id else 0)
-                    if ret is None:
-                        ret = {"ret": "success"}
-                else:
-                    ret = {"ret": "error", "log": "Queue not initialized"}
+                ret = ModelLinkkfItem.web_list(req)
                 return jsonify(ret)
-            
+            elif sub == "db_remove":
+                db_id = request.form.get("id")
+                if not db_id:
+                    return jsonify({"ret": "error", "log": "No ID provided"})
+                return jsonify(ModelLinkkfItem.delete_by_id(db_id))
+
+            elif sub == "get_playlist":
+                # 현재 파일과 같은 폴더에서 다음 에피소드들 찾기
+                try:
+                    file_path = request.args.get("path", "")
+                    if not file_path or not os.path.exists(file_path):
+                        return jsonify({"error": "File not found", "playlist": [], "current_index": 0}), 404
+                    
+                    # 보안 체크
+                    download_path = P.ModelSetting.get("linkkf_download_path")
+                    if not file_path.startswith(download_path):
+                        return jsonify({"error": "Access denied", "playlist": [], "current_index": 0}), 403
+                    
+                    folder = os.path.dirname(file_path)
+                    current_file = os.path.basename(file_path)
+                    
+                    # 파일명에서 SxxExx 패턴 추출
+                    ep_match = re.search(r'\.S(\d+)E(\d+)\.', current_file, re.IGNORECASE)
+                    if not ep_match:
+                        # 패턴 없으면 현재 파일만 반환
+                        return jsonify({
+                            "playlist": [{"path": file_path, "name": current_file}],
+                            "current_index": 0
+                        })
+                    
+                    current_season = int(ep_match.group(1))
+                    current_episode = int(ep_match.group(2))
+                    
+                    # 같은 폴더의 모든 mp4 파일 가져오기
+                    all_files = []
+                    for f in os.listdir(folder):
+                        if f.endswith('.mp4'):
+                            match = re.search(r'\.S(\d+)E(\d+)\.', f, re.IGNORECASE)
+                            if match:
+                                s = int(match.group(1))
+                                e = int(match.group(2))
+                                all_files.append({
+                                    "path": os.path.join(folder, f),
+                                    "name": f,
+                                    "season": s,
+                                    "episode": e
+                                })
+                    
+                    # 시즌/에피소드 순으로 정렬
+                    all_files.sort(key=lambda x: (x["season"], x["episode"]))
+                    
+                    # 현재 에피소드 이상인 것만 필터링 (현재 + 다음 에피소드들)
+                    playlist = []
+                    current_index = 0
+                    for i, f in enumerate(all_files):
+                        if f["season"] == current_season and f["episode"] >= current_episode:
+                            entry = {"path": f["path"], "name": f["name"]}
+                            if f["episode"] == current_episode:
+                                current_index = len(playlist)
+                            playlist.append(entry)
+                    
+                    logger.info(f"Linkkf Playlist: {len(playlist)} items, current_index: {current_index}")
+                    return jsonify({
+                        "playlist": playlist,
+                        "current_index": current_index
+                    })
+                    
+                except Exception as e:
+                    logger.error(f"Get playlist error: {e}")
+                    logger.error(traceback.format_exc())
+                    return jsonify({"error": str(e), "playlist": [], "current_index": 0}), 500
+
+            elif sub == "stream_video":
+                # 비디오 스트리밍 (MP4 파일 직접 서빙)
+                try:
+                    from flask import send_file, Response, make_response
+                    import mimetypes
+                    
+                    file_path = request.args.get("path", "")
+                    if not file_path or not os.path.exists(file_path):
+                        return "File not found", 404
+                    
+                    # 보안 체크: 다운로드 경로 내에 있는지 확인
+                    download_path = P.ModelSetting.get("linkkf_download_path")
+                    if not file_path.startswith(download_path):
+                        return "Access denied", 403
+                        
+                    file_size = os.path.getsize(file_path)
+                    range_header = request.headers.get('Range', None)
+                    
+                    if not range_header:
+                        return send_file(file_path, mimetype='video/mp4', as_attachment=False)
+                    
+                    # Range Request 처리 (seeking 지원)
+                    byte1, byte2 = 0, None
+                    m = re.search('(\d+)-(\d*)', range_header)
+                    if m:
+                        g = m.groups()
+                        byte1 = int(g[0])
+                        if g[1]:
+                            byte2 = int(g[1])
+                    
+                    if byte2 is None:
+                        byte2 = file_size - 1
+                    
+                    length = byte2 - byte1 + 1
+                    
+                    with open(file_path, 'rb') as f:
+                        f.seek(byte1)
+                        data = f.read(length)
+                    
+                    rv = Response(data, 206, mimetype='video/mp4', content_type='video/mp4', direct_passthrough=True)
+                    rv.headers.add('Content-Range', 'bytes {0}-{1}/{2}'.format(byte1, byte2, file_size))
+                    rv.headers.add('Accept-Ranges', 'bytes')
+                    return rv
+                except Exception as e:
+                    logger.error(f"Stream video error: {e}")
+                    logger.error(traceback.format_exc())
+                    return jsonify({"error": str(e)}), 500
+
             # 매치되는 sub가 없는 경우 기본 응답
             return jsonify({"ret": "error", "log": f"Unknown sub: {sub}"})
 
@@ -324,7 +408,7 @@ class LogicLinkkf(PluginModuleBase):
         queue 페이지에서 list, stop 등의 명령을 처리
         """
         ret = {"ret": "success"}
-        logger.debug(f"process_command - command: {command}, arg1: {arg1}")
+        # logger.debug(f"process_command - command: {command}, arg1: {arg1}")
         
         if command == "list":
             # 큐 목록 반환
@@ -335,17 +419,37 @@ class LogicLinkkf(PluginModuleBase):
             return jsonify(ret)
         
         elif command == "stop":
-            # 다운로드 중지
+            # 다운로드 중지 (cancel)
             if self.queue and arg1:
                 try:
                     entity_id = int(arg1)
-                    result = self.queue.command("stop", entity_id)
+                    result = self.queue.command("cancel", entity_id)
                     if result:
                         ret = result
                 except Exception as e:
                     ret = {"ret": "error", "log": str(e)}
             return jsonify(ret)
         
+        elif command == "remove":
+            # 개별 항목 삭제
+            if self.queue and arg1:
+                try:
+                    entity_id = int(arg1)
+                    result = self.queue.command("remove", entity_id)
+                    if result:
+                        ret = result
+                except Exception as e:
+                    ret = {"ret": "error", "log": str(e)}
+            return jsonify(ret)
+        
+        elif command in ["reset", "delete_completed"]:
+            # 전체 초기화 또는 완료 삭제
+            if self.queue:
+                result = self.queue.command(command, 0)
+                if result:
+                    ret = result
+            return jsonify(ret)
+
         elif command == "queue_list":
             # 대기 큐 목록
             if self.queue:
@@ -934,7 +1038,7 @@ class LogicLinkkf(PluginModuleBase):
             data = {"ret": "success", "page": page}
             response_data = LogicLinkkf.get_html(url, timeout=10)
             # P.logger.debug(response_data)
-            P.logger.debug("debug.....................")
+            # P.logger.debug("debug.....................")
             # P.logger.debug(response_data)
 
             # JSON 응답인지 확인
@@ -1182,6 +1286,7 @@ class LogicLinkkf(PluginModuleBase):
                             "program_title": data["title"],
                             "save_folder": Util.change_text_for_use_filename(data["save_folder"]),
                             "title": ep_title,
+                            "ep_num": ep_name,
                             "season": data["season"],
                         }
                         
@@ -1546,6 +1651,32 @@ class LinkkfQueueEntity(FfmpegQueueEntity):
             logger.error(traceback.format_exc())
             self.url = playid_url
 
+    def download_completed(self):
+        """다운로드 완료 후 처리 (파일 이동, DB 업데이트 등)"""
+        try:
+            logger.info(f"LinkkfQueueEntity.download_completed called for index {self.entity_id}")
+            
+            from framework import app
+            with app.app_context():
+                # DB 상태 업데이트
+                db_item = ModelLinkkfItem.get_by_linkkf_id(self.info.get("_id"))
+                if db_item:
+                    db_item.status = "completed"
+                    db_item.completed_time = datetime.now()
+                    db_item.filepath = self.filepath
+                    db_item.filename = self.filename
+                    db_item.save()
+                    logger.info(f"Updated DB status to 'completed' for episode {db_item.id}")
+                else:
+                    logger.warning(f"Could not find DB item to update for _id {self.info.get('_id')}")
+                
+            # 전체 목록 갱신을 위해 소켓IO 발신 (필요 시)
+            # from framework import socketio
+            # socketio.emit("linkkf_refresh", {"idx": self.entity_id}, namespace="/framework")
+        except Exception as e:
+            logger.error(f"Error in LinkkfQueueEntity.download_completed: {e}")
+            logger.error(traceback.format_exc())
+
     def refresh_status(self):
         try:
             # from framework import socketio (FlaskFarm 표준 방식)
@@ -1571,7 +1702,7 @@ class LinkkfQueueEntity(FfmpegQueueEntity):
         
         # 템플릿이 기대하는 필드들 추가
         tmp["idx"] = self.entity_id
-        tmp["callback_id"] = f"linkkf_{self.entity_id}"
+        tmp["callback_id"] = "linkkf"
         tmp["start_time"] = self.created_time.strftime("%m-%d %H:%M") if hasattr(self, 'created_time') and self.created_time and hasattr(self.created_time, 'strftime') else (self.created_time if self.created_time else "")
         tmp["status_kor"] = self.ffmpeg_status_kor if self.ffmpeg_status_kor else "대기중"
         tmp["percent"] = self.ffmpeg_percent if self.ffmpeg_percent else 0
@@ -1646,7 +1777,7 @@ class LinkkfQueueEntity(FfmpegQueueEntity):
                             continue
                         # logger.debug(f"url: {url}, url2: {url2}")
                         ret = LogicLinkkf.get_video_url_from_url(url, url2)
-                        logger.debug(f"ret::::> {ret}")
+                        # logger.debug(f"ret::::> {ret}")
 
                         if ret is not None:
                             video_url = ret
@@ -1740,7 +1871,82 @@ class ModelLinkkfItem(db.Model):
         item.savepath = q["savepath"]
         item.video_url = q["url"]
         item.vtt_url = q["vtt"]
-        item.thumbnail = q["image"][0]
+        item.thumbnail = q.get("image", "")
         item.status = "wait"
         item.linkkf_info = q["linkkf_info"]
         item.save()
+
+    @classmethod
+    def get_paging_info(cls, count, page, page_size):
+        total_page = int(count / page_size) + (1 if count % page_size != 0 else 0)
+        start_page = (int((page - 1) / 10)) * 10 + 1
+        last_page = start_page + 9
+        if last_page > total_page:
+            last_page = total_page
+            
+        ret = {
+            "start_page": start_page,
+            "last_page": last_page,
+            "total_page": total_page,
+            "current_page": page,
+            "count": count,
+            "page_size": page_size,
+        }
+        ret["prev_page"] = True if ret["start_page"] != 1 else False
+        ret["next_page"] = (
+            True
+            if (ret["start_page"] + 10) <= ret["total_page"]
+            else False
+        )
+        return ret
+
+    @classmethod
+    def delete_by_id(cls, idx):
+        db.session.query(cls).filter_by(id=idx).delete()
+        db.session.commit()
+        return True
+
+    @classmethod
+    def web_list(cls, req):
+        ret = {}
+        page = int(req.form["page"]) if "page" in req.form else 1
+        page_size = 30
+        job_id = ""
+        search = req.form["search_word"] if "search_word" in req.form else ""
+        option = req.form["option"] if "option" in req.form else "all"
+        order = req.form["order"] if "order" in req.form else "desc"
+        query = cls.make_query(search=search, order=order, option=option)
+        count = query.count()
+        query = query.limit(page_size).offset((page - 1) * page_size)
+        lists = query.all()
+        ret["list"] = [item.as_dict() for item in lists]
+        ret["paging"] = cls.get_paging_info(count, page, page_size)
+        return ret
+
+    @classmethod
+    def make_query(cls, search="", order="desc", option="all"):
+        query = db.session.query(cls)
+        if search is not None and search != "":
+            if search.find("|") != -1:
+                tmp = search.split("|")
+                conditions = []
+                for tt in tmp:
+                    if tt != "":
+                        conditions.append(cls.filename.like("%" + tt.strip() + "%"))
+                query = query.filter(or_(*conditions))
+            elif search.find(",") != -1:
+                tmp = search.split(",")
+                for tt in tmp:
+                    if tt != "":
+                        query = query.filter(cls.filename.like("%" + tt.strip() + "%"))
+            else:
+                query = query.filter(cls.filename.like("%" + search + f"%"))
+        
+        if option == "completed":
+            query = query.filter(cls.status == "completed")
+            
+        if order == "desc":
+            query = query.order_by(desc(cls.id))
+        else:
+            query = query.order_by(cls.id)
+        return query

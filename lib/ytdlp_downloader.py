@@ -325,16 +325,30 @@ class YtdlpDownloader:
                     match = prog_re.search(line)
                     if match:
                         try:
-                            self.percent = float(match.group('percent'))
+                            new_percent = float(match.group('percent'))
                             speed_group = match.groupdict().get('speed')
+                            
+                            # 속도가 표시되지 않는 경우 (aria2c 등)를 위해 정규식 보완
+                            if not speed_group:
+                                # "[download]  10.5% of ~100.00MiB at  2.45MiB/s" 형태 재확인
+                                at_match = re.search(r'at\s+([\d\.]+\s*\w+/s)', line)
+                                if at_match:
+                                    speed_group = at_match.group(1)
+                            
                             if speed_group:
                                 self.current_speed = speed_group.strip()
+                            
                             if self.start_time:
                                 elapsed = time.time() - self.start_time
                                 self.elapsed_time = self.format_time(elapsed)
-                            if self.callback:
-                                logger.info(f"[yt-dlp progress] Calling callback: {int(self.percent)}% speed={self.current_speed}")
+                            
+                            # [최적화] 진행률이 1% 이상 차이나거나, 100%인 경우에만 콜백 호출 (로그 부하 감소)
+                            if self.callback and (int(new_percent) > int(self.percent) or new_percent >= 100):
+                                self.percent = new_percent
+                                logger.info(f"[yt-dlp progress] {int(self.percent)}% speed={self.current_speed}")
                                 self.callback(percent=int(self.percent), current=int(self.percent), total=100, speed=self.current_speed, elapsed=self.elapsed_time)
+                            else:
+                                self.percent = new_percent
                         except Exception as cb_err:
                             logger.warning(f"Callback error: {cb_err}")
                         break  # 한 패턴이 매칭되면 중단
@@ -371,3 +385,16 @@ class YtdlpDownloader:
     def cancel(self):
         """다운로드 취소"""
         self.cancelled = True
+        try:
+            if self.process:
+                # subprocess 종류에 따라 종료 방식 결정
+                if platform.system() == 'Windows':
+                    subprocess.run(['taskkill', '/F', '/T', '/PID', str(self.process.pid)], capture_output=True)
+                else:
+                    self.process.terminate()
+                    # 강제 종료 필요 시
+                    # import signal
+                    # os.killpg(os.getpgid(self.process.pid), signal.SIGTERM)
+                logger.info(f"Ytdlp process {self.process.pid} terminated by cancel()")
+        except Exception as e:
+            logger.error(f"Error terminating ytdlp process: {e}")
