@@ -219,6 +219,7 @@ async def _download_worker_async(
     """실제 다운로드 작업 (AsyncIO)"""
     import sys
     import os
+    import re
     import time
     import json
     import tempfile

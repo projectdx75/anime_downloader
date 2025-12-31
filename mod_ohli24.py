@@ -1408,13 +1408,13 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
             # ------------------------------------------------------------------
             # [METADATA PARSING] - Extract title, season, epi info first!
             # ------------------------------------------------------------------
-            # 파일명 생성
+            # 메타데이터만 먼저 파싱 (파일명 생성은 해상도 감지 후 진행)
             match = re.compile(r"(?P<title>.*?)\s*((?P<season>\d+)%s)?\s*((?P<epi_no>\d+)%s)" % ("기", "화")).search(
                 self.info["title"]
             )
             
             epi_no = 1
-            self.quality = "720P"
+            self.quality = "720P"  # 기본값 (해상도 감지 시 덮어쓰기)
             
             if match:
                 self.content_title = match.group("title").strip()
@@ -1422,22 +1422,14 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
                     self.season = int(match.group("season"))
                 
                 epi_no = int(match.group("epi_no"))
-                ret = "%s.S%sE%s.%s-OHNI24.mp4" % (
-                    self.content_title,
-                    "0%s" % self.season if self.season < 10 else self.season,
-                    "0%s" % epi_no if epi_no < 10 else epi_no,
-                    self.quality,
-                )
             else:
                 self.content_title = self.info["title"]
                 logger.debug("NOT MATCH")
-                ret = "%s.720p-OHNI24.mp4" % self.info["title"]
             
             self.epi_queue = epi_no
-            self.filename = Util.change_text_for_use_filename(ret)
-            logger.info(f"self.filename::> {self.filename}")
+            # NOTE: 파일명은 해상도 감지 후 생성 (아래 Step 2 이후)
             
-            # Savepath 생성
+            # Savepath 생성 (filepath는 파일명 생성 후 설정)
             self.savepath = P.ModelSetting.get("ohli24_download_path")
             
             if P.ModelSetting.get_bool("ohli24_auto_make_folder"):
@@ -1452,7 +1444,7 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
                 self.savepath = os.path.join(self.savepath, folder_name)
                 if P.ModelSetting.get_bool("ohli24_auto_make_season_folder"):
                     self.savepath = os.path.join(self.savepath, "Season %s" % int(self.season))
-            self.filepath = os.path.join(self.savepath, self.filename)
+            # NOTE: self.filepath는 파일명 생성 후 설정 (Step 2 이후)
             if not os.path.exists(self.savepath):
                 os.makedirs(self.savepath)
             logger.info(f"self.savepath::> {self.savepath}")
@@ -1512,6 +1504,20 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
             # 해상도 설정 (감지된 값 또는 기본값 720)
             if detected_resolution:
                 self.quality = f"{detected_resolution}P"
+                logger.info(f"Quality set from m3u8: {self.quality}")
+            
+            # [FILENAME GENERATION] - 해상도 감지 후 파일명 생성
+            if hasattr(self, 'epi_queue'):
+                epi_no = self.epi_queue
+                ret = "%s.S%sE%s.%s-OHNI24.mp4" % (
+                    self.content_title,
+                    "0%s" % self.season if self.season < 10 else self.season,
+                    "0%s" % epi_no if epi_no < 10 else epi_no,
+                    self.quality,
+                )
+                self.filename = Util.change_text_for_use_filename(ret)
+                self.filepath = os.path.join(self.savepath, self.filename)
+                logger.info(f"self.filename::> {self.filename}")
             
             if not video_url:
                 logger.error("Failed to extract video URL from cdndania")
