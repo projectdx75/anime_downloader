@@ -5,6 +5,7 @@
 # @Site    :
 # @File    : logic_ohli24
 # @Software: PyCharm
+from __future__ import annotations
 
 import asyncio
 import hashlib
@@ -18,6 +19,7 @@ import threading
 import traceback
 import urllib
 from datetime import datetime, date
+from typing import Any, Dict, List, Optional, Tuple, Union, Callable, TYPE_CHECKING
 from urllib import parse
 
 # third-party
@@ -60,12 +62,12 @@ name = "ohli24"
 
 
 class LogicOhli24(PluginModuleBase):
-    current_headers = None
-    current_data = None
-    referer = None
-    origin_url = None
-    episode_url = None
-    cookies = None
+    current_headers: Optional[Dict[str, str]] = None
+    current_data: Optional[Dict[str, Any]] = None
+    referer: Optional[str] = None
+    origin_url: Optional[str] = None
+    episode_url: Optional[str] = None
+    cookies: Optional[requests.cookies.RequestsCookieJar] = None
     
     # proxy = "http://192.168.0.2:3138"
     # proxies = {
@@ -74,11 +76,11 @@ class LogicOhli24(PluginModuleBase):
     # }
 
     @classmethod
-    def get_proxy(cls):
+    def get_proxy(cls) -> str:
         return P.ModelSetting.get("ohli24_proxy_url")
 
     @classmethod
-    def get_proxies(cls):
+    def get_proxies(cls) -> Optional[Dict[str, str]]:
         proxy = cls.get_proxy()
         if proxy:
             return {"http": proxy, "https": proxy}
@@ -104,13 +106,14 @@ class LogicOhli24(PluginModuleBase):
     download_thread = None
     current_download_count = 0
 
-    def __init__(self, P):
+    def __init__(self, P: Any) -> None:
         super(LogicOhli24, self).__init__(P, "setting", scheduler_desc="ohli24 자동 다운로드")
-        self.name = name
+        self.name: str = name
 
         self.db_default = {
             "ohli24_db_version": "1",
             "ohli24_proxy_url": "",
+            "ohli24_discord_webhook_url": "",
             "ohli24_url": "https://ani.ohli24.com",
             "ohli24_download_path": os.path.join(path_data, P.package_name, "ohli24"),
             "ohli24_auto_make_folder": "True",
@@ -118,8 +121,8 @@ class LogicOhli24(PluginModuleBase):
             "ohli24_auto_make_season_folder": "True",
             "ohli24_finished_insert": "[완결]",
             "ohli24_max_ffmpeg_process_count": "1",
-            f"{self.name}_download_method": "ffmpeg",  # ffmpeg or ytdlp
-            "ohli24_download_threads": "16",
+            f"{self.name}_download_method": "cdndania",  # cdndania (default), ffmpeg, ytdlp, aria2c
+            "ohli24_download_threads": "2",  # 기본값 2 (안정성 권장)
             "ohli24_order_desc": "False",
             "ohli24_auto_start": "False",
             "ohli24_interval": "* 5 * * *",
@@ -135,8 +138,32 @@ class LogicOhli24(PluginModuleBase):
         # default_route_socketio(P, self)
         default_route_socketio_module(self, attach="/queue")
 
+    def cleanup_stale_temps(self) -> None:
+        """서버 시작 시 잔여 tmp 폴더 정리"""
+        try:
+            download_path = P.ModelSetting.get("ohli24_download_path")
+            if not download_path or not os.path.exists(download_path):
+                return
+            
+            logger.info(f"Checking for stale temp directories in: {download_path}")
+            
+            # 다운로드 경로 순회 (1 depth만 확인해도 충분할 듯 하나, 시즌 폴더 고려하여 recursively)
+            for root, dirs, files in os.walk(download_path):
+                for dir_name in dirs:
+                    if dir_name.startswith("tmp") and len(dir_name) > 3:
+                        full_path = os.path.join(root, dir_name)
+                        try:
+                            import shutil
+                            logger.info(f"Removing stale temp directory: {full_path}")
+                            shutil.rmtree(full_path)
+                        except Exception as e:
+                            logger.error(f"Failed to remove stale temp dir {full_path}: {e}")
+                            
+        except Exception as e:
+            logger.error(f"Error during stale temp cleanup: {e}")
+
     @staticmethod
-    def db_init():
+    def db_init() -> None:
         pass
         # try:
         #     for key, value in P.Logic.db_default.items():
@@ -147,7 +174,7 @@ class LogicOhli24(PluginModuleBase):
         #     logger.error('Exception:%s', e)
         #     logger.error(traceback.format_exc())
 
-    def process_menu(self, sub, req):
+    def process_menu(self, sub: str, req: Any) -> str:
         arg = P.ModelSetting.to_dict()
         arg["sub"] = self.name
         if sub in ["setting", "queue", "list", "category", "request", "search"]:
@@ -166,7 +193,7 @@ class LogicOhli24(PluginModuleBase):
         return render_template("sample.html", title="%s - %s" % (P.package_name, sub))
 
     # @staticmethod
-    def process_ajax(self, sub, req):
+    def process_ajax(self, sub: str, req: Any) -> Any:
         try:
             data = []
             cate = request.form.get("type", None)
@@ -458,7 +485,7 @@ class LogicOhli24(PluginModuleBase):
                 # db 에서 다운로드 완료 유무 체크
 
     @staticmethod
-    async def get_data(url) -> str:
+    async def get_data(url: str) -> str:
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as response:
                 content = await response.text()
@@ -466,12 +493,12 @@ class LogicOhli24(PluginModuleBase):
                 return content
 
     @staticmethod
-    async def main(url_list: list):
+    async def main(url_list: List[str]) -> List[str]:
         input_coroutines = [LogicOhli24.get_data(url_) for url_ in url_list]
         res = await asyncio.gather(*input_coroutines)
         return res
 
-    def get_series_info(self, code, wr_id, bo_table):
+    def get_series_info(self, code: str, wr_id: Optional[str], bo_table: Optional[str]) -> Dict[str, Any]:
         code_type = "c"
         code = urllib.parse.quote(code)
 
@@ -810,7 +837,7 @@ class LogicOhli24(PluginModuleBase):
             return {"ret": "exception", "log": str(e)}
 
     # @staticmethod
-    def plugin_load(self):
+    def plugin_load(self) -> None:
         try:
             # SupportFfmpeg.initialize(ffmpeg_modelsetting.get('ffmpeg_path'), os.path.join(F.config['path_data'], 'tmp'),
             #                          self.callback_function, ffmpeg_modelsetting.get_int('max_pf_count'))
@@ -835,13 +862,16 @@ class LogicOhli24(PluginModuleBase):
             )
             self.current_data = None
             self.queue.queue_start()
+            
+            # 잔여 Temp 폴더 정리
+            self.cleanup_stale_temps()
 
         except Exception as e:
             logger.error("Exception:%s", e)
             logger.error(traceback.format_exc())
 
     # @staticmethod
-    def plugin_unload(self):
+    def plugin_unload(self) -> None:
         try:
             logger.debug("%s plugin_unload", P.package_name)
             scheduler.remove_job("%s_recent" % P.package_name)
@@ -856,7 +886,16 @@ class LogicOhli24(PluginModuleBase):
         return True
 
     @staticmethod
-    def get_html(url, headers=None, referer=None, stream=False, timeout=60, stealth=False, data=None, method='GET'):
+    def get_html(
+        url: str,
+        headers: Optional[Dict[str, str]] = None,
+        referer: Optional[str] = None,
+        stream: bool = False,
+        timeout: int = 60,
+        stealth: bool = False,
+        data: Optional[Dict[str, Any]] = None,
+        method: str = 'GET'
+    ) -> str:
         """별도 스레드에서 curl_cffi 실행하여 gevent SSL 충돌 및 Cloudflare 우회"""
         from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
         import time
@@ -940,7 +979,7 @@ class LogicOhli24(PluginModuleBase):
         return response_data
 
     #########################################################
-    def add(self, episode_info):
+    def add(self, episode_info: Dict[str, Any]) -> str:
         if self.is_exist(episode_info):
             return "queue_exist"
         else:
@@ -951,7 +990,7 @@ class LogicOhli24(PluginModuleBase):
             # logger.debug("db_entity.status ::: %s", db_entity.status)
             if db_entity is None:
                 entity = Ohli24QueueEntity(P, self, episode_info)
-                entity.proxy = self.proxy
+                entity.proxy = LogicOhli24.get_proxy()
                 logger.debug("entity:::> %s", entity.as_dict())
                 ModelOhli24Item.append(entity.as_dict())
                 # # logger.debug("entity:: type >> %s", type(entity))
@@ -970,7 +1009,7 @@ class LogicOhli24(PluginModuleBase):
                 return "enqueue_db_append"
             elif db_entity.status != "completed":
                 entity = Ohli24QueueEntity(P, self, episode_info)
-                entity.proxy = self.proxy
+                entity.proxy = LogicOhli24.get_proxy()
                 logger.debug("entity:::> %s", entity.as_dict())
 
                 # P.logger.debug(F.config['path_data'])
@@ -988,7 +1027,7 @@ class LogicOhli24(PluginModuleBase):
             else:
                 return "db_completed"
 
-    def is_exist(self, info):
+    def is_exist(self, info: Dict[str, Any]) -> bool:
         # print(self.queue)
         # print(self.queue.entity_list)
         for en in self.queue.entity_list:
@@ -996,7 +1035,7 @@ class LogicOhli24(PluginModuleBase):
                 return True
         return False
 
-    def callback_function(self, **args):
+    def callback_function(self, **args: Any) -> None:
         logger.debug(f"callback_function invoked with args: {args}")
         if 'status' in args:
             logger.debug(f"Status: {args['status']}")
@@ -1111,38 +1150,144 @@ class LogicOhli24(PluginModuleBase):
         elif args["type"] == "normal":
             if args["status"] == SupportFfmpeg.Status.DOWNLOADING:
                 refresh_type = "status"
+                # Discord Notification
+                try:
+                    title = args['data'].get('title', 'Unknown Title')
+                    filename = args['data'].get('filename', 'Unknown File')
+                    poster_url = entity.info.get('image_link', '') if entity and entity.info else ''
+                    msg = "다운로드를 시작합니다."
+                    self.send_discord_notification(msg, title, filename, poster_url)
+                except Exception as e:
+                    logger.error(f"Failed to send discord notification: {e}")
         # P.logger.info(refresh_type)
         self.socketio_callback(refresh_type, args["data"])
 
 
+    def send_discord_notification(
+        self,
+        title: str,
+        desc: str,
+        filename: str,
+        image_url: str = ""
+    ) -> None:
+        try:
+            webhook_url = P.ModelSetting.get("ohli24_discord_webhook_url")
+            if not webhook_url:
+                logger.debug("Discord webhook URL is empty.")
+                return
+            
+            logger.info(f"Sending Discord notification to: {webhook_url}")
+            
+            # 에피소드/시즌 정보 추출 (배지용)
+            import re
+            season_ep_str = ""
+            match = re.search(r"(?P<season>\d+)기\s*(?P<episode>\d+)화", title)
+            if not match:
+                 match = re.search(r"(?P<season>\d+)기", title)
+            if not match:
+                 match = re.search(r"(?P<episode>\d+)화", title)
+                 
+            if match:
+                parts = []
+                gd = match.groupdict()
+                if "season" in gd and gd["season"]:
+                    parts.append(f"S{int(gd['season']):02d}")
+                if "episode" in gd and gd["episode"]:
+                    parts.append(f"E{int(gd['episode']):02d}")
+                if parts:
+                    season_ep_str = " | ".join(parts)
+            
+            author_name = "Ohli24 Downloader"
+            if season_ep_str:
+                author_name = f"{season_ep_str} • Ohli24"
+
+            embed = {
+                "title": title,
+                "description": desc,
+                "color": 5763719, # Green (0x57F287)
+                "author": {
+                    "name": author_name,
+                    "icon_url": "https://i.imgur.com/4M34hi2.png" # Optional generic icon
+                },
+                "fields": [
+                    {
+                        "name": "파일명",
+                        "value": filename if filename else "알 수 없음",
+                        "inline": False
+                    }
+                ],
+                "footer": {
+                    "text": f"FlaskFarm Ohli24 • {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                }
+            }
+            
+            if image_url:
+                embed["thumbnail"] = {
+                    "url": image_url
+                }
+
+            message = {
+                "username": "Ohli24 Downloader",
+                "embeds": [embed]
+            }
+
+            import requests
+            headers = {"Content-Type": "application/json"}
+            response = requests.post(webhook_url, json=message, headers=headers)
+            
+            if response.status_code == 204:
+                logger.info("Discord notification sent successfully.")
+            else:
+                logger.error(f"Failed to send Discord notification. Status Code: {response.status_code}, Response: {response.text}")
+
+        except Exception as e:
+            logger.error(f"Exception in send_discord_notification: {e}")
+            logger.error(traceback.format_exc())
+
+
 class Ohli24QueueEntity(FfmpegQueueEntity):
-    def __init__(self, P, module_logic, info):
+    def __init__(self, P: Any, module_logic: LogicOhli24, info: Dict[str, Any]) -> None:
         super(Ohli24QueueEntity, self).__init__(P, module_logic, info)
-        self._vi = None
-        self.url = None
-        self.epi_queue = None
-        self.filepath = None
-        self.savepath = None
-        self.quality = None
-        self.filename = None
-        self.vtt = None
-        self.season = 1
-        self.content_title = None
-        self.srt_url = None
-        self.headers = None
-        self.cookies_file = None  # yt-dlp용 CDN 세션 쿠키 파일 경로
-        self.need_special_downloader = False # CDN 보안 우회 다운로더 필요 여부
+        self._vi: Optional[Any] = None
+        self.url: Optional[str] = None
+        self.epi_queue: Optional[str] = None
+        self.filepath: Optional[str] = None
+        self.savepath: Optional[str] = None
+        self.quality: Optional[str] = None
+        self.filename: Optional[str] = None
+        self.vtt: Optional[str] = None
+        self.season: int = 1
+        self.content_title: Optional[str] = None
+        self.srt_url: Optional[str] = None
+        self.headers: Optional[Dict[str, str]] = None
+        self.cookies_file: Optional[str] = None  # yt-dlp용 CDN 세션 쿠키 파일 경로
+        self.need_special_downloader: bool = False # CDN 보안 우회 다운로더 필요 여부
+        self._discord_sent: bool = False # Discord 알림 발송 여부
         # Todo::: 임시 주석 처리
         self.make_episode_info()
 
 
-    def refresh_status(self):
+    def refresh_status(self) -> None:
         # ffmpeg_queue_v1.py에서 실패 처리(-1)된 경우 DB 업데이트 트리거
         if getattr(self, 'ffmpeg_status', 0) == -1:
              reason = getattr(self, 'ffmpeg_status_kor', 'Unknown Error')
              self.download_failed(reason)
             
         self.module_logic.socketio_callback("status", self.as_dict())
+        
+        # Discord Notification Trigger (All downloaders)
+        try:
+            if getattr(self, 'ffmpeg_status', 0) == 5: # DOWNLOADING
+                 if not getattr(self, '_discord_sent', False):
+                     self._discord_sent = True
+                     title = self.info.get('title', 'Unknown Title')
+                     filename = getattr(self, 'filename', 'Unknown File')
+                     # 썸네일 이미지 - image_link 또는 thumbnail 필드에서 가져옴
+                     poster_url = self.info.get('image_link', '') or self.info.get('thumbnail', '')
+                     logger.debug(f"Discord poster_url: {poster_url}")
+                     self.module_logic.send_discord_notification("다운로드 시작", title, filename, poster_url)
+        except Exception as e:
+            logger.error(f"Failed to check/send discord notification in refresh_status: {e}")
         # 추가: /queue 네임스페이스로도 명시적으로 전송
         try:
             from framework import socketio
@@ -1151,7 +1296,7 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
         except:
             pass
 
-    def info_dict(self, tmp):
+    def info_dict(self, tmp: Dict[str, Any]) -> Dict[str, Any]:
         # logger.debug('self.info::> %s', self.info)
         for key, value in self.info.items():
             tmp[key] = value
@@ -1162,7 +1307,7 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
         tmp["epi_queue"] = self.epi_queue
         return tmp
 
-    def download_completed(self):
+    def download_completed(self) -> None:
         logger.debug("download completed.......!!")
         db_entity = ModelOhli24Item.get_by_ohli24_id(self.info["_id"])
         if db_entity is not None:
@@ -1170,7 +1315,7 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
             db_entity.completed_time = datetime.now()
             db_entity.save()
 
-    def download_failed(self, reason):
+    def download_failed(self, reason: str) -> None:
         logger.debug(f"download failed.......!! reason: {reason}")
         db_entity = ModelOhli24Item.get_by_ohli24_id(self.info["_id"])
         if db_entity is not None:
@@ -1293,8 +1438,9 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
             iframe_src = iframe.get("src")
             logger.info(f"Found cdndania iframe: {iframe_src}")
             self.iframe_src = iframe_src
-            # CDN 보안 우회 다운로더 사용 플래그 설정 (도메인 무관하게 모듈 강제 선택)
-            self.need_special_downloader = True
+            # CDN 보안 우회 다운로더 필요 여부 - 설정에 따름
+            # self.need_special_downloader = True  # 설정값 존중 (ffmpeg/ytdlp/aria2c 테스트 가능)
+            self.need_special_downloader = False
             
             # Step 2: cdndania.com 페이지에서 m3u8 URL 추출
             video_url, vtt_url, cookies_file = self.extract_video_from_cdndania(iframe_src, url)
@@ -1348,7 +1494,8 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
         cookies_file = None
         
         try:
-            import cloudscraper
+
+            from curl_cffi import requests
             import tempfile
             import json
             
@@ -1365,12 +1512,11 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
                 logger.error(f"Could not find video ID in iframe URL: {iframe_src}")
                 return video_url, vtt_url, cookies_file
             
-            # cloudscraper 세션 생성 (쿠키 유지용)
-            scraper = cloudscraper.create_scraper(
-                browser={'browser': 'chrome', 'platform': 'darwin', 'mobile': False},
-                delay=10
-            )
+            # curl_cffi 세션 생성 (Chrome 120 TLS Fingerprint)
+            scraper = requests.Session(impersonate="chrome120")
             proxies = LogicOhli24.get_proxies()
+            if proxies:
+                scraper.proxies = {"http": proxies["http"], "https": proxies["https"]}
             
             # getVideo API 호출
             # iframe 도메인 자동 감지 (cdndania.com -> michealcdn.com 등)
@@ -1553,6 +1699,9 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
     #     # P.logger.info(refresh_type)
     #     # Todo:
     #     self.socketio_callback(refresh_type, args['data'])
+
+
+
 
 
 class ModelOhli24Item(ModelBase):

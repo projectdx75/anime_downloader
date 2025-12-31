@@ -261,13 +261,12 @@ class FfmpegQueue(object):
                     if not download_threads:
                         download_threads = 16
                     
-                    # cdndania.com 감지 시 CdndaniaDownloader 사용 (curl_cffi로 세션 기반 보안 우회)
-                    # [주의] cdndania는 yt-dlp로 받으면 14B 가짜 파일(보안 차단)이 받아지므로
-                    # aria2c 선택 여부와 무관하게 전용 다운로더(CdndaniaDownloader)를 써야 함.
-                    # 대신 CdndaniaDownloader 내부에 멀티스레드(16)를 구현하여 속도를 해결함.
-                    if getattr(entity, 'need_special_downloader', False) or 'cdndania.com' in video_url or 'michealcdn.com' in video_url:
-                        logger.info(f"Detected special CDN requirement (flag={getattr(entity, 'need_special_downloader', False)}) - using Optimized CdndaniaDownloader")
-                        download_method = "cdndania"
+                    # cdndania.com 감지 로직 제거 - 이제 설정에서 직접 선택
+                    # 사용자가 ohli24_download_method 설정에서 cdndania 선택 가능
+                    # if getattr(entity, 'need_special_downloader', False) or 'cdndania.com' in video_url or 'michealcdn.com' in video_url:
+                    #     logger.info(f"Detected special CDN requirement - using Optimized CdndaniaDownloader")
+                    #     download_method = "cdndania"
+                    pass  # 이제 설정값(download_method) 그대로 사용
                     
                     logger.info(f"Download method: {download_method}")
 
