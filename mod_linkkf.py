@@ -27,7 +27,7 @@ from flaskfarm.lib.support.expand.ffmpeg import SupportFfmpeg
 # sjva 공용
 from framework import db, path_data, scheduler
 from lxml import html
-from plugin import PluginModuleBase
+from .mod_base import AnimeModuleBase
 from requests_cache import CachedSession
 
 # cloudscraper는 lazy import로 처리
@@ -51,7 +51,7 @@ logger = P.logger
 name = "linkkf"
 
 
-class LogicLinkkf(PluginModuleBase):
+class LogicLinkkf(AnimeModuleBase):
     current_headers = None
     current_data = None
     referer = None
@@ -76,11 +76,8 @@ class LogicLinkkf(PluginModuleBase):
     }
 
     def __init__(self, P):
-        super(LogicLinkkf, self).__init__(
-            P, "setting", scheduler_desc="linkkf 자동 다운로드"
-        )
+        super(LogicLinkkf, self).__init__(P, setup_default=self.db_default, name=name, first_menu='setting', scheduler_desc="linkkf 자동 다운로드")
         self.queue = None
-        self.name = name
         self.db_default = {
             "linkkf_db_version": "1",
             "linkkf_url": "https://linkkf.live",
@@ -111,23 +108,6 @@ class LogicLinkkf(PluginModuleBase):
         default_route_socketio_module(self, attach="/setting")
         self.current_data = None
 
-    def process_menu(self, sub, req):
-        arg = P.ModelSetting.to_dict()
-        arg["sub"] = self.name
-        if sub in ["setting", "queue", "category", "list", "request", "search"]:
-            if sub == "request" and req.args.get("code") is not None:
-                arg["linkkf_current_code"] = req.args.get("code")
-            if sub == "setting":
-                job_id = "%s_%s" % (self.P.package_name, self.name)
-                arg["scheduler"] = str(scheduler.is_include(job_id))
-                arg["is_running"] = str(scheduler.is_running(job_id))
-            return render_template(
-                "{package_name}_{module_name}_{sub}.html".format(
-                    package_name=P.package_name, module_name=self.name, sub=sub
-                ),
-                arg=arg,
-            )
-        return render_template("sample.html", title="%s - %s" % (P.package_name, sub))
 
     def process_ajax(self, sub, req):
         try:
@@ -204,17 +184,6 @@ class LogicLinkkf(PluginModuleBase):
                     logger.error(traceback.format_exc())
                     ret["ret"] = "error"
                     ret["log"] = str(e)
-                return jsonify(ret)
-            elif sub == "entity_list":
-                ret = {"list": self.queue.get_entity_list() if self.queue else []}
-                return jsonify(ret)
-            elif sub == "queue_command":
-                cmd = request.form.get("cmd", "")
-                entity_id = request.form.get("entity_id", "")
-                if self.queue:
-                    ret = self.queue.command(cmd, int(entity_id) if entity_id else 0)
-                else:
-                    ret = {"ret": "error", "log": "Queue not initialized"}
                 return jsonify(ret)
             elif sub == "add_queue_checked_list":
                 # 선택된 에피소드 일괄 추가 (백그라운드 스레드로 처리)
@@ -429,64 +398,6 @@ class LogicLinkkf(PluginModuleBase):
             P.logger.error(traceback.format_exc())
             return jsonify({"ret": "error", "log": str(e)})
 
-    def process_command(self, command, arg1, arg2, arg3, req):
-        """
-        FlaskFarm 프레임워크가 /command 엔드포인트에서 호출하는 함수
-        queue 페이지에서 list, stop 등의 명령을 처리
-        """
-        ret = {"ret": "success"}
-        # logger.debug(f"process_command - command: {command}, arg1: {arg1}")
-        
-        if command == "list":
-            # 큐 목록 반환
-            if self.queue:
-                ret = [x for x in self.queue.get_entity_list()]
-            else:
-                ret = []
-            return jsonify(ret)
-        
-        elif command == "stop":
-            # 다운로드 중지 (cancel)
-            if self.queue and arg1:
-                try:
-                    entity_id = int(arg1)
-                    result = self.queue.command("cancel", entity_id)
-                    if result:
-                        ret = result
-                except Exception as e:
-                    ret = {"ret": "error", "log": str(e)}
-            return jsonify(ret)
-        
-        elif command == "remove":
-            # 개별 항목 삭제
-            if self.queue and arg1:
-                try:
-                    entity_id = int(arg1)
-                    result = self.queue.command("remove", entity_id)
-                    if result:
-                        ret = result
-                except Exception as e:
-                    ret = {"ret": "error", "log": str(e)}
-            return jsonify(ret)
-        
-        elif command in ["reset", "delete_completed"]:
-            # 전체 초기화 또는 완료 삭제
-            if self.queue:
-                result = self.queue.command(command, 0)
-                if result:
-                    ret = result
-            return jsonify(ret)
-
-        elif command == "queue_list":
-            # 대기 큐 목록
-            if self.queue:
-                ret = [x for x in self.queue.get_entity_list()]
-            else:
-                ret = []
-            return jsonify(ret)
-        
-        # 기본 응답
-        return jsonify(ret)
 
     def socketio_callback(self, refresh_type, data):
         """

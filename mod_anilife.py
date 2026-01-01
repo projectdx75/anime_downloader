@@ -47,7 +47,7 @@ from sqlalchemy import or_, and_, func, not_, desc
 from framework import db, scheduler, path_data, socketio
 from framework.util import Util
 from framework import F
-from plugin import PluginModuleBase
+from .mod_base import AnimeModuleBase
 from .lib.ffmpeg_queue_v1 import FfmpegQueueEntity, FfmpegQueue
 from support.expand.ffmpeg import SupportFfmpeg
 from .lib.crawler import Crawler
@@ -68,7 +68,7 @@ logger = P.logger
 name = "anilife"
 
 
-class LogicAniLife(PluginModuleBase):
+class LogicAniLife(AnimeModuleBase):
     db_default = {
         "anilife_db_version": "1",
         "anilife_url": "https://anilife.live",
@@ -162,8 +162,7 @@ class LogicAniLife(PluginModuleBase):
     }
 
     def __init__(self, P):
-        super(LogicAniLife, self).__init__(P, "setting", scheduler_desc="애니라이프 자동 다운로드")
-        self.name = "anilife"
+        super(LogicAniLife, self).__init__(P, setup_default=self.db_default, name=name, first_menu='setting', scheduler_desc="애니라이프 자동 다운로드")
         self.queue = None
         self.OS_PLATFORM = platform.system()
         default_route_socketio_module(self, attach="/search")
@@ -486,51 +485,7 @@ class LogicAniLife(PluginModuleBase):
     def db_init():
         pass
 
-    def process_menu(self, sub, req):
-        arg = P.ModelSetting.to_dict()
-        arg["sub"] = self.name
-        if sub in ["setting", "queue", "list", "search", "request"]:
-            if sub == "request" and req.args.get("content_code") is not None:
-                arg["anilife_current_code"] = req.args.get("content_code")
-            if sub == "setting":
-                job_id = "%s_%s" % (self.P.package_name, self.name)
-                arg["scheduler"] = str(scheduler.is_include(job_id))
-                arg["is_running"] = str(scheduler.is_running(job_id))
-            return render_template(
-                "{package_name}_{module_name}_{sub}.html".format(
-                    package_name=P.package_name, module_name=self.name, sub=sub
-                ),
-                arg=arg,
-            )
-        return render_template("sample.html", title="%s - %s" % (P.package_name, sub))
 
-    def socketio_callback(self, refresh_type, data):
-        """
-        socketio를 통해 클라이언트에 상태 업데이트 전송
-        refresh_type: 'add', 'status', 'last', 'list_refresh' 등
-        data: entity.as_dict() 데이터 또는 리스트 갱신용 빈 문자열
-        """
-        try:
-            from flaskfarm.lib.framework.init_main import socketio
-            
-            # /package_name/module_name/queue 네임스페이스로 emit
-            namespace = f"/{P.package_name}/{self.name}/queue"
-            
-            # 큐 페이지 소켓에 직접 emit
-            socketio.emit(refresh_type, data, namespace=namespace, broadcast=True)
-            
-            # 진행 상태인 경우 /framework 네임스페이스로 전역 알림(옵션)
-            if refresh_type == "status" and isinstance(data, dict):
-                percent = data.get('percent', 0)
-                if percent > 0 and percent % 10 == 0: # 10% 단위로 전역 알림
-                    notify_data = {
-                        "type": "info",
-                        "msg": f"[Anilife] 다운로드중 {percent}% - {data.get('filename', '')}",
-                    }
-                    socketio.emit("notify", notify_data, namespace="/framework", broadcast=True)
-                    
-        except Exception as e:
-            logger.error(f"socketio_callback error: {e}")
 
     def process_ajax(self, sub, req):
         try:
@@ -605,13 +560,6 @@ class LogicAniLife(PluginModuleBase):
                 # 성공적으로 큐에 추가되면 UI 새로고침 트리거
                 if ret["ret"].startswith("enqueue"):
                     self.socketio_callback("list_refresh", "")
-                return jsonify(ret)
-            elif sub == "entity_list":
-                return jsonify(self.queue.get_entity_list())
-            elif sub == "queue_command":
-                ret = self.queue.command(
-                    req.form["command"], int(req.form["entity_id"])
-                )
                 return jsonify(ret)
             elif sub == "add_queue_checked_list":
                 data = json.loads(request.form["data"])

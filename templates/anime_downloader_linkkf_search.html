@@ -126,7 +126,7 @@
           success: (ret) => {
               current_screen_movie_data = ret;
               total_page = ret.total_page;
-              // console.log("ret::>", ret);
+              // // console.log("ret::>", ret);
 
               if (current_screen_movie_data !== "") {
                   make_screen_movie_list(ret, page);
@@ -175,7 +175,7 @@
           dataType: "json",
           success: (ret) => {
               current_screen_movie_data = ret
-              // console.log('ret::>', ret)
+              // // console.log('ret::>', ret)
 
               if (current_screen_movie_data !== '') {
                   if (type === "ing") {
@@ -192,7 +192,7 @@
                       make_screen_movie_list(ret.data, page)
                   }
                   div_visible = true
-                  // console.log(div_visible)
+                  // // console.log(div_visible)
               }
               next_page = page + 1
           }
@@ -321,9 +321,9 @@
       let tmp = "";
       let new_anime = true;
       let new_style = ''
-      // console.log('page a: ', page)
-      // console.log(data)
-      // console.log(data.data)
+      // // console.log('page a: ', page)
+      // // console.log(data)
+      // // console.log(data.data)
       //console.log(data.episode)
 
       let page_elem = "";
@@ -341,8 +341,8 @@
       str += "</div>";
       str += '<div id="inner_screen_movie" class="row infinite-scroll">';
       for (let i in data.data) {
-        // console.log(i)
-        // console.log(data.data[i])
+        // // console.log(i)
+        // // console.log(data.data[i])
           if (data.data[i].postid === data.latest_anime_code) {
               new_anime = false
           }
@@ -438,12 +438,12 @@
   $("body").on("click", "#btn_search", function (e) {
       e.preventDefault();
       let query = $("#input_search").val();
-      // console.log(query);
+      // // console.log(query);
       current_cate = "search"
       current_query = query
 
       if ($("#input_search").val() === "") {
-          // console.log("search keyword nothing");
+          // // console.log("search keyword nothing");
           return false;
       }
 
@@ -456,7 +456,7 @@
           contentType: "application/x-www-form-urlencoded; charset=UTF-8",
           success: function (ret) {
               if (ret.ret) {
-                  // console.log('ret:::', ret)
+                  // // console.log('ret:::', ret)
                   make_search_result_list(ret.data, 1);
                   next_page = page + 1
               } else {
@@ -470,34 +470,34 @@
 
 
   $("#anime_category").on("click", function (e) {
-      // console.log($(this))
-      // console.log(e)
+      // // console.log($(this))
+      // // console.log(e)
 
       switch (e.target.id) {
           case "ing":
-              // console.log("ing.....")
+              // // console.log("ing.....")
 
           // spinner_loading.style.display = "block";
               current_cate = "ing";
               get_anime_list("ing", 1);
               break;
           case "movie":
-              // console.log("movie")
+              // // console.log("movie")
               current_cate = "movie";
               get_anime_list("movie", 1);
               break;
           case "complete_anilist":
-              // console.log("complete")
+              // // console.log("complete")
               current_cate = "complete";
               get_anime_list("complete", 1);
               break;
           case "top_view":
-              // console.log("top_view")
+              // // console.log("top_view")
               current_cate = "top_view";
               get_anime_list("top_view", 1);
               break;
           default:
-              // console.log("default")
+              // // console.log("default")
               spinner_loading.style.display = "block";
               current_cate = "ing";
               get_anime_list(1, "ing");
@@ -512,7 +512,7 @@
   $("body").on('click', '#analysis_btn', function (e) {
       e.preventDefault();
       const code = document.getElementById("code").value
-      // console.log(code)
+      // // console.log(code)
       $.ajax({
           url: '/' + package_name + '/ajax/' + sub + '/analysis',
           type: "POST",
@@ -521,8 +521,8 @@
           dataType: "json",
           success: function (ret) {
               if (ret.ret === 'success' && ret.data != null) {
-                  // console.log(ret.code)
-                  // console.log(ret.data)
+                  // // console.log(ret.code)
+                  // // console.log(ret.data)
                   make_program(ret.data)
               } else {
                   $.notify('<strong>분석 실패</strong><br>' + ret.log, {type: 'warning'});
@@ -582,7 +582,7 @@
   $("body").on('click', '#add_queue_btn', function (e) {
       e.preventDefault();
       data = current_data.episode[$(this).data('idx')];
-      // console.log('data:::>', data)
+      // // console.log('data:::>', data)
       $.ajax({
           url: '/' + package_name + '/ajax/' + sub + '/add_queue',
           type: "POST",
@@ -606,7 +606,7 @@
   //  	const el = document.querySelector('img');
   // const observer = lozad(el); // passing a `NodeList` (e.g. `document.querySelectorAll()`) is also valid
   // observer.observe();
-  // console.log('scroll 세로크기:', document.body.scrollHeight)
+  // // console.log('scroll 세로크기:', document.body.scrollHeight)
 
   const loadNextAnimes = (cate, page, ch) => {
       // spinner.style.display = "block";
@@ -649,9 +649,9 @@
       })
           .then((res) => res.json())
           .then((response) => {
-              // console.log("Success:", JSON.stringify(response));
+              // // console.log("Success:", JSON.stringify(response));
               // {#imagesContainer.appendChild()#}
-              // console.log("return page:::> ", String(response.page));
+              // // console.log("return page:::> ", String(response.page));
               // {#page = response.page#}
               loader.style.display = "block";
               if (current_cate === 'search') {
@@ -661,8 +661,8 @@
                   make_screen_movie_list(response.data, response.page);
               }
 
-              // console.log(document.body.scrollHeight)
-              // console.log(ch)
+              // // console.log(document.body.scrollHeight)
+              // // console.log(ch)
               window.scrollBy({
                   top: ch + 35,
                   left: 0,
@@ -682,9 +682,9 @@
       const {scrollTop, scrollHeight, clientHeight} = e.target.scrollingElement;
       if (Math.round(scrollHeight - scrollTop) <= clientHeight + 170) {
           // document.getElementById("spinner").style.display = "block";
-          // console.log("loading");
-          // console.log("now page::> ", page);
-          // console.log("next_page::> ", String(next_page));
+          // // console.log("loading");
+          // // console.log("now page::> ", page);
+          // // console.log("next_page::> ", String(next_page));
           loadNextAnimes(current_cate, next_page, clientHeight);
           /*window.scrollBy({
               top: e.target.scrollingElement.scrollHeight + 200,

@@ -61,16 +61,16 @@
 
         $(document).ready(function () {
             const socket_url = window.location.protocol + "//" + document.domain + ":" + location.port + "/anime_downloader/anilife/queue";
-            console.log("Connecting to socket:", socket_url);
+            // console.log("Connecting to socket:", socket_url);
             const socket = io.connect(socket_url);
 
             socket.on('connect', function() {
-                console.log('Socket connected to anilife queue!');
+                // console.log('Socket connected to anilife queue!');
             });
             
             // 모든 이벤트 모니터링 (디버깅용)
             socket.onAny((event, ...args) => {
-                console.log(`[Socket event: ${event}]`, args);
+                // console.log(`[Socket event: ${event}]`, args);
             });
 
             socket.on('start', function (data) {
@@ -87,7 +87,7 @@
             }, 3000);
 
             socket.on('status', function (data) {
-                console.log("Status update received:", data);
+                // console.log("Status update received:", data);
                 status_html(data);
             });
 
@@ -121,7 +121,7 @@
             globalSendCommand('list', null, null, null, function (data) {
                 current_data = data;
                 $("#list").html('');
-                console.log(data)
+                // console.log(data)
                 if (data.length == 0) {
                     str = "<tr><td colspan='10'><h4>작업이 없습니다.</h4><td><tr>";
                 } else {

@@ -61,7 +61,7 @@
     const loader = document.getElementById("preloader");
 
     const dismissLoadingScreen = async function () {
-        console.log("Before the delay")
+        // console.log("Before the delay")
         // await delay(2.5);
         loader.style.display = "none";
     };
@@ -69,7 +69,7 @@
     const wait_seconds = function () {
         // REFERENCE:  https://www.w3schools.com/jsref/met_win_settimeout.asp
         let result = setTimeout(dismissLoadingScreen, 2500);
-        console.log(result)
+        // console.log(result)
     };
     const init = function () {
 
@@ -83,11 +83,11 @@
 
     async function myAsyncFunction() {
         //Do what you want here
-        console.log("Before the delay")
+        // console.log("Before the delay")
 
         await delay(2.5);
 
-        console.log("After the delay")
+        // console.log("After the delay")
         //Do what you want here too
 
     }
@@ -102,7 +102,7 @@
         // e.stopPropagation()
         // e.preventDefault();
         const code = document.getElementById("code").value
-        console.log(code)
+        // console.log(code)
         $.ajax({
             url: '/' + package_name + '/ajax/' + sub + '/analysis',
             type: "POST",
@@ -111,8 +111,8 @@
             dataType: "json",
             success: function (ret) {
                 if (ret.ret === 'success' && ret.data != null) {
-                    // {#console.log(ret.code)#}
-                    console.log(ret.data)
+                    // {#// console.log(ret.code)#}
+                    // console.log(ret.data)
                     make_program(ret.data)
                     $("#loader").css("display", 'none')
                 } else {
@@ -124,7 +124,7 @@
 
     function make_program(data) {
         current_data = data;
-        // console.log("current_data::", current_data)
+        // // console.log("current_data::", current_data)
         
         // 에피소드 목록을 완전히 숨긴 상태로 시작 (visibility로 레이아웃 시프트 방지)
         const episodeList = document.getElementById("episode_list");
@@ -255,9 +255,9 @@
     }
 
     $(function () {
-        console.log(params.wr_id)
-        console.log(findGetParameter('wr_id'))
-        console.log(params.code)
+        // console.log(params.wr_id)
+        // console.log(findGetParameter('wr_id'))
+        // console.log(params.code)
         if (params.code === '') {
 
         } else {
@@ -267,15 +267,15 @@
 
         if ("{{arg['anilife_current_code']}}" !== "") {
             if (params.code === null) {
-                console.log('params.code === null')
+                // console.log('params.code === null')
                 document.getElementById("code").value = "{{arg['anilife_current_code']}}";
 
             } else if (params.code === '') {
                 document.getElementById("code").value = "{{arg['anilife_current_code']}}";
             } else {
 
-                console.log('params code exist')
-                console.log(params.code)
+                // console.log('params code exist')
+                // console.log(params.code)
                 document.getElementById("code").value = params.code
 
                 analyze(params.wr_id, params.bo_table)
@@ -309,7 +309,7 @@
         }, 100);
         
         $("#loader").css("display", 'none');
-        console.log({{ arg['code'] }})
+        // console.log({{ arg['code'] }})
     });
 
     $("#analysis_btn").unbind("click").bind('click', function (e) {
@@ -317,7 +317,7 @@
         e.stopPropagation()
         $("#loader").css("display", 'block')
         const code = document.getElementById("code").value
-        console.log(code)
+        // console.log(code)
         $.ajax({
             url: '/' + package_name + '/ajax/' + sub + '/analysis',
             type: "POST",
@@ -327,8 +327,8 @@
             success: function (ret) {
                 $("#loader").css("display", 'none')
                 if (ret.ret === 'success' && ret.data != null) {
-                    // {#console.log(ret.code)#}
-                    console.log(ret.data)
+                    // {#// console.log(ret.code)#}
+                    // console.log(ret.data)
 
                     make_program(ret.data)
                     dismissLoadingScreen()
@@ -358,7 +358,7 @@
     $("body").on('click', '#add_queue_btn', function (e) {
         e.preventDefault();
         data = current_data.episode[$(this).data('idx')];
-        console.log('data:::>', data)
+        // console.log('data:::>', data)
         $.ajax({
             url: '/' + package_name + '/ajax/' + sub + '/add_queue',
             type: "POST",
@@ -366,7 +366,7 @@
             data: {data: JSON.stringify(data)},
             dataType: "json",
             success: function (data) {
-                console.log('#add_queue_btn::data >>', data)
+                // console.log('#add_queue_btn::data >>', data)
                 if (data.ret == 'enqueue_db_append' || data.ret == 'enqueue_db_exist') {
                     $.notify('<strong>다운로드 작업을 추가 하였습니다.</strong>', {type: 'success'});
                 } else if (data.ret == 'queue_exist') {

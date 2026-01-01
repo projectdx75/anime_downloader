@@ -91,14 +91,14 @@
         const loader = document.getElementById("preloader");
 
         const dismissLoadingScreen = async function () {
-            console.log("Before the delay")
+            // console.log("Before the delay")
             // await delay(2.5);
             loader.style.display = "none";
         };
 
 
         const get_anime_list = (type, page) => {
-            console.log(`type: ${type}, page: ${page}`)
+            // console.log(`type: ${type}, page: ${page}`)
             let url = ''
             let data = {"page": page, "type": type}
 
@@ -138,14 +138,14 @@
                             $.notify("<strong>분석 실패</strong><br>" + ret.log, {
                                 type: "warning",
                             });
-                            console.log("error")
+                            // console.log("error")
                             dismissLoadingScreen()
                             return false;
                         }
 
 
                         current_screen_movie_data = ret
-                        console.log('ret::>', ret)
+                        // console.log('ret::>', ret)
 
                         if (current_screen_movie_data !== '') {
                             if (type === "ing") {
@@ -161,7 +161,7 @@
                                 make_screen_movie_list(ret.data, page)
                             }
                             div_visible = true
-                            console.log(div_visible)
+                            // console.log(div_visible)
                         }
                         dismissLoadingScreen()
                         next_page = page + 1
@@ -230,7 +230,7 @@
             let str = ''
             let tmp = ''
 
-            console.log(data.anime_list, page)
+            // console.log(data.anime_list, page)
 
             str += '<div>';
             str += '<button type="button" class="btn btn-info">Page <span class="badge bg-warning">' + page + '</span></button>';
@@ -240,7 +240,7 @@
                 if (data.anime_list[i].wr_id !== '') {
                     const re = /bo_table=([^&]+)/
                     const bo_table = data.anime_list[i].link.match(re)
-                    // console.log(bo_table)
+                    // // console.log(bo_table)
                     request_url = './request?code=' + data.anime_list[i].code + '&amp;wr_id=' + data.anime_list[i].wr_id + '&amp;bo_table=' + bo_table[1]
                 } else {
                     request_url = './request?code=' + data.anime_list[i].code
@@ -289,7 +289,7 @@
             let str = ''
             let tmp = ''
 
-            console.log(data.anime_list, page)
+            // console.log(data.anime_list, page)
 
             str += '<div>';
             str += '<button type="button" class="btn btn-info">Page <span class="badge bg-warning">' + page + '</span></button>';
@@ -368,12 +368,12 @@
         $("body").on("click", "#btn_search", function (e) {
             e.preventDefault();
             let query = $("#input_search").val();
-            console.log(query);
+            // console.log(query);
             current_cate = "search"
             current_query = query
 
             if ($("#input_search").val() === "") {
-                console.log("search keyword nothing");
+                // console.log("search keyword nothing");
                 return false;
             }
 
@@ -386,7 +386,7 @@
                 contentType: "application/x-www-form-urlencoded; charset=UTF-8",
                 success: function (ret) {
                     if (ret.ret) {
-                        console.log('ret:::', ret)
+                        // console.log('ret:::', ret)
                         make_search_result_list(ret.data, 1);
                         next_page = page + 1
                     } else {
@@ -400,28 +400,28 @@
         });
 
         $('#anime_category #ing').on("click", function () {
-            // {#console.log(this.id)#}
+            // {#// console.log(this.id)#}
             let spinner = document.getElementById('spinner');
             spinner.style.visibility = 'visible';
             get_anime_list("ing", 1)
         })
 
         $('#anime_category #complete_anilist').on("click", function () {
-            // {#console.log(this.id)#}
+            // {#// console.log(this.id)#}
             let spinner = document.getElementById('spinner');
             spinner.style.visibility = 'visible';
             get_anime_list("fin", 1)
         })
 
         $('#anime_category #theater').on("click", function () {
-            // {#console.log(this.id)#}
+            // {#// console.log(this.id)#}
             let spinner = document.getElementById('spinner');
             spinner.style.visibility = 'visible';
             get_anime_list("theater", 1)
         })
 
         $('#anime_category #top20').on("click", function () {
-            // {#console.log(this.id)#}
+            // {#// console.log(this.id)#}
             let spinner = document.getElementById('spinner');
             spinner.style.visibility = 'visible';
             get_anime_list("top20", 1)
@@ -431,7 +431,7 @@
         $("body").on('click', '#analysis_btn', function (e) {
             e.preventDefault();
             const code = document.getElementById("code").value
-            console.log(code)
+            // console.log(code)
             $.ajax({
                 url: '/' + package_name + '/ajax/' + sub + '/analysis',
                 type: "POST",
@@ -440,8 +440,8 @@
                 dataType: "json",
                 success: function (ret) {
                     if (ret.ret === 'success' && ret.data != null) {
-                        // console.log(ret.code)
-                        console.log(ret.data)
+                        // // console.log(ret.code)
+                        // console.log(ret.data)
                         make_program(ret.data)
                     } else {
                         $.notify('<strong>분석 실패</strong><br>' + ret.log, {type: 'warning'});
@@ -470,7 +470,7 @@
         $("body").on('click', '#add_queue_btn', function (e) {
             e.preventDefault();
             data = current_data.episode[$(this).data('idx')];
-            console.log('data:::>', data)
+            // console.log('data:::>', data)
             $.ajax({
                 url: '/' + package_name + '/ajax/' + sub + '/add_queue',
                 type: "POST",
@@ -534,9 +534,9 @@
             })
                 .then((res) => res.json())
                 .then((response) => {
-                    // console.log("Success:", JSON.stringify(response));
+                    // // console.log("Success:", JSON.stringify(response));
                     // {#imagesContainer.appendChild()#}
-                    console.log("return page:::> ", String(response.page));
+                    // console.log("return page:::> ", String(response.page));
                     // {#page = response.page#}
                     if (current_cate === 'search') {
                         make_search_result_list(response.data, response.page);
@@ -556,9 +556,9 @@
             const {scrollTop, scrollHeight, clientHeight} = e.target.scrollingElement;
             if (Math.round(scrollHeight - scrollTop) <= clientHeight) {
                 document.getElementById("spinner").style.display = "block";
-                console.log("loading");
-                console.log("now page::> ", page);
-                console.log("next_page::> ", String(next_page));
+                // console.log("loading");
+                // console.log("now page::> ", page);
+                // console.log("next_page::> ", String(next_page));
                 loadNextAnimes(current_cate, next_page);
             }
         };

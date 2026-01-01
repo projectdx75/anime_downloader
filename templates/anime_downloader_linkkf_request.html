@@ -83,7 +83,7 @@
         function analyze(wr_id, bo_table) {
             // e.preventDefault();
             const code = document.getElementById("code").value
-            console.log(code)
+            // console.log(code)
             $.ajax({
                 url: '/' + package_name + '/ajax/' + sub + '/analysis',
                 type: "POST",
@@ -92,8 +92,8 @@
                 dataType: "json",
                 success: function (ret) {
                     if (ret.ret === 'success' && ret.data != null) {
-                        // {#console.log(ret.code)#}
-                        console.log(ret.data)
+                        // {#// console.log(ret.code)#}
+                        // console.log(ret.data)
                         make_program(ret.data)
                     } else {
                         $.notify('<strong>분석 실패</strong><br>' + ret.log, {type: 'warning'});
@@ -192,9 +192,9 @@
         }
 
         $(function () {
-            console.log(params.wr_id)
-            console.log(findGetParameter('wr_id'))
-            console.log(params.code)
+            // console.log(params.wr_id)
+            // console.log(findGetParameter('wr_id'))
+            // console.log(params.code)
             if (params.code === '') {
 
             } else {
@@ -204,15 +204,15 @@
 
             if ("{{arg['linkkf_current_code']}}" !== "") {
                 if (params.code === null) {
-                    console.log('params.code === null')
+                    // console.log('params.code === null')
                     document.getElementById("code").value = "{{arg['linkkf_current_code']}}";
 
                 } else if (params.code === '') {
                     document.getElementById("code").value = "{{arg['linkkf_current_code']}}";
                 } else {
 
-                    console.log('params code exist')
-                    console.log(params.code)
+                    // console.log('params code exist')
+                    // console.log(params.code)
                     document.getElementById("code").value = params.code
 
                     analyze(params.wr_id, params.bo_table)
@@ -229,7 +229,7 @@
 
         $(document).ready(function () {
 
-            console.log('wr_id::', params.wr_id)
+            // console.log('wr_id::', params.wr_id)
 
         });
 
@@ -237,7 +237,7 @@
             e.preventDefault();
             e.stopPropagation()
             const code = document.getElementById("code").value
-            console.log(code)
+            // console.log(code)
             $.ajax({
                 url: '/' + package_name + '/ajax/' + sub + '/analysis',
                 type: "POST",
@@ -246,8 +246,8 @@
                 dataType: "json",
                 success: function (ret) {
                     if (ret.ret === 'success' && ret.data != null) {
-                        // {#console.log(ret.code)#}
-                        console.log(ret.data)
+                        // {#// console.log(ret.code)#}
+                        // console.log(ret.data)
                         make_program(ret.data)
                     } else {
                         $.notify('<strong>분석 실패</strong><br>' + ret.log, {type: 'warning'});
@@ -302,7 +302,7 @@
         $("body").on('click', '#add_queue_btn', function (e) {
             e.preventDefault();
             data = current_data.episode[$(this).data('idx')];
-            console.log('data:::>', data)
+            // console.log('data:::>', data)
             $.ajax({
                 url: '/' + package_name + '/ajax/' + sub + '/add_queue',
                 type: "POST",
@@ -310,7 +310,7 @@
                 data: {data: JSON.stringify(data)},
                 dataType: "json",
                 success: function (data) {
-                    console.log('#add_queue_btn::data >>', data)
+                    // console.log('#add_queue_btn::data >>', data)
                     if (data.ret == 'enqueue_db_append' || data.ret == 'enqueue_db_exist') {
                         $.notify('<strong>다운로드 작업을 추가 하였습니다.</strong>', {type: 'success'});
                     } else if (data.ret == 'queue_exist') {

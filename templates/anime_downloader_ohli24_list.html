@@ -147,7 +147,7 @@
         });
 
         function global_sub_request_search(page, move_top = true) {
-            console.log('........................')
+            // console.log('........................')
             var formData = get_formdata('#form_search')
             formData += '&page=' + page;
             $.ajax({
@@ -157,7 +157,7 @@
                 data: formData,
                 dataType: "json",
                 success: function (data) {
-                    console.log(data)
+                    // console.log(data)
                     current_data = data;
                     if (move_top) {
                          window.scrollTo(0,0);

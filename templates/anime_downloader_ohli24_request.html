@@ -91,7 +91,7 @@
             {#e.preventDefault();#}
 
             const code = document.getElementById("code").value
-            console.log(code)
+            // // console.log(code)
             $.ajax({
                 url: '/' + package_name + '/ajax/' + sub + '/analysis',
                 type: "POST",
@@ -100,8 +100,8 @@
                 dataType: "json",
                 success: function (ret) {
                     if (ret.ret === 'success' && ret.data != null) {
-                        // {#console.log(ret.code)#}
-                        console.log(ret.data)
+                        // {#// // console.log(ret.code)#}
+                        // // console.log(ret.data)
                         var order_text = (ret.data.list_order === 'desc') ? '최신화부터 (역순)' : '1화부터 (정순)';
                         if (ret.data.list_order === undefined) {
                             // 로직상 list_order가 없을 수 있으므로 체크
@@ -118,7 +118,7 @@
 
         function make_program(data) {
             current_data = data;
-            console.log(data);
+            // // console.log(data);
             
             let str = "";
             
@@ -226,9 +226,9 @@
         }
 
         $(function () {
-            console.log(params.wr_id)
-            console.log(findGetParameter('wr_id'))
-            console.log(params.code)
+            // // console.log(params.wr_id)
+            // // console.log(findGetParameter('wr_id'))
+            // // console.log(params.code)
             if (params.code === '') {
 
             } else {
@@ -238,15 +238,15 @@
 
             if ("{{arg['ohli24_current_code']}}" !== "") {
                 if (params.code === null) {
-                    console.log('params.code === null')
+                    // // console.log('params.code === null')
                     document.getElementById("code").value = "{{arg['ohli24_current_code']}}";
 
                 } else if (params.code === '') {
                     document.getElementById("code").value = "{{arg['ohli24_current_code']}}";
                 } else {
 
-                    console.log('params code exist')
-                    console.log(params.code)
+                    // // console.log('params code exist')
+                    // // console.log(params.code)
                     document.getElementById("code").value = params.code
 
                     analyze(params.wr_id, params.bo_table)
@@ -262,15 +262,15 @@
         })
 
         $(document).ready(function () {
-            console.log("{{ arg['code'] }}")
-            console.log('wr_id::', params.wr_id)
+            // // console.log("{{ arg['code'] }}")
+            // // console.log('wr_id::', params.wr_id)
             if (document.getElementById("code").value !== "") {
                 {#document.getElementById("analysis_btn").click()#}
                 $('#analysis_btn').click();
             }
 
 
-            console.log(accessibleCount)
+            // // console.log(accessibleCount)
 
         });
 
@@ -280,12 +280,12 @@
             e.stopPropagation();
 
             accessibleCount = accessibleCount - 1; //count부터 뺀다
-            console.log(accessibleCount)
+            // // console.log(accessibleCount)
             if (accessibleCount < 0) {
                 alert("이미 작업이 수행중 입니다.");
             } else {
                 const code = document.getElementById("code").value
-                console.log(code)
+                // // console.log(code)
                 $.ajax({
                     url: '/' + package_name + '/ajax/' + sub + '/analysis',
                     type: "POST",
@@ -294,17 +294,17 @@
                     dataType: "json",
                     success: function (ret) {
                         if (ret.ret === 'success' && ret.data != null) {
-                            // {#console.log(ret.code)#}
-                            console.log(ret.data)
+                            // {#// // console.log(ret.code)#}
+                            // // console.log(ret.data)
                             make_program(ret.data)
                         } else {
                             $.notify('<strong>분석 실패</strong><br>' + ret.log, {type: 'warning'});
                         }
                     }
                 });
-                console.log(accessibleCount)
+                // // console.log(accessibleCount)
                 accessibleCount++
-                console.log(accessibleCount)
+                // // console.log(accessibleCount)
 
             }
 
@@ -356,7 +356,7 @@
         $("body").on('click', '#add_queue_btn', function (e) {
             e.preventDefault();
             data = current_data.episode[$(this).data('idx')];
-            console.log('data:::>', data)
+            // // console.log('data:::>', data)
             $.ajax({
                 url: '/' + package_name + '/ajax/' + sub + '/add_queue',
                 type: "POST",
@@ -364,7 +364,7 @@
                 data: {data: JSON.stringify(data)},
                 dataType: "json",
                 success: function (data) {
-                    console.log('#add_queue_btn::data >>', data)
+                    // // console.log('#add_queue_btn::data >>', data)
                     if (data.ret == 'enqueue_db_append' || data.ret == 'enqueue_db_exist') {
                         $.notify('<strong>다운로드 작업을 추가 하였습니다.</strong>', {type: 'success'});
                     } else if (data.ret == 'queue_exist') {

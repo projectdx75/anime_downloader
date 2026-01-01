@@ -55,6 +55,8 @@ from .lib.util import Util
 # from support_site import SupportKakaotv
 
 from .setup import *
+from .mod_base import AnimeModuleBase
+from .model_base import AnimeQueueEntity
 
 logger = P.logger
 
@@ -62,7 +64,7 @@ print("*=" * 50)
 name = "ohli24"
 
 
-class LogicOhli24(PluginModuleBase):
+class LogicOhli24(AnimeModuleBase):
     current_headers: Optional[Dict[str, str]] = None
     current_data: Optional[Dict[str, Any]] = None
     referer: Optional[str] = None
@@ -108,7 +110,6 @@ class LogicOhli24(PluginModuleBase):
     current_download_count = 0
 
     def __init__(self, P: Any) -> None:
-        super(LogicOhli24, self).__init__(P, "setting", scheduler_desc="ohli24 자동 다운로드")
         self.name: str = name
 
         self.db_default = {
@@ -135,6 +136,7 @@ class LogicOhli24(PluginModuleBase):
             "ohli24_image_url_prefix_episode": "https://www.jetcloud-list.cc/thumbnail/",
             "ohli24_discord_notify": "True",
         }
+        super(LogicOhli24, self).__init__(P, name=name, first_menu='setting', scheduler_desc="ohli24 자동 다운로드", setup_default=self.db_default)
         self.queue = None
         # default_route_socketio(P, self)
         self.web_list_model = ModelOhli24Item
@@ -164,9 +166,7 @@ class LogicOhli24(PluginModuleBase):
         except Exception as e:
             logger.error(f"Error during stale temp cleanup: {e}")
 
-    @staticmethod
-    def db_init() -> None:
-        pass
+
         # try:
         #     for key, value in P.Logic.db_default.items():
         #         if db.session.query(ModelSetting).filter_by(key=key).count() == 0:
@@ -176,27 +176,14 @@ class LogicOhli24(PluginModuleBase):
         #     logger.error('Exception:%s', e)
         #     logger.error(traceback.format_exc())
 
-    def process_menu(self, sub: str, req: Any) -> str:
-        arg = P.ModelSetting.to_dict()
-        arg["sub"] = self.name
-        if sub in ["setting", "queue", "list", "category", "request", "search"]:
-            if sub == "request" and req.args.get("content_code") is not None:
-                arg["ohli24_current_code"] = req.args.get("content_code")
-            elif sub == "setting":
-                job_id = "%s_%s" % (self.P.package_name, self.name)
-                arg["scheduler"] = str(scheduler.is_include(job_id))
-                arg["is_running"] = str(scheduler.is_running(job_id))
-            return render_template(
-                "{package_name}_{module_name}_{sub}.html".format(
-                    package_name=P.package_name, module_name=self.name, sub=sub
-                ),
-                arg=arg,
-            )
-        return render_template("sample.html", title="%s - %s" % (P.package_name, sub))
+
 
     # @staticmethod
     def process_ajax(self, sub: str, req: Any) -> Any:
         try:
+            ret = super().process_ajax(sub, req)
+            if ret: return ret
+
             data = []
             cate = request.form.get("type", None)
             page = request.form.get("page", None)
@@ -523,13 +510,7 @@ class LogicOhli24(PluginModuleBase):
     def process_command(self, command, arg1, arg2, arg3, req):
         ret = {"ret": "success"}
 
-        if command == "queue_list":
-            logger.debug("queue_list")
-            logger.debug(f"self.queue.get_entity_list():: {self.queue.get_entity_list()}")
-            ret = [x for x in self.queue.get_entity_list()]
-
-            return ret
-        elif command == "download_program":
+        if command == "download_program":
             _pass = arg2
             db_item = ModelOhli24Program.get(arg1)
             if _pass == "false" and db_item is not None:
@@ -549,26 +530,9 @@ class LogicOhli24(PluginModuleBase):
                 db_item.init_for_queue()
                 self.download_queue.put(db_item)
                 ret["msg"] = "다운로드를 추가 하였습니다."
+            return jsonify(ret)
 
-        elif command == "list":
-            ret = []
-            for ins in SupportFfmpeg.get_list():
-                ret.append(ins.get_data())
-
-        elif command == "queue_command":
-            if arg1 == "cancel":
-                pass
-            elif arg1 == "reset":
-                logger.debug("reset")
-                # if self.queue is not None:
-                #     with self.queue.mutex:
-                #         self.queue.queue.clear()
-
-                if self.download_queue is not None:
-                    with self.download_queue.mutex:
-                        self.download_queue.queue.clear()
-
-        return jsonify(ret)
+        return super().process_command(command, arg1, arg2, arg3, req)
 
     @staticmethod
     def add_whitelist(*args):
@@ -1567,7 +1531,7 @@ class LogicOhli24(PluginModuleBase):
             logger.error(traceback.format_exc())
 
 
-class Ohli24QueueEntity(FfmpegQueueEntity):
+class Ohli24QueueEntity(AnimeQueueEntity):
     def __init__(self, P: Any, module_logic: LogicOhli24, info: Dict[str, Any]) -> None:
         super(Ohli24QueueEntity, self).__init__(P, module_logic, info)
         self._vi: Optional[Any] = None
@@ -1590,6 +1554,7 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
 
 
     def refresh_status(self) -> None:
+        super().refresh_status()
         # ffmpeg_queue_v1.py에서 실패 처리(-1)된 경우 DB 업데이트 트리거
         if getattr(self, 'ffmpeg_status', 0) == -1:
              reason = getattr(self, 'ffmpeg_status_kor', 'Unknown Error')
@@ -1630,6 +1595,7 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
         return tmp
 
     def download_completed(self) -> None:
+        super().download_completed()
         logger.debug("download completed.......!!")
         logger.debug(f"[DB_COMPLETE] Looking up entity by ohli24_id: {self.info.get('_id')}")
         db_entity = ModelOhli24Item.get_by_ohli24_id(self.info["_id"])

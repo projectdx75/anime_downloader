@@ -281,8 +281,28 @@
     }
 
     /* Collapse Borders */
-    .border-left {
-        border-left: 3px solid rgba(255,255,255,0.1) !important;
+    /* Folder Browser Modal Styles */
+    .folder-item {
+        cursor: pointer;
+        transition: background 0.2s;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+        display: flex !important;
+        align-items: center;
+        width: 100%;
+        overflow: hidden;
+    }
+    .folder-item:hover {
+        background: rgba(255, 255, 255, 0.1);
+    }
+    .folder-item span {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        flex: 1;
+        min-width: 0;
+    }
+    .folder-item.selected {
+        background: rgba(59, 130, 246, 0.3) !important;
     }
 </style>
 
