@@ -104,9 +104,12 @@ class AnimeModuleBase(PluginModuleBase):
                     return jsonify({'ret': 'fail', 'error': str(e)})
 
             elif sub == 'queue_command':
-                cmd = req.form['command']
-                entity_id = int(req.form['entity_id'])
-                ret = self.queue.command(cmd, entity_id)
+                cmd = request.form.get('command')
+                if not cmd:
+                    cmd = request.args.get('command')
+                entity_id_str = request.form.get('entity_id') or request.args.get('entity_id')
+                entity_id = int(entity_id_str) if entity_id_str else -1
+                ret = self.queue.command(cmd, entity_id) if self.queue else {'ret': 'fail', 'log': 'No queue'}
                 return jsonify(ret)
             
             elif sub == 'entity_list':
@@ -122,10 +125,10 @@ class AnimeModuleBase(PluginModuleBase):
                      return jsonify({'ret': False, 'log': 'Not implemented'})
             
             elif sub == 'command':
-                command = request.form.get('command')
-                arg1 = request.form.get('arg1')
-                arg2 = request.form.get('arg2')
-                arg3 = request.form.get('arg3')
+                command = request.form.get('command') or request.args.get('command')
+                arg1 = request.form.get('arg1') or request.args.get('arg1')
+                arg2 = request.form.get('arg2') or request.args.get('arg2')
+                arg3 = request.form.get('arg3') or request.args.get('arg3')
                 return self.process_command(command, arg1, arg2, arg3, req)
 
         except Exception as e:
@@ -135,24 +138,27 @@ class AnimeModuleBase(PluginModuleBase):
 
     def process_command(self, command, arg1, arg2, arg3, req):
         try:
+            if not command:
+                return jsonify({"ret": "fail", "log": "No command specified"})
+                
             if command == "list":
                 ret = self.queue.get_entity_list() if self.queue else []
                 return jsonify(ret)
             elif command == "stop":
-                entity_id = int(arg1)
+                entity_id = int(arg1) if arg1 else -1
                 result = self.queue.command("cancel", entity_id) if self.queue else {"ret": "error"}
                 return jsonify(result)
             elif command == "remove":
-                entity_id = int(arg1)
+                entity_id = int(arg1) if arg1 else -1
                 result = self.queue.command("remove", entity_id) if self.queue else {"ret": "error"}
                 return jsonify(result)
             elif command in ["reset", "delete_completed"]:
                 result = self.queue.command(command, 0) if self.queue else {"ret": "error"}
                 return jsonify(result)
             
-            return jsonify({'ret': 'fail', 'log': f'Unknown command: {command}'})
+            return jsonify({"ret": "fail", "log": f"Unknown command: {command}"})
         except Exception as e:
-            self.P.logger.error(f"Command Error: {e}")
+            self.P.logger.error(f"process_command Error: {e}")
             self.P.logger.error(traceback.format_exc())
             return jsonify({'ret': 'fail', 'log': str(e)})
 

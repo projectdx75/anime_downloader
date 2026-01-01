@@ -1432,15 +1432,6 @@ class LogicOhli24(AnimeModuleBase):
         elif args["type"] == "normal":
             if args["status"] == SupportFfmpeg.Status.DOWNLOADING:
                 refresh_type = "status"
-                # Discord Notification
-                try:
-                    title = args['data'].get('title', 'Unknown Title')
-                    filename = args['data'].get('filename', 'Unknown File')
-                    poster_url = entity.info.get('image_link', '') if entity and entity.info else ''
-                    msg = "다운로드를 시작합니다."
-                    self.send_discord_notification(msg, title, filename, poster_url)
-                except Exception as e:
-                    logger.error(f"Failed to send discord notification: {e}")
         # P.logger.info(refresh_type)
         self.socketio_callback(refresh_type, args["data"])
 
@@ -1549,8 +1540,8 @@ class Ohli24QueueEntity(AnimeQueueEntity):
         self.cookies_file: Optional[str] = None  # yt-dlp용 CDN 세션 쿠키 파일 경로
         self.need_special_downloader: bool = False # CDN 보안 우회 다운로더 필요 여부
         self._discord_sent: bool = False # Discord 알림 발송 여부
-        # Todo::: 임시 주석 처리
-        self.make_episode_info()
+        # [Lazy Extraction] __init__에서는 무거운 분석을 하지 않습니다.
+        # self.make_episode_info() 
 
 
     def refresh_status(self) -> None:
@@ -1603,8 +1594,27 @@ class Ohli24QueueEntity(AnimeQueueEntity):
         if db_entity is not None:
             db_entity.status = "completed"
             db_entity.completed_time = datetime.now()
+            # Map missing fields from queue entity to DB record
+            db_entity.filepath = self.filepath
+            db_entity.filename = self.filename
+            db_entity.savepath = self.savepath
+            db_entity.quality = self.quality
+            db_entity.video_url = self.url
+            db_entity.vtt_url = self.vtt
+            
             result = db_entity.save()
             logger.debug(f"[DB_COMPLETE] Save result: {result}")
+            
+            # Discord Notification (On Complete)
+            try:
+                if P.ModelSetting.get_bool("ohli24_discord_notify"):
+                    title = self.info.get('title', 'Unknown Title')
+                    filename = self.filename
+                    poster_url = self.info.get('thumbnail', '')
+                    msg = "다운로드가 완료되었습니다."
+                    self.module_logic.send_discord_notification(msg, title, filename, poster_url)
+            except Exception as e:
+                logger.error(f"Failed to send discord notification on complete: {e}")
         else:
             logger.warning(f"[DB_COMPLETE] No db_entity found for _id: {self.info.get('_id')}")
 
@@ -1615,8 +1625,8 @@ class Ohli24QueueEntity(AnimeQueueEntity):
             db_entity.status = "failed"
             db_entity.save()
 
-    # Get episode info from OHLI24 site
-    def make_episode_info(self):
+    # [Lazy Extraction] prepare_extra() replaces make_episode_info()
+    def prepare_extra(self):
         try:
             base_url = P.ModelSetting.get("ohli24_url")
             

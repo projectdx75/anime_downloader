@@ -166,7 +166,13 @@
 </div>
 
 <script type="text/javascript">
+    var PACKAGE_NAME = "{{ arg['package_name'] }}";
+    var MODULE_NAME = "{{ arg['module_name'] }}";
+    var current_list_length = 0;
+
 $(document).ready(function(){
+    $(".content-cloak").addClass("visible");
+    
     var protocol = location.protocol;
     var socketUrl = protocol + "//" + document.domain + ":" + location.port;
     
@@ -195,66 +201,70 @@ $(document).ready(function(){
         socket.on('last', function(data){ status_html(data); button_html(data); });
     }
 
-    var refreshIntervalId = null;
-    function silentFetchList(callback) {
-        $.ajax({
-            url: '/' + PACKAGE_NAME + '/ajax/' + MODULE_NAME + '/command',
-            type: 'POST',
-            cache: false,
-            global: false,
-            data: {command: 'list'},
-            dataType: 'json',
-            success: function(data) { if (callback) callback(data); }
-        });
-    }
-    
-    function autoRefreshList() {
-        silentFetchList(function(data) {
-            if (!current_data || data.length !== current_data.length) {
-                current_data = data;
-                renderList(data);
-            }
-            
-            var hasActiveDownload = false;
-            if (data && data.length > 0) {
-                for (var j = 0; j < data.length; j++) {
-                    if (data[j].status_str === 'DOWNLOADING' || data[j].status_str === 'WAITING') {
-                        hasActiveDownload = true;
-                        break;
-                    }
-                }
-            }
-            
-            if (!hasActiveDownload && refreshIntervalId) {
-                clearInterval(refreshIntervalId);
-                refreshIntervalId = null;
-            }
-            if (hasActiveDownload && !refreshIntervalId) {
-                refreshIntervalId = setInterval(autoRefreshList, 3000);
-            }
-        });
-    }
-    
-    function renderList(data) {
-        $("#list").html('');
-        if (!data || data.length == 0) {
-            $("#list").html("<tr><td colspan='10' style='text-align:center; padding: 40px; color: #6ee7b7;'>다운로드 대기 중인 작업이 없습니다.</td></tr>");
-        } else {
-            var str = '';
-            for(var i in data) {
-                str += make_item(data[i]);
-            }
-            $("#list").html(str);
-        }
-    }
-
-    globalSendCommand('list', null, null, null, function(data) {
-        current_data = data;
-        renderList(data);
-    });
-    
+    on_start();
     refreshIntervalId = setInterval(autoRefreshList, 3000);
 });
+
+var refreshIntervalId = null;
+
+function silentFetchList(callback) {
+    $.ajax({
+        url: '/' + PACKAGE_NAME + '/ajax/' + MODULE_NAME + '/command',
+        type: 'POST',
+        cache: false,
+        global: false,
+        data: {command: 'list'},
+        dataType: 'json',
+        success: function(data) { if (callback) callback(data); }
+    });
+}
+
+function autoRefreshList() {
+    silentFetchList(function(data) {
+        if (data.length !== current_list_length) {
+            current_list_length = data.length;
+            renderList(data);
+        }
+        
+        var hasActiveDownload = false;
+        if (data && data.length > 0) {
+            for (var j = 0; j < data.length; j++) {
+                if (data[j].status_str === 'DOWNLOADING' || data[j].status_str === 'WAITING' || data[j].status_str === 'STARTED') {
+                    hasActiveDownload = true;
+                    break;
+                }
+            }
+        }
+        
+        if (!hasActiveDownload && refreshIntervalId) {
+            clearInterval(refreshIntervalId);
+            refreshIntervalId = null;
+        }
+        if (hasActiveDownload && !refreshIntervalId) {
+            refreshIntervalId = setInterval(autoRefreshList, 3000);
+        }
+    });
+}
+
+function on_start() {
+    silentFetchList(function(data) {
+        current_list_length = data.length;
+        renderList(data);
+    });
+}
+
+function renderList(data) {
+    $("#list").html('');
+    if (!data || data.length == 0) {
+        $("#list").html("<tr><td colspan='10' style='text-align:center; padding: 40px; color: #6ee7b7;'>다운로드 대기 중인 작업이 없습니다.</td></tr>");
+    } else {
+        var str = '';
+        for(var i in data) {
+            str += make_item(data[i]);
+        }
+        $("#list").html(str);
+    }
+}
 
 $("body").on('click', '#stop_btn', function(e){
     e.stopPropagation(); e.preventDefault();
@@ -398,9 +408,6 @@ function status_html(data) {
     var detailEl = document.getElementById("detail_" + data.idx);
     if (detailEl) detailEl.innerHTML = get_detail(data);
 }
-</script>
-
-});
 </script>
 
 {% endblock %}

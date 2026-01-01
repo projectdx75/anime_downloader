@@ -1210,8 +1210,8 @@ class AniLifeQueueEntity(FfmpegQueueEntity):
         self.content_title = None
         self.srt_url = None
         self.headers = None
-        # Todo::: 임시 주석 처리
-        self.make_episode_info()
+        # [Lazy Extraction] __init__에서는 무거운 분석을 하지 않습니다.
+        # self.make_episode_info()
 
     def refresh_status(self):
         self.module_logic.socketio_callback("status", self.as_dict())
@@ -1234,8 +1234,9 @@ class AniLifeQueueEntity(FfmpegQueueEntity):
             db_entity.complated_time = datetime.now()
             db_entity.save()
 
-    def make_episode_info(self):
+    def prepare_extra(self):
         """
+        [Lazy Extraction] prepare_extra() replaces make_episode_info()
         에피소드 정보를 추출하고 비디오 URL을 가져옵니다.
         Selenium + stealth 기반 구현 (JavaScript 실행 필요)
         

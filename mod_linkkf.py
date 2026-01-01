@@ -59,6 +59,7 @@ class LogicLinkkf(AnimeModuleBase):
     download_thread = None
     current_download_count = 0
     _scraper = None  # cloudscraper 싱글톤
+    queue = None  # 클래스 레벨에서 큐 관리
 
     cache_path = os.path.dirname(__file__)
 
@@ -77,7 +78,7 @@ class LogicLinkkf(AnimeModuleBase):
 
     def __init__(self, P):
         super(LogicLinkkf, self).__init__(P, setup_default=self.db_default, name=name, first_menu='setting', scheduler_desc="linkkf 자동 다운로드")
-        self.queue = None
+        # self.queue = None  # 인스턴스 레벨 초기화 제거 (클래스 레벨 사용)
         self.db_default = {
             "linkkf_db_version": "1",
             "linkkf_url": "https://linkkf.live",
@@ -592,6 +593,10 @@ class LogicLinkkf(AnimeModuleBase):
                 
                 if m3u8_match:
                     video_url = m3u8_match.group(1)
+                    # 상대 경로 처리 (예: cache/...)
+                    if video_url.startswith('cache/'):
+                        from urllib.parse import urljoin
+                        video_url = urljoin(iframe_src, video_url)
                     logger.info(f"Found m3u8 URL: {video_url}")
                 else:
                     # 대안 패턴: source src
@@ -599,6 +604,9 @@ class LogicLinkkf(AnimeModuleBase):
                     source_match = source_pattern.search(iframe_content)
                     if source_match:
                         video_url = source_match.group(1)
+                        if video_url.startswith('cache/'):
+                            from urllib.parse import urljoin
+                            video_url = urljoin(iframe_src, video_url)
                         logger.info(f"Found source URL: {video_url}")
                 
                 # VTT 자막 URL 추출
@@ -1428,17 +1436,20 @@ class LogicLinkkf(AnimeModuleBase):
             logger.error(traceback.format_exc())
 
     def add(self, episode_info):
-        # 큐가 초기화되지 않았으면 초기화
-        if self.queue is None:
+        # 큐가 초기화되지 않았으면 초기화 (클래스 레벨 큐 확인)
+        if LogicLinkkf.queue is None:
             logger.warning("Queue is None in add(), initializing...")
             try:
-                self.queue = FfmpegQueue(
+                LogicLinkkf.queue = FfmpegQueue(
                     P, P.ModelSetting.get_int("linkkf_max_ffmpeg_process_count"), "linkkf", caller=self
                 )
-                self.queue.queue_start()
+                LogicLinkkf.queue.queue_start()
             except Exception as e:
                 logger.error(f"Failed to initialize queue: {e}")
                 return "queue_init_error"
+        
+        # self.queue를 LogicLinkkf.queue로 바인딩 (프로세스 내부 공유 보장)
+        self.queue = LogicLinkkf.queue
         
         # 큐 상태 로깅
         queue_len = len(self.queue.entity_list) if self.queue else 0
@@ -1503,10 +1514,10 @@ class LogicLinkkf(AnimeModuleBase):
     #             return True
 
     def is_exist(self, info):
-        if self.queue is None:
+        if LogicLinkkf.queue is None:
             return False
             
-        for _ in self.queue.entity_list:
+        for _ in LogicLinkkf.queue.entity_list:
             if _.info["_id"] == info["_id"]:
                 return True
         return False
@@ -1514,12 +1525,15 @@ class LogicLinkkf(AnimeModuleBase):
     def plugin_load(self):
         try:
             logger.debug("%s plugin_load", P.package_name)
-            # old version
-            self.queue = FfmpegQueue(
-                P, P.ModelSetting.get_int("linkkf_max_ffmpeg_process_count"), "linkkf", caller=self
-            )
+            # 클래스 레벨 큐 초기화
+            if LogicLinkkf.queue is None:
+                LogicLinkkf.queue = FfmpegQueue(
+                    P, P.ModelSetting.get_int("linkkf_max_ffmpeg_process_count"), "linkkf", caller=self
+                )
+                LogicLinkkf.queue.queue_start()
+            
+            self.queue = LogicLinkkf.queue
             self.current_data = None
-            self.queue.queue_start()
 
             # new version Todo:
             # if self.download_queue is None:
@@ -1596,9 +1610,18 @@ class LinkkfQueueEntity(FfmpegQueueEntity):
         self.filepath = os.path.join(self.savepath, self.filename) if self.filename else self.savepath
         logger.info(f"[DEBUG] filepath set to: '{self.filepath}'")
         
-        # playid URL에서 실제 비디오 URL과 자막 URL 추출
+        # playid URL에서 실제 비디오 URL과 자막 URL 추출은 prepare_extra에서 수행합니다.
+        self.playid_url = playid_url
+        self.url = playid_url # 초기값 설정
+
+    def prepare_extra(self):
+        """
+        [Lazy Extraction] 
+        다운로드 직전에 실제 비디오 URL과 자막 URL을 추출합니다.
+        """
         try:
-            video_url, referer_url, vtt_url = LogicLinkkf.extract_video_url_from_playid(playid_url)
+            logger.info(f"Linkkf Queue prepare_extra starting for: {self.content_title} - {self.filename}")
+            video_url, referer_url, vtt_url = LogicLinkkf.extract_video_url_from_playid(self.playid_url)
             
             if video_url:
                 self.url = video_url
@@ -1615,12 +1638,12 @@ class LinkkfQueueEntity(FfmpegQueueEntity):
                     logger.info(f"Subtitle URL saved: {self.vtt}")
             else:
                 # 추출 실패 시 원본 URL 사용 (fallback)
-                self.url = playid_url
-                logger.warning(f"Failed to extract video URL, using playid URL: {playid_url}")
+                self.url = self.playid_url
+                logger.warning(f"Failed to extract video URL, using playid URL: {self.playid_url}")
         except Exception as e:
             logger.error(f"Exception in video URL extraction: {e}")
             logger.error(traceback.format_exc())
-            self.url = playid_url
+            self.url = self.playid_url
 
     def download_completed(self):
         """다운로드 완료 후 처리 (파일 이동, DB 업데이트 등)"""
