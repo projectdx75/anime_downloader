@@ -1553,19 +1553,6 @@ class Ohli24QueueEntity(AnimeQueueEntity):
             
         self.module_logic.socketio_callback("status", self.as_dict())
         
-        # Discord Notification Trigger (All downloaders)
-        try:
-            if getattr(self, 'ffmpeg_status', 0) == 5: # DOWNLOADING
-                 if not getattr(self, '_discord_sent', False):
-                     self._discord_sent = True
-                     title = self.info.get('title', 'Unknown Title')
-                     filename = getattr(self, 'filename', 'Unknown File')
-                     # 썸네일 이미지 - image_link 또는 thumbnail 필드에서 가져옴
-                     poster_url = self.info.get('image_link', '') or self.info.get('thumbnail', '')
-                     logger.debug(f"Discord poster_url: {poster_url}")
-                     self.module_logic.send_discord_notification("다운로드 시작", title, filename, poster_url)
-        except Exception as e:
-            logger.error(f"Failed to check/send discord notification in refresh_status: {e}")
         # 추가: /queue 네임스페이스로도 명시적으로 전송
         try:
             from framework import socketio
@@ -1803,6 +1790,26 @@ class Ohli24QueueEntity(AnimeQueueEntity):
                 except Exception as srt_err:
                     logger.warning(f"Subtitle download failed: {srt_err}")
             
+            # ------------------------------------------------------------------
+            # [IMMEDIATE SYNC] - Update DB with all extracted metadata
+            # ------------------------------------------------------------------
+            try:
+                db_entity = ModelOhli24Item.get_by_ohli24_id(self.info["_id"])
+                if db_entity:
+                    logger.debug(f"[SYNC] Syncing metadata for _id: {self.info['_id']}")
+                    db_entity.title = self.content_title
+                    db_entity.season = self.season
+                    db_entity.episode_no = self.epi_queue
+                    db_entity.quality = self.quality
+                    db_entity.savepath = self.savepath
+                    db_entity.filename = self.filename
+                    db_entity.filepath = self.filepath
+                    db_entity.video_url = self.url
+                    db_entity.vtt_url = self.srt_url or self.vtt
+                    db_entity.save()
+            except Exception as sync_err:
+                logger.error(f"[SYNC] Failed to sync metadata in prepare_extra: {sync_err}")
+
         except Exception as e:
             P.logger.error("Exception:%s", e)
             P.logger.error(traceback.format_exc())

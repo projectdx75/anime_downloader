@@ -357,9 +357,13 @@ class YtdlpDownloader:
                     logger.warning(f"yt-dlp output notice: {line}")
                     self.error_output.append(line)
                 
-                # Aria2c / 병렬 다운로드 로그 로깅
+                # Aria2c / 병렬 다운로드 로그 - 10회당 1회만 로깅 (로그 부하 감소)
                 if 'aria2c' in line.lower() or 'fragment' in line.lower():
-                    logger.info(f"yt-dlp: {line}")
+                    if not hasattr(self, '_fragment_log_count'):
+                        self._fragment_log_count = 0
+                    self._fragment_log_count += 1
+                    if self._fragment_log_count % 10 == 1:  # 1, 11, 21, 31... 번째만 로깅
+                        logger.debug(f"yt-dlp: {line}")
 
             self.process.wait()
             
@@ -374,6 +378,36 @@ class YtdlpDownloader:
                             os.remove(self.output_path)
                             return False, f"CDN 보안 차단(가짜 파일 다운로드됨: {file_size}B)"
                     except: pass
+                
+                # [Fragment Cleanup] yt-dlp 임시 파일 정리 (Frag*, .ytdl, .part 등)
+                try:
+                    import glob
+                    dirname = os.path.dirname(self.output_path)
+                    basename = os.path.basename(self.output_path)
+                    name_without_ext = os.path.splitext(basename)[0]
+                    
+                    # 패턴 목록: *-Frag*, .ytdl, .part 파일들
+                    cleanup_patterns = [
+                        os.path.join(dirname, f"{name_without_ext}*-Frag*"),
+                        os.path.join(dirname, f"{name_without_ext}*.ytdl"),
+                        os.path.join(dirname, f"{name_without_ext}*.part"),
+                        os.path.join(dirname, "*-Frag*"),  # 일반 Fragment 파일
+                    ]
+                    
+                    cleaned_count = 0
+                    for pattern in cleanup_patterns:
+                        for frag_file in glob.glob(pattern):
+                            try:
+                                os.remove(frag_file)
+                                cleaned_count += 1
+                            except:
+                                pass
+                    
+                    if cleaned_count > 0:
+                        logger.info(f"[Cleanup] Removed {cleaned_count} temporary fragment files")
+                except Exception as cleanup_err:
+                    logger.debug(f"Fragment cleanup error (non-critical): {cleanup_err}")
+                
                 return True, "Download completed"
             
             error_msg = "\n".join(self.error_output[-3:]) if self.error_output else f"Exit code {self.process.returncode}"

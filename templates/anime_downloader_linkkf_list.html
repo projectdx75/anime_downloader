@@ -765,6 +765,7 @@ $(document).ready(function(){
                 str += '<div class="item-actions">';
                 if (item.status === 'completed') {
                     str += '<button class="action-btn btn-play" data-path="' + item.filepath + '" data-filename="' + item.filename + '"><i class="fa fa-play"></i> 재생</button>';
+                    str += '<button class="action-btn btn-merge-sub" data-id="' + item.id + '" data-filename="' + item.filename + '"><i class="fa fa-cc"></i> 자막합침</button>';
                 }
                 str += '<button class="action-btn" onclick="m_modal(current_data.list[' + i + '])"><i class="fa fa-code"></i> JSON</button>';
                 str += '<button class="action-btn" onclick="search_item(\'' + (item.title || '') + '\')"><i class="fa fa-search"></i> 검색</button>';
@@ -805,6 +806,42 @@ $(document).ready(function(){
                     } else {
                         $.notify('삭제에 실패했습니다.', { type: 'warning' });
                     }
+                }
+            });
+        });
+
+        // 자막 합침 버튼 클릭 핸들러
+        $(document).on('click', '.btn-merge-sub', function() {
+            var $btn = $(this);
+            var itemId = $btn.data('id');
+            var filename = $btn.data('filename');
+            
+            // 로딩 상태 표시
+            $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> 처리중...');
+            
+            $.ajax({
+                url: '/' + package_name + '/ajax/' + sub + '/merge_subtitle',
+                type: 'POST',
+                data: { id: itemId },
+                dataType: 'json',
+                success: function(data) {
+                    if (data.ret === 'success') {
+                        $.notify('<i class="fa fa-check"></i> ' + data.message + '<br><small>' + data.output_file + '</small>', { 
+                            type: 'success',
+                            delay: 5000
+                        });
+                    } else {
+                        $.notify('<i class="fa fa-exclamation-triangle"></i> 실패: ' + data.message, { 
+                            type: 'danger',
+                            delay: 8000
+                        });
+                    }
+                },
+                error: function(xhr, status, error) {
+                    $.notify('요청 실패: ' + error, { type: 'danger' });
+                },
+                complete: function() {
+                    $btn.prop('disabled', false).html('<i class="fa fa-cc"></i> 자막합침');
                 }
             });
         });

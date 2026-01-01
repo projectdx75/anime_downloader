@@ -250,6 +250,77 @@ class LogicLinkkf(AnimeModuleBase):
                     return jsonify({"ret": "error", "log": "No ID provided"})
                 return jsonify(ModelLinkkfItem.delete_by_id(db_id))
 
+            elif sub == "merge_subtitle":
+                # 자막 합치기 - ffmpeg로 SRT를 MP4에 삽입
+                import subprocess
+                import shutil
+                
+                db_id = request.form.get("id")
+                if not db_id:
+                    return jsonify({"ret": "error", "message": "No ID provided"})
+                
+                try:
+                    db_item = ModelLinkkfItem.get_by_id(int(db_id))
+                    if not db_item:
+                        return jsonify({"ret": "error", "message": "Item not found"})
+                    
+                    mp4_path = db_item.filepath
+                    if not mp4_path or not os.path.exists(mp4_path):
+                        return jsonify({"ret": "error", "message": f"MP4 file not found: {mp4_path}"})
+                    
+                    # SRT 파일 경로 (MP4와 동일 경로에 .srt 확장자)
+                    srt_path = os.path.splitext(mp4_path)[0] + ".srt"
+                    if not os.path.exists(srt_path):
+                        return jsonify({"ret": "error", "message": f"SRT file not found: {srt_path}"})
+                    
+                    # 출력 파일: *_subed.mp4
+                    base_name = os.path.splitext(mp4_path)[0]
+                    output_path = f"{base_name}_subed.mp4"
+                    
+                    # 이미 존재하면 덮어쓰기 전 확인
+                    if os.path.exists(output_path):
+                        os.remove(output_path)
+                    
+                    # ffmpeg 명령어: 자막을 soft embed (mov_text 코덱)
+                    # -i mp4 -i srt -c:v copy -c:a copy -c:s mov_text output
+                    ffmpeg_cmd = [
+                        "ffmpeg", "-y",
+                        "-i", mp4_path,
+                        "-i", srt_path,
+                        "-c:v", "copy",
+                        "-c:a", "copy",
+                        "-c:s", "mov_text",
+                        "-metadata:s:s:0", "language=kor",
+                        output_path
+                    ]
+                    
+                    logger.info(f"[Merge Subtitle] Running ffmpeg: {' '.join(ffmpeg_cmd)}")
+                    result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True, timeout=300)
+                    
+                    if result.returncode != 0:
+                        logger.error(f"ffmpeg error: {result.stderr}")
+                        return jsonify({"ret": "error", "message": f"ffmpeg failed: {result.stderr[-200:]}"})
+                    
+                    if not os.path.exists(output_path):
+                        return jsonify({"ret": "error", "message": "Output file was not created"})
+                    
+                    output_size = os.path.getsize(output_path)
+                    logger.info(f"[Merge Subtitle] Created: {output_path} ({output_size} bytes)")
+                    
+                    return jsonify({
+                        "ret": "success", 
+                        "message": f"자막 합침 완료!",
+                        "output_file": os.path.basename(output_path),
+                        "output_size": output_size
+                    })
+                    
+                except subprocess.TimeoutExpired:
+                    return jsonify({"ret": "error", "message": "ffmpeg timeout (5분 초과)"})
+                except Exception as e:
+                    logger.error(f"merge_subtitle error: {e}")
+                    logger.error(traceback.format_exc())
+                    return jsonify({"ret": "error", "message": str(e)})
+
             elif sub == "get_playlist":
                 # 현재 파일과 같은 폴더에서 다음 에피소드들 찾기
                 try:
@@ -1460,9 +1531,8 @@ class LogicLinkkf(AnimeModuleBase):
             return "queue_exist"
         else:
             db_entity = ModelLinkkfItem.get_by_linkkf_id(episode_info["_id"])
-            logger.info(f"db_entity: {db_entity}")
-
-            logger.debug("db_entity:::> %s", db_entity)
+            # logger.info(f"db_entity: {db_entity}")
+            # logger.debug("db_entity:::> %s", db_entity)
             # logger.debug("db_entity.status ::: %s", db_entity.status)
             if db_entity is None:
                 entity = LinkkfQueueEntity(P, self, episode_info)
@@ -1614,6 +1684,27 @@ class LinkkfQueueEntity(FfmpegQueueEntity):
         self.playid_url = playid_url
         self.url = playid_url # 초기값 설정
 
+    def get_downloader(self, video_url, output_file, callback=None, callback_function=None):
+        """
+        Factory를 통해 다운로더 인스턴스를 반환합니다.
+        설정에서 다운로드 방식을 읽어옵니다.
+        """
+        from .lib.downloader_factory import DownloaderFactory
+        
+        # 설정에서 다운로드 방식 읽기
+        method = self.P.ModelSetting.get("linkkf_download_method") or "ytdlp"
+        logger.info(f"Linkkf get_downloader using method: {method}")
+        
+        return DownloaderFactory.get_downloader(
+            method=method,
+            video_url=video_url,
+            output_file=output_file,
+            headers=self.headers,
+            callback=callback,
+            callback_id="linkkf",
+            callback_function=callback_function
+        )
+
     def prepare_extra(self):
         """
         [Lazy Extraction] 
@@ -1639,7 +1730,37 @@ class LinkkfQueueEntity(FfmpegQueueEntity):
             else:
                 # 추출 실패 시 원본 URL 사용 (fallback)
                 self.url = self.playid_url
-                logger.warning(f"Failed to extract video URL, using playid URL: {self.playid_url}")
+            
+            # ------------------------------------------------------------------
+            # [IMMEDIATE SYNC] - Update DB with all extracted metadata
+            # ------------------------------------------------------------------
+            try:
+                from .mod_linkkf import ModelLinkkfItem
+                db_item = ModelLinkkfItem.get_by_linkkf_id(self.info.get("_id"))
+                if db_item:
+                    logger.debug(f"[SYNC] Syncing metadata for Linkkf _id: {self.info.get('_id')}")
+                    # Parse episode number if possible for DB field
+                    epi_no = None
+                    try:
+                        match = re.search(r"(?P<epi_no>\d+)", str(self.info.get("ep_num", "")))
+                        if match:
+                            epi_no = int(match.group("epi_no"))
+                    except:
+                        pass
+
+                    db_item.title = self.content_title
+                    db_item.season = int(self.season) if self.season else 1
+                    db_item.episode_no = epi_no
+                    db_item.quality = self.quality
+                    db_item.savepath = self.savepath
+                    db_item.filename = self.filename
+                    db_item.filepath = self.filepath
+                    db_item.video_url = self.url
+                    db_item.vtt_url = self.vtt
+                    db_item.save()
+            except Exception as sync_err:
+                logger.error(f"[SYNC] Failed to sync Linkkf metadata in prepare_extra: {sync_err}")
+
         except Exception as e:
             logger.error(f"Exception in video URL extraction: {e}")
             logger.error(traceback.format_exc())
@@ -1659,6 +1780,10 @@ class LinkkfQueueEntity(FfmpegQueueEntity):
                     db_item.completed_time = datetime.now()
                     db_item.filepath = self.filepath
                     db_item.filename = self.filename
+                    db_item.savepath = self.savepath
+                    db_item.quality = self.quality
+                    db_item.video_url = self.url
+                    db_item.vtt_url = self.vtt
                     db_item.save()
                     logger.info(f"Updated DB status to 'completed' for episode {db_item.id}")
                 else:
