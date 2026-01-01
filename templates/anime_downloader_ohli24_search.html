@@ -659,6 +659,33 @@
         .glass-card:hover .img-wrapper img {
             transform: scale(1.05);
         }
+        
+        /* Card Text Readability Improvements */
+        .glass-card .card-body {
+            background: linear-gradient(to top, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.8) 100%) !important;
+        }
+        
+        .glass-card .card-title {
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6) !important;
+            font-size: 1rem !important;
+            letter-spacing: 0.02em !important;
+            color: #fff !important;
+        }
+        
+        .glass-card .card-body .badge,
+        .glass-card .badge.badge-secondary {
+            background: #475569 !important;
+            color: #f1f5f9 !important;
+            font-weight: 600 !important;
+            padding: 0.4em 0.7em !important;
+            font-size: 0.72rem !important;
+            max-width: 140px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            opacity: 1 !important;
+            border-radius: 4px;
+        }
 
         /* Category Buttons */
         .btn-pill {

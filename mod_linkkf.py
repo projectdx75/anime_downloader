@@ -395,6 +395,33 @@ class LogicLinkkf(PluginModuleBase):
                     return jsonify({"error": str(e)}), 500
 
             # 매치되는 sub가 없는 경우 기본 응답
+            if sub == "browse_dir":
+                try:
+                    path = request.form.get("path", "")
+                    if not path or not os.path.exists(path):
+                        path = P.ModelSetting.get("linkkf_download_path") or os.path.expanduser("~")
+                    path = os.path.abspath(path)
+                    if not os.path.isdir(path):
+                        path = os.path.dirname(path)
+                    directories = []
+                    try:
+                        for item in sorted(os.listdir(path)):
+                            item_path = os.path.join(path, item)
+                            if os.path.isdir(item_path) and not item.startswith('.'):
+                                directories.append({"name": item, "path": item_path})
+                    except PermissionError:
+                        pass
+                    parent = os.path.dirname(path) if path != "/" else None
+                    return jsonify({
+                        "ret": "success",
+                        "current_path": path,
+                        "parent_path": parent,
+                        "directories": directories
+                    })
+                except Exception as e:
+                    logger.error(f"browse_dir error: {e}")
+                    return jsonify({"ret": "error", "error": str(e)}), 500
+
             return jsonify({"ret": "error", "log": f"Unknown sub: {sub}"})
 
         except Exception as e:

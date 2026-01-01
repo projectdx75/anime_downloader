@@ -173,7 +173,7 @@
             
             // Standard Actions
             if (data.first_exist_filepath) {
-                str += `<button class="btn btn-success btn-sm mr-2" onclick="play_video('${data.first_exist_filepath.replace(/\\/g, '\\\\')}', '${data.first_exist_filename}')"><i class="fa fa-play"></i> 재생</button>`;
+                str += `<button type="button" class="btn btn-success btn-sm mr-2" onclick="play_video('${data.first_exist_filepath.replace(/\\/g, '\\\\')}', '${data.first_exist_filename}')"><i class="fa fa-play"></i> 재생</button>`;
             }
             str += `<button id="check_download_btn" class="btn btn-primary btn-sm"><i class="fa fa-download"></i> 선택 다운로드</button>`;
             str += `<button id="all_check_on_btn" class="btn btn-outline-light btn-sm">전체 선택</button>`;

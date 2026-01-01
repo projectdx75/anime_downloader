@@ -683,6 +683,32 @@ class LogicAniLife(PluginModuleBase):
                     logger.error(f"Exception: {e}")
                     logger.error(traceback.format_exc())
                     return jsonify({"ret": False, "log": str(e)})
+            elif sub == "browse_dir":
+                try:
+                    path = request.form.get("path", "")
+                    if not path or not os.path.exists(path):
+                        path = P.ModelSetting.get("anilife_download_path") or os.path.expanduser("~")
+                    path = os.path.abspath(path)
+                    if not os.path.isdir(path):
+                        path = os.path.dirname(path)
+                    directories = []
+                    try:
+                        for item in sorted(os.listdir(path)):
+                            item_path = os.path.join(path, item)
+                            if os.path.isdir(item_path) and not item.startswith('.'):
+                                directories.append({"name": item, "path": item_path})
+                    except PermissionError:
+                        pass
+                    parent = os.path.dirname(path) if path != "/" else None
+                    return jsonify({
+                        "ret": "success",
+                        "current_path": path,
+                        "parent_path": parent,
+                        "directories": directories
+                    })
+                except Exception as e:
+                    logger.error(f"browse_dir error: {e}")
+                    return jsonify({"ret": "error", "error": str(e)}), 500
         except Exception as e:
             P.logger.error("Exception:%s", e)
             P.logger.error(traceback.format_exc())

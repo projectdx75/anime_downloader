@@ -475,13 +475,18 @@ async def _download_worker_async(
                                     completed_segments += 1
                                     total_bytes += len(content)
                                     
-                                    # Log Progress
+                                    # Progress Update & Log
+                                    pct = int((completed_segments / total_segments) * 100)
+                                    elapsed = time.time() - start_time
+                                    speed = total_bytes / elapsed if elapsed > 0 else 0
+                                    
+                                    # Update progress file frequently (for UI callback)
                                     if completed_segments == 1 or completed_segments % 10 == 0 or completed_segments == total_segments:
-                                        pct = int((completed_segments / total_segments) * 100)
-                                        elapsed = time.time() - start_time
-                                        speed = total_bytes / elapsed if elapsed > 0 else 0
-                                        log.info(f"Progress: {pct}% ({completed_segments}/{total_segments}) Speed: {format_speed(speed)}")
                                         update_progress(pct, completed_segments, total_segments, format_speed(speed), format_time(elapsed))
+                                    
+                                    # Log only at 25% intervals (reduce log spam)
+                                    if completed_segments == 1 or pct in [25, 50, 75, 100] and (completed_segments == total_segments or completed_segments * 4 % total_segments < 4):
+                                        log.info(f"Progress: {pct}% ({completed_segments}/{total_segments}) Speed: {format_speed(speed)}")
                                     return
                             except asyncio.TimeoutError:
                                 if retry == 2:

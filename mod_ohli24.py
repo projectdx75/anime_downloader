@@ -18,6 +18,7 @@ import sys
 import threading
 import traceback
 import urllib
+import unicodedata
 from datetime import datetime, date
 from typing import Any, Dict, List, Optional, Tuple, Union, Callable, TYPE_CHECKING
 from urllib import parse
@@ -396,14 +397,19 @@ class LogicOhli24(PluginModuleBase):
                     
                     # 보안 체크
                     download_path = P.ModelSetting.get("ohli24_download_path")
-                    if not file_path.startswith(download_path):
+                    
+                    # Normalize both paths to NFC and absolute paths for comparison
+                    norm_file_path = unicodedata.normalize('NFC', os.path.abspath(file_path))
+                    norm_dl_path = unicodedata.normalize('NFC', os.path.abspath(download_path))
+                    
+                    if not norm_file_path.startswith(norm_dl_path):
                         return jsonify({"error": "Access denied", "playlist": [], "current_index": 0}), 403
                     
                     folder = os.path.dirname(file_path)
                     current_file = os.path.basename(file_path)
                     
-                    # 파일명에서 SxxExx 패턴 추출
-                    ep_match = re.search(r'\.S(\d+)E(\d+)\.', current_file, re.IGNORECASE)
+                    # 파일명에서 SxxExx 패턴 추출 (구분자 유연화)
+                    ep_match = re.search(r'[ .\-_]S(\d+)E(\d+)[ .\-_]', current_file, re.IGNORECASE)
                     if not ep_match:
                         # 패턴 없으면 현재 파일만 반환
                         return jsonify({
@@ -417,8 +423,10 @@ class LogicOhli24(PluginModuleBase):
                     # 같은 폴더의 모든 mp4 파일 가져오기
                     all_files = []
                     for f in os.listdir(folder):
-                        if f.endswith('.mp4'):
-                            match = re.search(r'\.S(\d+)E(\d+)\.', f, re.IGNORECASE)
+                        # Normalize to NFC for consistent matching
+                        f_nfc = unicodedata.normalize('NFC', f)
+                        if f_nfc.endswith('.mp4'):
+                            match = re.search(r'[ .\-_]S(\d+)E(\d+)[ .\-_]', f_nfc, re.IGNORECASE)
                             if match:
                                 s = int(match.group(1))
                                 e = int(match.group(2))
@@ -432,11 +440,16 @@ class LogicOhli24(PluginModuleBase):
                     # 시즌/에피소드 순으로 정렬
                     all_files.sort(key=lambda x: (x["season"], x["episode"]))
                     
-                    # 현재 에피소드 이상인 것만 필터링 (현재 + 다음 에피소드들)
+                    logger.debug(f"[PLAYLIST_DEBUG] Folder: {folder}")
+                    logger.debug(f"[PLAYLIST_DEBUG] All files in folder: {os.listdir(folder)[:10]}...")  # First 10
+                    logger.debug(f"[PLAYLIST_DEBUG] Matched SxxExx files: {len(all_files)}")
+                    logger.debug(f"[PLAYLIST_DEBUG] Current: S{current_season:02d}E{current_episode:02d}")
+                    
+                    # 현재 시즌의 모든 에피소드 포함 (전체 시즌 재생)
                     playlist = []
                     current_index = 0
                     for i, f in enumerate(all_files):
-                        if f["season"] == current_season and f["episode"] >= current_episode:
+                        if f["season"] == current_season:
                             entry = {"path": f["path"], "name": f["name"]}
                             if f["episode"] == current_episode:
                                 current_index = len(playlist)
@@ -457,6 +470,47 @@ class LogicOhli24(PluginModuleBase):
             P.logger.error(f"Exception: {e}")
             P.logger.error(traceback.format_exc())
             return jsonify({"error": str(e)}), 500
+        
+        # 폴더 탐색 엔드포인트
+        if sub == "browse_dir":
+            try:
+                path = request.form.get("path", "")
+                
+                # 기본 경로: 홈 디렉토리 또는 현재 다운로드 경로
+                if not path or not os.path.exists(path):
+                    path = P.ModelSetting.get("ohli24_download_path") or os.path.expanduser("~")
+                
+                # 경로 정규화
+                path = os.path.abspath(path)
+                
+                if not os.path.isdir(path):
+                    path = os.path.dirname(path)
+                
+                # 디렉토리 목록 가져오기
+                directories = []
+                try:
+                    for item in sorted(os.listdir(path)):
+                        item_path = os.path.join(path, item)
+                        if os.path.isdir(item_path) and not item.startswith('.'):
+                            directories.append({
+                                "name": item,
+                                "path": item_path
+                            })
+                except PermissionError:
+                    pass
+                
+                # 상위 폴더
+                parent = os.path.dirname(path) if path != "/" else None
+                
+                return jsonify({
+                    "ret": "success",
+                    "current_path": path,
+                    "parent_path": parent,
+                    "directories": directories
+                })
+            except Exception as e:
+                logger.error(f"browse_dir error: {e}")
+                return jsonify({"ret": "error", "error": str(e)}), 500
         
         # 매칭되지 않는 sub 요청에 대한 기본 응답
         return jsonify({"error": f"Unknown sub: {sub}"}), 404
@@ -1577,11 +1631,16 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
 
     def download_completed(self) -> None:
         logger.debug("download completed.......!!")
+        logger.debug(f"[DB_COMPLETE] Looking up entity by ohli24_id: {self.info.get('_id')}")
         db_entity = ModelOhli24Item.get_by_ohli24_id(self.info["_id"])
+        logger.debug(f"[DB_COMPLETE] Found db_entity: {db_entity}")
         if db_entity is not None:
             db_entity.status = "completed"
             db_entity.completed_time = datetime.now()
-            db_entity.save()
+            result = db_entity.save()
+            logger.debug(f"[DB_COMPLETE] Save result: {result}")
+        else:
+            logger.warning(f"[DB_COMPLETE] No db_entity found for _id: {self.info.get('_id')}")
 
     def download_failed(self, reason: str) -> None:
         logger.debug(f"download failed.......!! reason: {reason}")
@@ -1721,6 +1780,17 @@ class Ohli24QueueEntity(FfmpegQueueEntity):
                 )
                 self.filename = Util.change_text_for_use_filename(ret)
                 self.filepath = os.path.join(self.savepath, self.filename)
+                
+                # [NFD CHECK] Mac/Docker Compatibility
+                # If NFC (Python standard) file doesn't exist, check NFD (Mac filesystem standard)
+                if not os.path.exists(self.filepath):
+                    nfd_filename = unicodedata.normalize('NFD', self.filename)
+                    nfd_filepath = os.path.join(self.savepath, nfd_filename)
+                    if os.path.exists(nfd_filepath):
+                        logger.info(f"[NFD Match] Found existing file with NFD normalization: {nfd_filename}")
+                        self.filename = nfd_filename
+                        self.filepath = nfd_filepath
+                        
                 logger.info(f"self.filename::> {self.filename}")
             
             if not video_url:
@@ -2137,25 +2207,31 @@ class ModelOhli24Item(ModelBase):
 
     @classmethod
     def append(cls, q):
-        item = ModelOhli24Item()
-        item.content_code = q["content_code"]
-        item.season = q["season"]
-        item.episode_no = q["epi_queue"]
-        item.title = q["content_title"]
-        item.episode_title = q["title"]
-        item.ohli24_va = q["va"]
-        item.ohli24_vi = q["_vi"]
-        item.ohli24_id = q["_id"]
-        item.quality = q["quality"]
-        item.filepath = q["filepath"]
-        item.filename = q["filename"]
-        item.savepath = q["savepath"]
-        item.video_url = q["url"]
-        item.vtt_url = q["vtt"]
-        item.thumbnail = q["thumbnail"]
-        item.status = "wait"
-        item.ohli24_info = q["ohli24_info"]
-        item.save()
+        try:
+            logger.debug(f"[DB_APPEND] Starting append for _id: {q.get('_id')}")
+            item = ModelOhli24Item()
+            item.content_code = q["content_code"]
+            item.season = q["season"]
+            item.episode_no = q["epi_queue"]
+            item.title = q["content_title"]
+            item.episode_title = q["title"]
+            item.ohli24_va = q["va"]
+            item.ohli24_vi = q["_vi"]
+            item.ohli24_id = q["_id"]
+            item.quality = q["quality"]
+            item.filepath = q["filepath"]
+            item.filename = q["filename"]
+            item.savepath = q["savepath"]
+            item.video_url = q["url"]
+            item.vtt_url = q["vtt"]
+            item.thumbnail = q["thumbnail"]
+            item.status = "wait"
+            item.ohli24_info = q["ohli24_info"]
+            result = item.save()
+            logger.debug(f"[DB_APPEND] Save result for _id {q.get('_id')}: {result}")
+        except Exception as e:
+            logger.error(f"[DB_APPEND] Exception during append: {e}")
+            logger.error(traceback.format_exc())
 
 
 class ModelOhli24Program(ModelBase):
