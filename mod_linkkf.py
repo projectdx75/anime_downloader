@@ -463,7 +463,7 @@ class LogicLinkkf(AnimeModuleBase):
                     logger.error(f"browse_dir error: {e}")
                     return jsonify({"ret": "error", "error": str(e)}), 500
 
-            return jsonify({"ret": "error", "log": f"Unknown sub: {sub}"})
+            return super().process_ajax(sub, req)
 
         except Exception as e:
             P.logger.error(f"Exception: {str(e)}")

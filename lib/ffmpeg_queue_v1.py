@@ -228,8 +228,11 @@ class FfmpegQueue(object):
                 has_ytdl_file = os.path.exists(filepath + ".ytdl")
                 
                 if os.path.exists(filepath) and not (is_ytdlp or has_ytdl_file):
+                    logger.info(f"File already exists: {filepath}")
+                    entity.ffmpeg_status = 8 # COMPLETED_EXIST
                     entity.ffmpeg_status_kor = "파일 있음"
                     entity.ffmpeg_percent = 100
+                    entity.download_completed()
                     entity.refresh_status()
                     continue
                 dirname = os.path.dirname(filepath)

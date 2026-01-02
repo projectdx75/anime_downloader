@@ -1718,6 +1718,22 @@ class AniLifeQueueEntity(FfmpegQueueEntity):
             if not os.path.exists(self.savepath):
                 os.makedirs(self.savepath)
 
+            # [IMMEDIATE SYNC] Update DB with extracted metadata
+            try:
+                db_entity = ModelAniLifeItem.get_by_anilife_id(self.info["_id"])
+                if db_entity:
+                    logger.debug(f"[SYNC] Syncing metadata for AniLife _id: {self.info.get('_id')}")
+                    db_entity.title = self.content_title
+                    db_entity.season = self.season
+                    db_entity.episode_no = self.epi_queue
+                    db_entity.savepath = self.savepath
+                    db_entity.filename = self.filename
+                    db_entity.filepath = self.filepath
+                    db_entity.quality = self.quality
+                    db_entity.save()
+            except Exception as sync_err:
+                logger.error(f"Failed to sync metadata to DB: {sync_err}")
+
             # 최종 비디오 URL 설정
             self.url = vod_url
             logger.info(f"Final video URL: {self.url}")

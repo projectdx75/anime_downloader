@@ -150,7 +150,13 @@ class AnimeQueueEntity(FfmpegQueueEntity):
                 # Anilife uses _id
                 if hasattr(model_class, 'get_by_anilife_id') and info.get('_id'):
                     db_entity = model_class.get_by_anilife_id(info['_id'])
-                # Linkkf/Ohli24 might use different identifiers
+                # Ohli24 uses _id (via get_by_ohli24_id)
+                elif hasattr(model_class, 'get_by_ohli24_id') and info.get('_id'):
+                    db_entity = model_class.get_by_ohli24_id(info['_id'])
+                # Linkkf uses _id (via get_by_linkkf_id)
+                elif hasattr(model_class, 'get_by_linkkf_id') and info.get('_id'):
+                    db_entity = model_class.get_by_linkkf_id(info['_id'])
+                # Other modules might use get_by_id with db_id
                 elif hasattr(model_class, 'get_by_id') and info.get('db_id'):
                     db_entity = model_class.get_by_id(info['db_id'])
                 elif hasattr(model_class, 'get_by_content_code') and info.get('content_code'):

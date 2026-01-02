@@ -147,7 +147,7 @@
                     let current_screen_movie_data = ret
                     // console.log('ret::>', ret)
 
-                    if (current_screen_movie_data !== '') {
+                    if (ret.ret === 'success') {
                         if (type === "ing") {
                             make_airing_list(ret.data, page)
                             // observer.observe();
@@ -162,6 +162,8 @@
                         }
                         // div_visible = true
                         // // console.log(div_visible)
+                    } else {
+                        $.notify('<strong>데이터를 불러오지 못했습니다.</strong><br>' + (ret.log || ''), {type: 'danger'});
                     }
                     next_page = page + 1
                 }
@@ -202,6 +204,11 @@
         }
 
         function make_airing_list(data, page) {
+            if (!data || !data.anime_list) {
+                console.error("Invalid data received for airing list:", data);
+                $.notify('<strong>데이터를 불러오지 못했습니다.</strong>', {type: 'danger'});
+                return;
+            }
             let str = ''
             
             str += '<div class="d-flex justify-content-between align-items-center mb-3">';
@@ -237,6 +244,11 @@
         }
 
         function make_search_result_list(data, page) {
+            if (!data || !data.anime_list) {
+                console.error("Invalid data received for search result list:", data);
+                $.notify('<strong>검색 결과를 불러오지 못했습니다.</strong>', {type: 'danger'});
+                return;
+            }
             let str = ''
             let list = data.anime_list || [];
             
@@ -277,7 +289,11 @@
         }
 
         function make_screen_movie_list(data, page) {
-             let str = '';
+            if (!data || !data.anime_list) {
+                console.error("Invalid data received for screen movie list:", data);
+                return;
+            }
+            let str = '';
             
             str += '<div class="d-flex justify-content-between align-items-center mb-3">';
              let title = current_cate === 'movie' ? '극장판' : (current_cate === 'theater' ? '극장판(구)' : '완결 애니메이션');

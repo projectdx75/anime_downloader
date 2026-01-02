@@ -181,10 +181,6 @@ class LogicOhli24(AnimeModuleBase):
     # @staticmethod
     def process_ajax(self, sub: str, req: Any) -> Any:
         try:
-            ret = super().process_ajax(sub, req)
-            if ret: return ret
-
-            data = []
             cate = request.form.get("type", None)
             page = request.form.get("page", None)
 
@@ -199,22 +195,23 @@ class LogicOhli24(AnimeModuleBase):
                 self.current_data = data
                 return jsonify({"ret": "success", "data": data, "code": code})
             elif sub == "anime_list":
-
                 data = self.get_anime_info(cate, page)
+                if isinstance(data, dict) and data.get("ret") == "error":
+                    return jsonify(data)
                 return jsonify({"ret": "success", "cate": cate, "page": page, "data": data})
             elif sub == "complete_list":
-
                 logger.debug("cate:: %s", cate)
                 page = request.form["page"]
-
                 data = self.get_anime_info(cate, page)
+                if isinstance(data, dict) and data.get("ret") == "error":
+                    return jsonify(data)
                 return jsonify({"ret": "success", "cate": cate, "page": page, "data": data})
             elif sub == "search":
-
                 query = request.form["query"]
                 page = request.form["page"]
-
                 data = self.get_search_result(query, page, cate)
+                if isinstance(data, dict) and data.get("ret") == "error":
+                    return jsonify(data)
                 return jsonify(
                     {
                         "ret": "success",
@@ -499,8 +496,8 @@ class LogicOhli24(AnimeModuleBase):
                 logger.error(f"browse_dir error: {e}")
                 return jsonify({"ret": "error", "error": str(e)}), 500
         
-        # 매칭되지 않는 sub 요청에 대한 기본 응답
-        return jsonify({"error": f"Unknown sub: {sub}"}), 404
+        # Fallback to base class for common subs (setting_save, queue_command, entity_list, etc.)
+        return super().process_ajax(sub, req)
 
     def get_episode(self, clip_id):
         for _ in self.current_data["episode"]:
@@ -965,7 +962,7 @@ class LogicOhli24(AnimeModuleBase):
         except Exception as e:
             P.logger.error("Exception:%s", e)
             P.logger.error(traceback.format_exc())
-            return {"ret": "exception", "log": str(e)}
+            return {"ret": "error", "log": str(e)}
 
     def get_anime_info(self, cate, page):
         print(cate, page)
@@ -1010,7 +1007,7 @@ class LogicOhli24(AnimeModuleBase):
         except Exception as e:
             P.logger.error("Exception:%s", e)
             P.logger.error(traceback.format_exc())
-            return {"ret": "exception", "log": str(e)}
+            return {"ret": "error", "log": str(e)}
 
     def get_auto_anime_info(self, url: str = ""):
         try:
@@ -1038,7 +1035,7 @@ class LogicOhli24(AnimeModuleBase):
         except Exception as e:
             P.logger.error("Exception:%s", e)
             P.logger.error(traceback.format_exc())
-            return {"ret": "exception", "log": str(e)}
+            return {"ret": "error", "log": str(e)}
 
     # @staticmethod
     def get_search_result(self, query, page, cate):
@@ -1089,7 +1086,7 @@ class LogicOhli24(AnimeModuleBase):
         except Exception as e:
             P.logger.error(f"Exception: {str(e)}")
             P.logger.error(traceback.format_exc())
-            return {"ret": "exception", "log": str(e)}
+            return {"ret": "error", "log": str(e)}
 
     def process_api(self, sub: str, req: Any) -> Any:
         try:
@@ -1596,18 +1593,61 @@ class Ohli24QueueEntity(AnimeQueueEntity):
         self.epi_queue: Optional[str] = None
         self.filepath: Optional[str] = None
         self.savepath: Optional[str] = None
-        self.quality: Optional[str] = None
+        self.quality: Optional[str] = "720P"
         self.filename: Optional[str] = None
         self.vtt: Optional[str] = None
         self.season: int = 1
         self.content_title: Optional[str] = None
         self.srt_url: Optional[str] = None
         self.headers: Optional[Dict[str, str]] = None
-        self.cookies_file: Optional[str] = None  # yt-dlp용 CDN 세션 쿠키 파일 경로
-        self.need_special_downloader: bool = False # CDN 보안 우회 다운로더 필요 여부
-        self._discord_sent: bool = False # Discord 알림 발송 여부
-        # [Lazy Extraction] __init__에서는 무거운 분석을 하지 않습니다.
-        # self.make_episode_info() 
+        self.cookies_file: Optional[str] = None
+        self.need_special_downloader: bool = False
+        self._discord_sent: bool = False
+        
+        # [Early Extraction] Parse basic metadata immediately so DB append has data
+        self.parse_metadata()
+
+    def parse_metadata(self) -> None:
+        """Extract basic info from title for early DB population."""
+        try:
+            title_full = self.info.get("title", "")
+            if not title_full:
+                return
+
+            match = re.compile(r"(?P<title>.*?)\s*((?P<season>\d+)기)?\s*((?P<epi_no>\d+)화)").search(title_full)
+            if match:
+                self.content_title = match.group("title").strip()
+                if match.group("season"):
+                    self.season = int(match.group("season"))
+                self.epi_queue = int(match.group("epi_no"))
+            else:
+                self.content_title = title_full
+                self.epi_queue = 1
+            
+            # Predict initial filename/filepath for UI
+            epi_no = self.epi_queue
+            ret = "%s.S%sE%s.%s-OHNI24.mp4" % (
+                self.content_title,
+                "0%s" % self.season if self.season < 10 else self.season,
+                "0%s" % epi_no if epi_no < 10 else epi_no,
+                self.quality,
+            )
+            self.filename = Util.change_text_for_use_filename(ret)
+            
+            # Savepath
+            self.savepath = P.ModelSetting.get("ohli24_download_path")
+            if P.ModelSetting.get_bool("ohli24_auto_make_folder"):
+                folder_name = self.content_title
+                if self.info.get("day", "").find("완결") != -1:
+                    folder_name = "%s %s" % (P.ModelSetting.get("ohli24_finished_insert"), self.content_title)
+                folder_name = Util.change_text_for_use_filename(folder_name.strip())
+                self.savepath = os.path.join(self.savepath, folder_name)
+                if P.ModelSetting.get_bool("ohli24_auto_make_season_folder"):
+                    self.savepath = os.path.join(self.savepath, "Season %s" % int(self.season))
+            
+            self.filepath = os.path.join(self.savepath, self.filename)
+        except Exception as e:
+            logger.error(f"Error in parse_metadata: {e}")
 
 
     def refresh_status(self) -> None:
@@ -1700,43 +1740,21 @@ class Ohli24QueueEntity(AnimeQueueEntity):
             # ------------------------------------------------------------------
             # [METADATA PARSING] - Extract title, season, epi info first!
             # ------------------------------------------------------------------
-            # 메타데이터만 먼저 파싱 (파일명 생성은 해상도 감지 후 진행)
-            match = re.compile(r"(?P<title>.*?)\s*((?P<season>\d+)%s)?\s*((?P<epi_no>\d+)%s)" % ("기", "화")).search(
-                self.info["title"]
-            )
-            
-            epi_no = 1
-            self.quality = "720P"  # 기본값 (해상도 감지 시 덮어쓰기)
-            
-            if match:
-                self.content_title = match.group("title").strip()
-                if "season" in match.groupdict() and match.group("season") is not None:
-                    self.season = int(match.group("season"))
-                
-                epi_no = int(match.group("epi_no"))
-            else:
-                self.content_title = self.info["title"]
-                logger.debug("NOT MATCH")
-            
-            self.epi_queue = epi_no
-            # NOTE: 파일명은 해상도 감지 후 생성 (아래 Step 2 이후)
-            
-            # Savepath 생성 (filepath는 파일명 생성 후 설정)
-            self.savepath = P.ModelSetting.get("ohli24_download_path")
-            
-            if P.ModelSetting.get_bool("ohli24_auto_make_folder"):
-                if self.info["day"].find("완결") != -1:
-                    folder_name = "%s %s" % (
-                        P.ModelSetting.get("ohli24_finished_insert"),
-                        self.content_title,
-                    )
-                else:
-                    folder_name = self.content_title
-                folder_name = Util.change_text_for_use_filename(folder_name.strip())
-                self.savepath = os.path.join(self.savepath, folder_name)
-                if P.ModelSetting.get_bool("ohli24_auto_make_season_folder"):
-                    self.savepath = os.path.join(self.savepath, "Season %s" % int(self.season))
-            # NOTE: self.filepath는 파일명 생성 후 설정 (Step 2 이후)
+            # [IMMEDIATE SYNC] Update DB with extracted metadata
+            try:
+                db_entity = ModelOhli24Item.get_by_ohli24_id(self.info["_id"])
+                if db_entity:
+                    logger.debug(f"[SYNC] Syncing metadata for Ohli24 _id: {self.info.get('_id')}")
+                    db_entity.title = self.content_title
+                    db_entity.season = self.season
+                    db_entity.episode_no = self.epi_queue
+                    db_entity.savepath = self.savepath
+                    db_entity.filename = self.filename
+                    db_entity.filepath = self.filepath
+                    db_entity.save()
+            except Exception as sync_err:
+                logger.error(f"Failed to sync metadata to DB: {sync_err}")
+
             if not os.path.exists(self.savepath):
                 os.makedirs(self.savepath)
             logger.info(f"self.savepath::> {self.savepath}")
@@ -1799,7 +1817,8 @@ class Ohli24QueueEntity(AnimeQueueEntity):
                 logger.info(f"Quality set from m3u8: {self.quality}")
             
             # [FILENAME GENERATION] - 해상도 감지 후 파일명 생성
-            if hasattr(self, 'epi_queue'):
+            # [FILENAME GENERATION] - Re-generate filename after quality detection
+            if self.epi_queue:
                 epi_no = self.epi_queue
                 ret = "%s.S%sE%s.%s-OHNI24.mp4" % (
                     self.content_title,
@@ -1811,7 +1830,6 @@ class Ohli24QueueEntity(AnimeQueueEntity):
                 self.filepath = os.path.join(self.savepath, self.filename)
                 
                 # [NFD CHECK] Mac/Docker Compatibility
-                # If NFC (Python standard) file doesn't exist, check NFD (Mac filesystem standard)
                 if not os.path.exists(self.filepath):
                     nfd_filename = unicodedata.normalize('NFD', self.filename)
                     nfd_filepath = os.path.join(self.savepath, nfd_filename)
@@ -1820,6 +1838,17 @@ class Ohli24QueueEntity(AnimeQueueEntity):
                         self.filename = nfd_filename
                         self.filepath = nfd_filepath
                         
+                # [IMMEDIATE SYNC 2] Update filename/filepath after resolution detection
+                try:
+                    db_entity = ModelOhli24Item.get_by_ohli24_id(self.info["_id"])
+                    if db_entity:
+                        db_entity.quality = self.quality
+                        db_entity.filename = self.filename
+                        db_entity.filepath = self.filepath
+                        db_entity.save()
+                except:
+                    pass
+                
                 logger.info(f"self.filename::> {self.filename}")
             
             if not video_url:
