@@ -699,7 +699,10 @@ class LogicAniLife(AnimeModuleBase):
                     logger.error(f"browse_dir error: {e}")
                     return jsonify({"ret": "error", "error": str(e)}), 500
             
-            return jsonify({"ret": "fail", "log": f"Unknown sub: {sub}"})
+            
+            # Fallback to base class for common subs (queue_command, entity_list, browse_dir, command, etc.)
+            return super().process_ajax(sub, req)
+
 
         except Exception as e:
             P.logger.error("AniLife process_ajax Exception:%s", e)
