@@ -1327,6 +1327,13 @@ class LogicAniLife(AnimeModuleBase):
                 else:
                     folder_name = content_title_clean if match else AniUtil.change_text_for_use_filename(title)
                 savepath = os.path.join(savepath, folder_name)
+                
+                # Check season folder option
+                if P.ModelSetting.get_bool("anilife_auto_make_season_folder"):
+                    season_val = season if match else 1
+                    savepath = os.path.join(savepath, "Season %s" % int(season_val))
+                    logger.debug(f"[EarlyCheck] With season folder: {savepath}")
+
             
             # Use glob to find any matching file
             full_pattern = os.path.join(savepath, filename_pattern)
