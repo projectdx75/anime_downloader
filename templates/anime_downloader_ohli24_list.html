@@ -491,19 +491,19 @@
                         <div class="episode-right-col">
                             <div class="date-info">${dateHtml}</div>
                             <div class="episode-actions">
-                                <button data-content_code="${item.content_code}" class="btn btn-outline-info btn-request">
+                                <button data-content_code="${item.content_code}" class="btn-minimal btn-request">
                                     <i class="fa fa-search"></i> 작품보기
                                 </button>
-                                <button data-title="${item.title}" class="btn btn-outline-secondary btn-self-search">
+                                <button data-title="${item.title}" class="btn-minimal btn-self-search">
                                     <i class="fa fa-list"></i> 목록검색
                                 </button>
-                                <button data-id="${item.id}" class="btn btn-outline-dark btn-json">
+                                <button data-id="${item.id}" class="btn-minimal btn-json">
                                     <i class="fa fa-code"></i> JSON
                                 </button>
-                                <button data-id="${item.id}" class="btn btn-outline-danger btn-remove">
+                                <button data-id="${item.id}" class="btn-minimal btn-remove btn-remove-alt">
                                     <i class="fa fa-trash"></i> 삭제
                                 </button>
-                                ${item.status == 'completed' ? `<button data-path="${item.savepath}/${item.filename}" class="btn btn-outline-success btn-watch"><i class="fa fa-play"></i> 보기</button>` : ''}
+                                ${item.status == 'completed' ? `<button data-path="${item.savepath}/${item.filename}" class="btn-minimal btn-watch btn-watch-primary"><i class="fa fa-play"></i> 보기</button>` : ''}
                             </div>
                         </div>
                     </div>

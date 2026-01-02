@@ -256,8 +256,56 @@ ul.nav.nav-pills .nav-link.active {
         min-width: 320px;
     }
     
-    .ohli24-list-page .episode-actions { display: flex; flex-wrap: nowrap; gap: 6px; }
-    .ohli24-list-page .episode-actions .btn { flex: none; width: auto; min-width: 80px; font-size: 11px !important; }
+    .ohli24-list-page .episode-actions { 
+        display: flex; 
+        flex-wrap: wrap; 
+        gap: 8px; 
+    }
+
+    .ohli24-list-page .btn-minimal {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: #cbd5e1 !important;
+        font-size: 11px !important;
+        padding: 5px 12px !important;
+        border-radius: 8px !important;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-weight: 500 !important;
+        white-space: nowrap;
+    }
+
+    .ohli24-list-page .btn-minimal i { font-size: 12px; opacity: 0.8; }
+
+    .ohli24-list-page .btn-minimal:hover {
+        background: rgba(255, 255, 255, 0.12);
+        border-color: rgba(255, 255, 255, 0.2);
+        transform: translateY(-1px);
+        color: #fff !important;
+    }
+
+    /* Primary Watch Button */
+    .ohli24-list-page .btn-watch-primary {
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+        border: none !important;
+        color: white !important;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+    }
+
+    .ohli24-list-page .btn-watch-primary:hover {
+        background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%) !important;
+        box-shadow: 0 6px 15px rgba(37, 99, 235, 0.4);
+        transform: translateY(-2px);
+    }
+
+    /* Danger Hover for Remove */
+    .ohli24-list-page .btn-remove-alt:hover {
+        background: rgba(239, 68, 68, 0.15) !important;
+        border-color: rgba(239, 68, 68, 0.3) !important;
+        color: #f87171 !important;
+    }
 }
 
 /* Queue Specific Styles - Scoped to Queue Page */
