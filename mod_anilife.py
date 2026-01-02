@@ -1238,29 +1238,93 @@ class LogicAniLife(AnimeModuleBase):
 
     #########################################################
     def add(self, episode_info):
+        """Add episode to download queue with early skip checks."""
+        # 1. Check if already in queue
         if self.is_exist(episode_info):
             return "queue_exist"
+        
+        # 2. Check DB for completion status FIRST (before expensive operations)
+        db_entity = ModelAniLifeItem.get_by_anilife_id(episode_info["_id"])
+        logger.debug(f"db_entity():: => {db_entity}")
+        
+        if db_entity is not None and db_entity.status == "completed":
+            logger.info(f"[Skip] Already completed in DB: {episode_info.get('title')}")
+            return "db_completed"
+        
+        # 3. Early file existence check - predict filename from title before expensive Camoufox
+        predicted_filepath = self._predict_filepath(episode_info)
+        if predicted_filepath and os.path.exists(predicted_filepath):
+            logger.info(f"[Skip] File already exists: {predicted_filepath}")
+            # Update DB status to completed if not already
+            if db_entity is not None and db_entity.status != "completed":
+                db_entity.status = "completed"
+                db_entity.save()
+            return "file_exists"
+        
+        # 4. Proceed with queue addition
+        if db_entity is None:
+            logger.debug(f"episode_info:: {episode_info}")
+            entity = AniLifeQueueEntity(P, self, episode_info)
+            logger.debug("entity:::> %s", entity.as_dict())
+            ModelAniLifeItem.append(entity.as_dict())
+            self.queue.add_queue(entity)
+            return "enqueue_db_append"
         else:
-            db_entity = ModelAniLifeItem.get_by_anilife_id(episode_info["_id"])
-
-            logger.debug(f"db_entity():: => {db_entity}")
-
-            if db_entity is None:
-                logger.debug(f"episode_info:: {episode_info}")
-                entity = AniLifeQueueEntity(P, self, episode_info)
-                logger.debug("entity:::> %s", entity.as_dict())
-                ModelAniLifeItem.append(entity.as_dict())
-
-                self.queue.add_queue(entity)
-
-                return "enqueue_db_append"
-            elif db_entity.status != "completed":
-                entity = AniLifeQueueEntity(P, self, episode_info)
-
-                self.queue.add_queue(entity)
-                return "enqueue_db_exist"
+            # db_entity exists but status is not completed
+            entity = AniLifeQueueEntity(P, self, episode_info)
+            self.queue.add_queue(entity)
+            return "enqueue_db_exist"
+    
+    def _predict_filepath(self, episode_info):
+        """Predict the output filepath from episode info WITHOUT expensive site access."""
+        try:
+            title = episode_info.get("title", "")
+            if not title:
+                return None
+            
+            # Parse title pattern: "제목 N기 M화" or "제목 M화"
+            match = re.compile(
+                r"(?P<title>.*?)\s*((?P<season>\d+)기)?\s*((?P<epi_no>\d+)화)"
+            ).search(title)
+            
+            if match:
+                content_title = match.group("title").strip()
+                season = int(match.group("season")) if match.group("season") else 1
+                epi_no = int(match.group("epi_no"))
+                quality = "1080P"
+                
+                filename = "%s.S%sE%s.%s-AL.mp4" % (
+                    content_title,
+                    "0%s" % season if season < 10 else season,
+                    "0%s" % epi_no if epi_no < 10 else epi_no,
+                    quality,
+                )
             else:
-                return "db_completed"
+                filename = "%s.720p-AL.mp4" % title
+            
+            # Sanitize filename
+            filename = AniUtil.change_text_for_use_filename(filename)
+            
+            # Get save path
+            savepath = P.ModelSetting.get("anilife_download_path")
+            if not savepath:
+                return None
+            
+            # Check auto folder option
+            if P.ModelSetting.get_bool("anilife_auto_make_folder"):
+                day = episode_info.get("day", "")
+                if "완결" in day:
+                    folder_name = "%s %s" % (content_title if match else title, "완결")
+                else:
+                    folder_name = content_title if match else title
+                folder_name = AniUtil.change_text_for_use_filename(folder_name)
+                savepath = os.path.join(savepath, folder_name)
+            
+            return os.path.join(savepath, filename)
+        except Exception as e:
+            logger.debug(f"_predict_filepath error: {e}")
+            return None
+
 
     def is_exist(self, info):
         for e in self.queue.entity_list:
