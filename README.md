@@ -70,6 +70,17 @@
 
 ## 📝 변경 이력 (Changelog)
 
+### v0.4.3 (2026-01-02)
+- **모바일 UX 대폭 개선**:
+    - 시스템 알림(bootstrap-notify) 커스텀 스타일링 (사이트별 테마 색상 적용)
+    - Anilife: Cosmic Violet / Linkkf: Forest Green / Ohli24: Slate Blue
+    - 모바일에서 상단 nav-pills 메뉴가 가려지는 문제 수정 (margin-top 50px)
+    - List 페이지 검색/초기화 버튼 사이즈 최적화
+    - DOM 요소 오버플로우 방지 및 컨텐츠 정렬 개선
+- **다운로더 쓰레드 설정**:
+    - `anilife_download_threads` 설정 추가 (yt-dlp concurrent-fragments)
+    - Linkkf `get_downloader`에서 `linkkf_download_threads` 설정 반영
+
 ### v0.4.0 (2026-01-02)
 - **Discord 알림 개선**:
     - 다운로드 완료 시에만 알림 전송 (시작 시 알림 제거)
