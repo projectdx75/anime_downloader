@@ -451,9 +451,14 @@
                 // Date
                 let createdDate = item.created_time ? item.created_time.split(' ')[0] : '';
                 let completedDate = item.completed_time ? item.completed_time.split(' ')[0] : '';
-                let dateHtml = `<span class="meta-tag" title="요청일: ${item.created_time}"><i class="fa fa-clock-o"></i> ${createdDate}</span>`;
+                
+                let dateHtml = `<div class="date-tag date-tag-req" title="요청일: ${item.created_time}">
+                                    <i class="fa fa-clock-o"></i> <span>시작: ${createdDate}</span>
+                                </div>`;
                 if (completedDate) {
-                    dateHtml += `<span class="meta-tag" title="완료일: ${item.completed_time}"><i class="fa fa-check-circle"></i> ${completedDate}</span>`;
+                    dateHtml += `<div class="date-tag date-tag-done" title="완료일: ${item.completed_time}">
+                                    <i class="fa fa-check-circle"></i> <span>완료: ${completedDate}</span>
+                                </div>`;
                 }
 
                 // Subtitle Line
