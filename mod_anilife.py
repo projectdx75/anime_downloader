@@ -1285,6 +1285,8 @@ class LogicAniLife(AnimeModuleBase):
             if not title:
                 return None
             
+            logger.debug(f"[EarlyCheck] Input title: {title}")
+            
             # Parse title pattern: "제목 N기 M화" or "제목 M화"
             match = re.compile(
                 r"(?P<title>.*?)\s*((?P<season>\d+)기)?\s*((?P<epi_no>\d+)화)"
@@ -1295,46 +1297,57 @@ class LogicAniLife(AnimeModuleBase):
                 season = int(match.group("season")) if match.group("season") else 1
                 epi_no = int(match.group("epi_no"))
                 
+                # Sanitize title part only (not the glob pattern)
+                content_title_clean = AniUtil.change_text_for_use_filename(content_title)
+                
                 # Use glob pattern for quality: *-AL.mp4 matches any quality
                 filename_pattern = "%s.S%sE%s.*-AL.mp4" % (
-                    content_title,
+                    content_title_clean,
                     "0%s" % season if season < 10 else season,
                     "0%s" % epi_no if epi_no < 10 else epi_no,
                 )
+                logger.debug(f"[EarlyCheck] Parsed: title='{content_title_clean}', S{season}E{epi_no}")
             else:
                 # Fallback pattern for non-standard titles
-                filename_pattern = "%s.*-AL.mp4" % title
-            
-            # Sanitize pattern (but keep glob wildcards)
-            filename_pattern = AniUtil.change_text_for_use_filename(filename_pattern)
+                title_clean = AniUtil.change_text_for_use_filename(title)
+                filename_pattern = "%s.*-AL.mp4" % title_clean
+                logger.debug(f"[EarlyCheck] No match, fallback pattern")
             
             # Get save path
             savepath = P.ModelSetting.get("anilife_download_path")
             if not savepath:
+                logger.debug(f"[EarlyCheck] No savepath configured")
                 return None
             
             # Check auto folder option
             if P.ModelSetting.get_bool("anilife_auto_make_folder"):
                 day = episode_info.get("day", "")
                 if "완결" in day:
-                    folder_name = "%s %s" % (content_title if match else title, "완결")
+                    folder_name = "%s %s" % (content_title_clean if match else AniUtil.change_text_for_use_filename(title), "완결")
                 else:
-                    folder_name = content_title if match else title
-                folder_name = AniUtil.change_text_for_use_filename(folder_name)
+                    folder_name = content_title_clean if match else AniUtil.change_text_for_use_filename(title)
                 savepath = os.path.join(savepath, folder_name)
             
             # Use glob to find any matching file
             full_pattern = os.path.join(savepath, filename_pattern)
+            logger.info(f"[EarlyCheck] Glob pattern: {full_pattern}")
+            
             matching_files = glob.glob(full_pattern)
+            logger.info(f"[EarlyCheck] Matching files: {matching_files}")
             
             if matching_files:
                 # Return first matching file
-                logger.debug(f"Found existing file: {matching_files[0]}")
+                logger.info(f"[EarlyCheck] Found existing file: {matching_files[0]}")
                 return matching_files[0]
+            
+            logger.debug(f"[EarlyCheck] No matching file found")
             return None
         except Exception as e:
-            logger.debug(f"_predict_filepath error: {e}")
+            logger.error(f"[EarlyCheck] _predict_filepath error: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return None
+
 
 
 
