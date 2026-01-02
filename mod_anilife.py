@@ -1276,8 +1276,11 @@ class LogicAniLife(AnimeModuleBase):
             return "enqueue_db_exist"
     
     def _predict_filepath(self, episode_info):
-        """Predict the output filepath from episode info WITHOUT expensive site access."""
+        """Predict the output filepath from episode info WITHOUT expensive site access.
+        Uses glob pattern to match any quality variant (720p, 1080p, etc.)."""
         try:
+            import glob
+            
             title = episode_info.get("title", "")
             if not title:
                 return None
@@ -1291,19 +1294,19 @@ class LogicAniLife(AnimeModuleBase):
                 content_title = match.group("title").strip()
                 season = int(match.group("season")) if match.group("season") else 1
                 epi_no = int(match.group("epi_no"))
-                quality = "1080P"
                 
-                filename = "%s.S%sE%s.%s-AL.mp4" % (
+                # Use glob pattern for quality: *-AL.mp4 matches any quality
+                filename_pattern = "%s.S%sE%s.*-AL.mp4" % (
                     content_title,
                     "0%s" % season if season < 10 else season,
                     "0%s" % epi_no if epi_no < 10 else epi_no,
-                    quality,
                 )
             else:
-                filename = "%s.720p-AL.mp4" % title
+                # Fallback pattern for non-standard titles
+                filename_pattern = "%s.*-AL.mp4" % title
             
-            # Sanitize filename
-            filename = AniUtil.change_text_for_use_filename(filename)
+            # Sanitize pattern (but keep glob wildcards)
+            filename_pattern = AniUtil.change_text_for_use_filename(filename_pattern)
             
             # Get save path
             savepath = P.ModelSetting.get("anilife_download_path")
@@ -1320,10 +1323,19 @@ class LogicAniLife(AnimeModuleBase):
                 folder_name = AniUtil.change_text_for_use_filename(folder_name)
                 savepath = os.path.join(savepath, folder_name)
             
-            return os.path.join(savepath, filename)
+            # Use glob to find any matching file
+            full_pattern = os.path.join(savepath, filename_pattern)
+            matching_files = glob.glob(full_pattern)
+            
+            if matching_files:
+                # Return first matching file
+                logger.debug(f"Found existing file: {matching_files[0]}")
+                return matching_files[0]
+            return None
         except Exception as e:
             logger.debug(f"_predict_filepath error: {e}")
             return None
+
 
 
     def is_exist(self, info):

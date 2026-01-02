@@ -1262,52 +1262,117 @@ class LogicOhli24(AnimeModuleBase):
 
     #########################################################
     def add(self, episode_info: Dict[str, Any]) -> str:
+        """Add episode to download queue with early skip checks."""
+        # 1. Check if already in queue
         if self.is_exist(episode_info):
             return "queue_exist"
+        
+        # 2. Check DB for completion status FIRST (before expensive operations)
+        db_entity = ModelOhli24Item.get_by_ohli24_id(episode_info["_id"])
+        logger.debug(f"db_entity:::> {db_entity}")
+        
+        if db_entity is not None and db_entity.status == "completed":
+            logger.info(f"[Skip] Already completed in DB: {episode_info.get('title')}")
+            return "db_completed"
+        
+        # 3. Early file existence check - predict filepath before expensive extraction
+        predicted_filepath = self._predict_filepath(episode_info)
+        if predicted_filepath and os.path.exists(predicted_filepath):
+            logger.info(f"[Skip] File already exists: {predicted_filepath}")
+            # Update DB status to completed if not already
+            if db_entity is not None and db_entity.status != "completed":
+                db_entity.status = "completed"
+                db_entity.filepath = predicted_filepath
+                db_entity.save()
+            return "file_exists"
+        
+        # 4. Proceed with queue addition
+        logger.debug(f"episode_info:: {episode_info}")
+        
+        if db_entity is None:
+            entity = Ohli24QueueEntity(P, self, episode_info)
+            entity.proxy = LogicOhli24.get_proxy()
+            logger.debug("entity:::> %s", entity.as_dict())
+            ModelOhli24Item.append(entity.as_dict())
+            self.queue.add_queue(entity)
+            return "enqueue_db_append"
         else:
-            logger.debug(f"episode_info:: {episode_info}")
-            db_entity = ModelOhli24Item.get_by_ohli24_id(episode_info["_id"])
-
-            logger.debug("db_entity:::> %s", db_entity)
-            # logger.debug("db_entity.status ::: %s", db_entity.status)
-            if db_entity is None:
-                entity = Ohli24QueueEntity(P, self, episode_info)
-                entity.proxy = LogicOhli24.get_proxy()
-                logger.debug("entity:::> %s", entity.as_dict())
-                ModelOhli24Item.append(entity.as_dict())
-                # # logger.debug("entity:: type >> %s", type(entity))
-                #
-                self.queue.add_queue(entity)
-
-                # P.logger.debug(F.config['path_data'])
-                # P.logger.debug(self.headers)
-
-                # filename = os.path.basename(entity.filepath)
-                # ffmpeg = SupportFfmpeg(entity.url, entity.filename, callback_function=self.callback_function,
-                #                        max_pf_count=0,
-                #                        save_path=entity.savepath, timeout_minute=60, headers=self.headers)
-                # ret = {'ret': 'success'}
-                # ret['json'] = ffmpeg.start()
-                return "enqueue_db_append"
-            elif db_entity.status != "completed":
-                entity = Ohli24QueueEntity(P, self, episode_info)
-                entity.proxy = LogicOhli24.get_proxy()
-                logger.debug("entity:::> %s", entity.as_dict())
-
-                # P.logger.debug(F.config['path_data'])
-                # P.logger.debug(self.headers)
-
-                # filename = os.path.basename(entity.filepath)
-                # ffmpeg = SupportFfmpeg(entity.url, entity.filename, callback_function=self.callback_function,
-                #                        max_pf_count=0, save_path=entity.savepath, timeout_minute=60,
-                #                        headers=self.headers)
-                # ret = {'ret': 'success'}
-                # ret['json'] = ffmpeg.start()
-
-                self.queue.add_queue(entity)
-                return "enqueue_db_exist"
+            # db_entity exists but status is not completed
+            entity = Ohli24QueueEntity(P, self, episode_info)
+            entity.proxy = LogicOhli24.get_proxy()
+            logger.debug("entity:::> %s", entity.as_dict())
+            self.queue.add_queue(entity)
+            return "enqueue_db_exist"
+    
+    def _predict_filepath(self, episode_info: Dict[str, Any]) -> Optional[str]:
+        """Predict the output filepath from episode info WITHOUT expensive site access.
+        Uses glob pattern to match any quality variant (720p, 1080p, etc.)."""
+        try:
+            import glob
+            
+            title = episode_info.get("title", "")
+            if not title:
+                return None
+            
+            # Parse title pattern: "제목 N기 M화" or "제목 M화"
+            match = re.compile(
+                r"(?P<title>.*?)\s*((?P<season>\d+)기)?\s*((?P<epi_no>\d+)화)"
+            ).search(title)
+            
+            if match:
+                content_title = match.group("title").strip()
+                season = int(match.group("season")) if match.group("season") else 1
+                epi_no = int(match.group("epi_no"))
+                
+                # Use glob pattern for quality: *-OHNI24.mp4 matches any quality
+                filename_pattern = "%s.S%sE%s.*-OHNI24.mp4" % (
+                    content_title,
+                    "0%s" % season if season < 10 else season,
+                    "0%s" % epi_no if epi_no < 10 else epi_no,
+                )
             else:
-                return "db_completed"
+                # Fallback pattern for non-standard titles
+                filename_pattern = "%s.*-OHNI24.mp4" % title
+            
+            # Sanitize pattern (but keep glob wildcards)
+            filename_pattern = Util.change_text_for_use_filename(filename_pattern)
+            
+            # Get save path
+            savepath = P.ModelSetting.get("ohli24_download_path")
+            if not savepath:
+                return None
+            
+            # Check auto folder option
+            if P.ModelSetting.get_bool("ohli24_auto_make_folder"):
+                day = episode_info.get("day", "")
+                content_title_clean = match.group("title").strip() if match else title
+                if "완결" in day:
+                    folder_name = "%s %s" % (
+                        P.ModelSetting.get("ohli24_finished_insert"),
+                        content_title_clean,
+                    )
+                else:
+                    folder_name = content_title_clean
+                folder_name = Util.change_text_for_use_filename(folder_name.strip())
+                savepath = os.path.join(savepath, folder_name)
+                
+                if P.ModelSetting.get_bool("ohli24_auto_make_season_folder"):
+                    season_val = int(match.group("season")) if match and match.group("season") else 1
+                    savepath = os.path.join(savepath, "Season %s" % season_val)
+            
+            # Use glob to find any matching file
+            full_pattern = os.path.join(savepath, filename_pattern)
+            matching_files = glob.glob(full_pattern)
+            
+            if matching_files:
+                # Return first matching file
+                logger.debug(f"Found existing file: {matching_files[0]}")
+                return matching_files[0]
+            return None
+        except Exception as e:
+            logger.debug(f"_predict_filepath error: {e}")
+            return None
+
 
     def is_exist(self, info: Dict[str, Any]) -> bool:
         # print(self.queue)
@@ -1316,6 +1381,7 @@ class LogicOhli24(AnimeModuleBase):
             if en.info["_id"] == info["_id"]:
                 return True
         return False
+
 
     def callback_function(self, **args: Any) -> None:
         logger.debug(f"callback_function invoked with args: {args}")

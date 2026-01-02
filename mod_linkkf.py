@@ -1507,6 +1507,7 @@ class LogicLinkkf(AnimeModuleBase):
             logger.error(traceback.format_exc())
 
     def add(self, episode_info):
+        """Add episode to download queue with early skip checks."""
         # 큐가 초기화되지 않았으면 초기화 (클래스 레벨 큐 확인)
         if LogicLinkkf.queue is None:
             logger.warning("Queue is None in add(), initializing...")
@@ -1522,60 +1523,56 @@ class LogicLinkkf(AnimeModuleBase):
         # self.queue를 LogicLinkkf.queue로 바인딩 (프로세스 내부 공유 보장)
         self.queue = LogicLinkkf.queue
         
-        # 큐 상태 로깅
-        queue_len = len(self.queue.entity_list) if self.queue else 0
-        logger.info(f"add() called - Queue length: {queue_len}, episode _id: {episode_info.get('_id')}")
-        
+        # 1. Check if already in queue
         if self.is_exist(episode_info):
             logger.info(f"is_exist returned True for _id: {episode_info.get('_id')}")
             return "queue_exist"
+        
+        # 2. Check DB for completion status FIRST (before expensive operations)
+        db_entity = ModelLinkkfItem.get_by_linkkf_id(episode_info["_id"])
+        
+        if db_entity is not None and db_entity.status == "completed":
+            logger.info(f"[Skip] Already completed in DB: {episode_info.get('program_title')} {episode_info.get('title')}")
+            return "db_completed"
+        
+        # 3. Early file existence check - filepath is already in episode_info from get_series_info
+        filepath = episode_info.get("filepath")
+        if filepath and os.path.exists(filepath):
+            logger.info(f"[Skip] File already exists: {filepath}")
+            # Update DB status to completed if not already
+            if db_entity is not None and db_entity.status != "completed":
+                db_entity.status = "completed"
+                db_entity.filepath = filepath
+                db_entity.save()
+            return "file_exists"
+        
+        # 4. Proceed with queue addition
+        queue_len = len(self.queue.entity_list) if self.queue else 0
+        logger.info(f"add() - Queue length: {queue_len}, episode _id: {episode_info.get('_id')}")
+        
+        if db_entity is None:
+            entity = LinkkfQueueEntity(P, self, episode_info)
+            logger.debug("entity:::> %s", entity.as_dict())
+            ModelLinkkfItem.append(entity.as_dict())
+            self.queue.add_queue(entity)
+            return "enqueue_db_append"
         else:
-            db_entity = ModelLinkkfItem.get_by_linkkf_id(episode_info["_id"])
-            # logger.info(f"db_entity: {db_entity}")
-            # logger.debug("db_entity:::> %s", db_entity)
-            # logger.debug("db_entity.status ::: %s", db_entity.status)
-            if db_entity is None:
+            # db_entity exists but status is not completed
+            status = db_entity.get("status") if isinstance(db_entity, dict) else db_entity.status
+            logger.info(f"db_entity status: {status}, adding to queue")
+            
+            try:
                 entity = LinkkfQueueEntity(P, self, episode_info)
-                logger.debug("entity:::> %s", entity.as_dict())
-                ModelLinkkfItem.append(entity.as_dict())
-                # # logger.debug("entity:: type >> %s", type(entity))
-                #
+                logger.info(f"LinkkfQueueEntity created, url: {entity.url}, filepath: {entity.filepath}")
+                result = self.queue.add_queue(entity)
+                logger.info(f"add_queue result: {result}, queue length after: {len(self.queue.entity_list)}")
+            except Exception as e:
+                logger.error(f"Error creating entity or adding to queue: {e}")
+                logger.error(traceback.format_exc())
+                return "entity_creation_error"
+            
+            return "enqueue_db_exist"
 
-                self.queue.add_queue(entity)
-                # self.download_queue.add_queue(entity)
-
-                # P.logger.debug(F.config['path_data'])
-                # P.logger.debug(self.headers)
-
-                # filename = os.path.basename(entity.filepath)
-                # ffmpeg = SupportFfmpeg(entity.url, entity.filename, callback_function=self.callback_function,
-                #                        max_pf_count=0,
-                #                        save_path=entity.savepath, timeout_minute=60, headers=self.headers)
-                # ret = {'ret': 'success'}
-                # ret['json'] = ffmpeg.start()
-                return "enqueue_db_append"
-            elif db_entity.get("status") != "completed" if isinstance(db_entity, dict) else db_entity.status != "completed":
-                # DB에 있지만 완료되지 않은 경우도 큐에 추가
-                status = db_entity.get("status") if isinstance(db_entity, dict) else db_entity.status
-                logger.info(f"db_entity status: {status}, adding to queue")
-                
-                try:
-                    logger.info("Creating LinkkfQueueEntity...")
-                    entity = LinkkfQueueEntity(P, self, episode_info)
-                    logger.info(f"LinkkfQueueEntity created, url: {entity.url}, filepath: {entity.filepath}")
-                    logger.debug("entity:::> %s", entity.as_dict())
-                    
-                    logger.info(f"Adding to queue, queue length before: {len(self.queue.entity_list)}")
-                    result = self.queue.add_queue(entity)
-                    logger.info(f"add_queue result: {result}, queue length after: {len(self.queue.entity_list)}")
-                except Exception as e:
-                    logger.error(f"Error creating entity or adding to queue: {e}")
-                    logger.error(traceback.format_exc())
-                    return "entity_creation_error"
-                
-                return "enqueue_db_exist"
-            else:
-                return "db_completed"
 
     # def is_exist(self, info):
     #     print(self.download_queue.entity_list)
