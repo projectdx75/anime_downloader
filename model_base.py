@@ -136,30 +136,32 @@ class AnimeQueueEntity(FfmpegQueueEntity):
     def _update_db_status(self):
         """Update DB status to completed - generic method for all sites."""
         try:
-            # Get the web_list_model from module_logic
-            model_class = getattr(self.module_logic, 'web_list_model', None)
-            if model_class is None:
-                return
-            
-            # Try to find the DB entity
-            db_entity = None
-            info = getattr(self, 'info', {})
-            
-            # Anilife uses _id
-            if hasattr(model_class, 'get_by_anilife_id') and info.get('_id'):
-                db_entity = model_class.get_by_anilife_id(info['_id'])
-            # Linkkf/Ohli24 might use different identifiers
-            elif hasattr(model_class, 'get_by_id') and info.get('db_id'):
-                db_entity = model_class.get_by_id(info['db_id'])
-            elif hasattr(model_class, 'get_by_content_code') and info.get('content_code'):
-                db_entity = model_class.query.filter_by(content_code=info['content_code'], episode_no=info.get('episode_no')).first()
-            
-            if db_entity is not None:
-                db_entity.status = "completed"
-                db_entity.completed_time = datetime.now()
-                db_entity.filename = getattr(self, 'filename', None)
-                db_entity.save()
-                logger.info(f"[{self.module_logic.name}] DB status updated to 'completed': {info.get('title', 'Unknown')}")
+            from framework import app
+            with app.app_context():
+                # Get the web_list_model from module_logic
+                model_class = getattr(self.module_logic, 'web_list_model', None)
+                if model_class is None:
+                    return
+                
+                # Try to find the DB entity
+                db_entity = None
+                info = getattr(self, 'info', {})
+                
+                # Anilife uses _id
+                if hasattr(model_class, 'get_by_anilife_id') and info.get('_id'):
+                    db_entity = model_class.get_by_anilife_id(info['_id'])
+                # Linkkf/Ohli24 might use different identifiers
+                elif hasattr(model_class, 'get_by_id') and info.get('db_id'):
+                    db_entity = model_class.get_by_id(info['db_id'])
+                elif hasattr(model_class, 'get_by_content_code') and info.get('content_code'):
+                    db_entity = model_class.query.filter_by(content_code=info['content_code'], episode_no=info.get('episode_no')).first()
+                
+                if db_entity is not None:
+                    db_entity.status = "completed"
+                    db_entity.completed_time = datetime.now()
+                    db_entity.filename = getattr(self, 'filename', None)
+                    db_entity.save()
+                    logger.info(f"[{self.module_logic.name}] DB status updated to 'completed': {info.get('title', 'Unknown')}")
         except Exception as e:
             logger.error(f"Failed to update DB status: {e}")
 

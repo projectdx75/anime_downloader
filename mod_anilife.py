@@ -1325,19 +1325,21 @@ class AniLifeQueueEntity(FfmpegQueueEntity):
         # Call parent's download_completed first (handles file move)
         super().download_completed()
         
-        # Update DB status
-        db_entity = ModelAniLifeItem.get_by_anilife_id(self.info["_id"])
-        if db_entity is not None:
-            db_entity.status = "completed"
-            db_entity.completed_time = datetime.now()
-            # 메타데이터 동기화
-            db_entity.filename = self.filename
-            db_entity.save_fullpath = getattr(self, 'save_fullpath', None)
-            db_entity.filesize = getattr(self, 'filesize', None)
-            db_entity.duration = getattr(self, 'duration', None)
-            db_entity.quality = getattr(self, 'quality', None)
-            db_entity.save()
-            logger.info(f"[Anilife] DB status updated to 'completed': {self.info.get('title', 'Unknown')}")
+        # Update DB status - wrap in app context since this runs in a thread
+        from framework import app
+        with app.app_context():
+            db_entity = ModelAniLifeItem.get_by_anilife_id(self.info["_id"])
+            if db_entity is not None:
+                db_entity.status = "completed"
+                db_entity.completed_time = datetime.now()
+                # 메타데이터 동기화
+                db_entity.filename = self.filename
+                db_entity.save_fullpath = getattr(self, 'save_fullpath', None)
+                db_entity.filesize = getattr(self, 'filesize', None)
+                db_entity.duration = getattr(self, 'duration', None)
+                db_entity.quality = getattr(self, 'quality', None)
+                db_entity.save()
+                logger.info(f"[Anilife] DB status updated to 'completed': {self.info.get('title', 'Unknown')}")
 
     def prepare_extra(self):
         """
