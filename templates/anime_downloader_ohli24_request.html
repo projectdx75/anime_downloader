@@ -1,4 +1,7 @@
 {% extends "base.html" %} {% block content %}
+<link rel="stylesheet" href="{{ url_for('.static', filename='css/mobile_custom.css') }}"/>
+<link rel="stylesheet" href="{{ url_for('.static', filename='css/' ~ arg['sub'] ~ '.css') }}"/>
+
     <div id="preloader">
         <div class="demo">
             <!--        <div class="loader-inner">-->
@@ -51,7 +54,7 @@
         const package_name = "{{arg['package_name'] }}";
         const sub = "{{arg['sub'] }}";
         const ohli24_url = "{{arg['ohli24_url']}}";
-        {#let current_data = '';#}
+        // let current_data = '';
         let accessibleCount = 1;
 
 
@@ -88,7 +91,7 @@
         }
 
         function analyze(wr_id, bo_table) {
-            {#e.preventDefault();#}
+            // e.preventDefault();
 
             const code = document.getElementById("code").value
             // // console.log(code)
@@ -265,7 +268,7 @@
             // // console.log("{{ arg['code'] }}")
             // // console.log('wr_id::', params.wr_id)
             if (document.getElementById("code").value !== "") {
-                {#document.getElementById("analysis_btn").click()#}
+                // document.getElementById("analysis_btn").click()
                 $('#analysis_btn').click();
             }
 
@@ -294,7 +297,7 @@
                     dataType: "json",
                     success: function (ret) {
                         if (ret.ret === 'success' && ret.data != null) {
-                            // {#// // console.log(ret.code)#}
+                            // console.log(ret.code)
                             // // console.log(ret.data)
                             make_program(ret.data)
                         } else {
@@ -371,8 +374,10 @@
                         $.notify('<strong>이미 큐에 있습니다. 삭제 후 추가하세요.</strong>', {type: 'warning'});
                     } else if (data.ret == 'db_completed') {
                         $.notify('<strong>DB에 완료 기록이 있습니다.</strong>', {type: 'warning'});
+                    } else if (data.ret == 'file_exists') {
+                        $.notify('<strong>파일이 이미 존재합니다.</strong>', {type: 'warning'});
                     } else {
-                        $.notify('<strong>추가 실패</strong><br>' + ret.log, {type: 'warning'});
+                        $.notify('<strong>추가 실패</strong><br>' + data.log, {type: 'warning'});
                     }
                 }
             });

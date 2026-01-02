@@ -1,5 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('.static', filename='css/mobile_custom.css') }}"/>
+<link rel="stylesheet" href="{{ url_for('.static', filename='css/' ~ arg['sub'] ~ '.css') }}"/>
+
 
 <div class="queue-container content-cloak">
     <!-- 헤더 버튼 그룹 -->
@@ -33,14 +36,6 @@
 </div>
 
 <style>
-    /* 상위 컨테이너 오버라이드 */
-    .container, .container-fluid, .row {
-        max-width: 100% !important;
-        padding-left: 16px !important;
-        padding-right: 16px !important;
-        margin-left: 0 !important;
-        margin-right: 0 !important;
-    }
     
     /* 컨테이너 */
     .queue-container {
@@ -425,44 +420,6 @@
         animation: spin 0.8s linear infinite;
     }
 
-    /* Navigation Menu Override */
-    ul.nav.nav-pills.bg-light {
-        background-color: rgba(30, 41, 59, 0.6) !important;
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 50rem !important;
-        padding: 6px !important;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2) !important;
-        display: inline-flex !important;
-        flex-wrap: wrap;
-        justify-content: center;
-        width: auto !important;
-        margin-bottom: 20px;
-    }
-
-    ul.nav.nav-pills .nav-item {
-        margin: 0 2px;
-    }
-
-    ul.nav.nav-pills .nav-link {
-        border-radius: 50rem !important;
-        padding: 8px 20px !important;
-        color: #94a3b8 !important;
-        font-weight: 600;
-        transition: all 0.3s ease;
-    }
-
-    ul.nav.nav-pills .nav-link:hover {
-        background-color: rgba(255, 255, 255, 0.1);
-        color: #fff !important;
-        transform: translateY(-1px);
-    }
-
-    ul.nav.nav-pills .nav-link.active {
-        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
-        color: #fff !important;
-        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
-    }
 </style>
 
 <script src="{{ url_for('.static', filename='js/sjva_ui14.js') }}"></script>
@@ -709,30 +666,5 @@ $(document).ready(function(){
   }, 100);
 });
 </script>
-<style>
-/* Mobile Margin Fix */
-@media (max-width: 768px) {
-    body { overflow-x: hidden !important; padding: 0 !important; margin: 0 !important; }
-    .container, .container-fluid, .row, form, #program_list, #program_auto_form, #episode_list, .queue-container, #yommi_wrapper, #main_container {
-        width: 100% !important; max-width: 100% !important;
-        padding-left: 4px !important; padding-right: 4px !important;
-        margin-left: 0 !important; margin-right: 0 !important;
-        box-sizing: border-box !important;
-    }
-    .form-group, .form-inline, [class*="col-"] {
-        flex: 0 0 100% !important; max-width: 100% !important; width: 100% !important;
-        padding-left: 0 !important; padding-right: 0 !important;
-    }
-    .row { margin-left: 0 !important; margin-right: 0 !important; }
-    .card, .card.p-4, .card.p-lg-5, .card.border-light {
-         width: calc(100% - 8px) !important; max-width: 100% !important;
-         padding: 8px !important; margin: 4px !important;
-         border-radius: 12px !important; box-sizing: border-box !important;
-    }
-    .badge {
-        white-space: normal !important; text-align: left !important;
-        line-height: 1.4 !important; height: auto !important; display: inline-block !important;
-    }
-}
-</style>
+
 {% endblock %}

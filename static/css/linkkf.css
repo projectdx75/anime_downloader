@@ -1,0 +1,37 @@
+/* Linkkf Theme Variables & Overrides */
+:root {
+    --forest-950: #022c22;
+    --forest-900: #064e3b;
+    --forest-800: #065f46;
+    --forest-500: #10b981;
+    --forest-400: #34d399;
+    --forest-100: #d1fae5;
+    --accent-amber: #fbbf24;
+
+    /* Shared Notify Variables */
+    --notify-bg: rgba(2, 44, 34, 0.95);
+    --notify-border: rgba(16, 185, 129, 0.3);
+    --notify-success-bg: rgba(6, 78, 59, 0.95);
+    --notify-warning-bg: rgba(120, 53, 15, 0.95);
+    --notify-danger-bg: rgba(127, 29, 29, 0.95);
+}
+
+body { 
+    background-color: var(--forest-950) !important; 
+    color: #ecfdf5; 
+}
+
+/* Linkkf Specific Nav-Pills Overrides */
+ul.nav.nav-pills.bg-light {
+    background-color: rgba(6, 78, 59, 0.4) !important;
+    border: 1px solid rgba(16, 185, 129, 0.1) !important;
+}
+
+ul.nav.nav-pills .nav-link {
+    color: #d1fae5 !important;
+}
+
+ul.nav.nav-pills .nav-link.active {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3) !important;
+}

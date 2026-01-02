@@ -1,4 +1,7 @@
 {% extends "base.html" %} {% block content %}
+<link rel="stylesheet" href="{{ url_for('.static', filename='css/mobile_custom.css') }}"/>
+<link rel="stylesheet" href="{{ url_for('.static', filename='css/' ~ arg['sub'] ~ '.css') }}"/>
+
  <div id="anime_downloader_wrapper" class="content-cloak" style="max-width: 100%;">
     <div id="preloader">
         <div class='demo'>
@@ -317,6 +320,8 @@
                         $.notify('<strong>이미 큐에 있습니다. 삭제 후 추가하세요.</strong>', {type: 'warning'});
                     } else if (data.ret == 'db_completed') {
                         $.notify('<strong>DB에 완료 기록이 있습니다.</strong>', {type: 'warning'});
+                    } else if (data.ret == 'file_exists') {
+                        $.notify('<strong>파일이 이미 존재합니다.</strong>', {type: 'warning'});
                     } else {
                         $.notify('<strong>추가 실패</strong><br>' + ret.log, {type: 'warning'});
                     }

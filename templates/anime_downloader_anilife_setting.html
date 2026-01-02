@@ -1,5 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('.static', filename='css/mobile_custom.css') }}"/>
+<link rel="stylesheet" href="{{ url_for('.static', filename='css/' ~ arg['sub'] ~ '.css') }}"/>
+
 <div id="anilife_setting_wrapper" class="container-fluid mt-4 mx-auto content-cloak" style="max-width: 100%;">
   
   <div class="glass-card p-4">
@@ -308,22 +311,8 @@
         background: rgba(59, 130, 246, 0.3) !important;
     }
     
-    /* Mobile Responsive */
-    @media (max-width: 768px) {
-        body { padding-top: 10px !important; }
-        ul.nav.nav-pills.bg-light {
-            margin-top: 50px !important;
-            margin-bottom: 10px !important;
-            width: 100% !important;
-            display: flex !important;
-            border-radius: 12px !important;
-        }
-        ul.nav.nav-pills .nav-link {
-            padding: 6px 12px !important;
-            font-size: 13px;
-        }
-    }
 </style>
+
 
 <script type="text/javascript">
 var package_name = "{{arg['package_name'] }}";

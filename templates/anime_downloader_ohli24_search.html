@@ -1,4 +1,7 @@
 {% extends "base.html" %} {% block content %}
+<link rel="stylesheet" href="{{ url_for('.static', filename='css/mobile_custom.css') }}"/>
+<link rel="stylesheet" href="{{ url_for('.static', filename='css/' ~ arg['sub'] ~ '.css') }}"/>
+
 
     <div id="preloader" class="loader">
         <div class="loader-inner">
@@ -147,18 +150,18 @@
                     if (current_screen_movie_data !== '') {
                         if (type === "ing") {
                             make_airing_list(ret.data, page)
-                            {#observer.observe();#}
+                            // observer.observe();
                         } else if (type === "fin") {
                             make_screen_movie_list(ret.data, page)
-                            {#observer.observe();#}
+                            // observer.observe();
                         } else if (type === "theater") {
                             make_screen_movie_list(ret.data, page)
-                            {#observer.observe();#}
+                            // observer.observe();
                         } else {
                             make_screen_movie_list(ret.data, page)
                         }
-                        {#div_visible = true#}
-                        {#// console.log(div_visible)#}
+                        // div_visible = true
+                        // // console.log(div_visible)
                     }
                     next_page = page + 1
                 }
@@ -483,7 +486,7 @@
         // const observer = lozad(el); // passing a `NodeList` (e.g. `document.querySelectorAll()`) is also valid
         // observer.observe();
         const loadNextAnimes = (cate, page) => {
-            {#spinner.style.display = "block";#}
+            // spinner.style.display = "block";
             let data = {type: cate, page: String(page)};
             let url = ''
             switch (cate) {
@@ -543,7 +546,7 @@
             console.dir(e.target.scrollingElement.scrollHeight);
             const {scrollTop, scrollHeight, clientHeight} = e.target.scrollingElement;
             if (Math.round(scrollHeight - scrollTop) <= clientHeight) {
-                {#document.getElementById("spinner").style.display = "block";#}
+                // document.getElementById("spinner").style.display = "block";
                 // console.log("loading");
                 // console.log("now page::> ", page);
                 // console.log("next_page::> ", String(next_page));

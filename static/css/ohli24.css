@@ -1,0 +1,39 @@
+/* Ohli24 Theme Variables & Overrides */
+:root {
+    --slate-950: #0f172a;
+    --slate-900: #0f172a; /* Same as 950 for deep background */
+    --slate-800: #1e293b;
+    --slate-700: #334155;
+    --blue-500: #3b82f6;
+    --blue-600: #2563eb;
+    --amber-400: #facc15;
+
+    /* Shared Notify Variables */
+    --notify-bg: rgba(15, 23, 42, 0.95);
+    --notify-border: rgba(59, 130, 246, 0.3);
+    --notify-success-bg: rgba(6, 78, 59, 0.95);
+    --notify-warning-bg: rgba(120, 53, 15, 0.95);
+    --notify-danger-bg: rgba(127, 29, 29, 0.95);
+}
+
+body { 
+    background-color: var(--slate-950) !important; 
+    color: #f1f5f9; 
+    background-image: linear-gradient(135deg, #1f2937, #111827, #0f172a) !important;
+    background-attachment: fixed !important;
+}
+
+/* Ohli24 Specific Nav-Pills Overrides */
+ul.nav.nav-pills.bg-light {
+    background-color: rgba(30, 41, 59, 0.6) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+ul.nav.nav-pills .nav-link {
+    color: #94a3b8 !important;
+}
+
+ul.nav.nav-pills .nav-link.active {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4) !important;
+}

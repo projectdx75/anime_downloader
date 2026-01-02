@@ -1,4 +1,7 @@
 {% extends "base.html" %} {% block content %}
+<link rel="stylesheet" href="{{ url_for('.static', filename='css/mobile_custom.css') }}"/>
+<link rel="stylesheet" href="{{ url_for('.static', filename='css/' ~ arg['sub'] ~ '.css') }}"/>
+
 <div id="preloader">
     <div class='demo'>
         <!--        <div class="loader-inner">-->
@@ -917,20 +920,6 @@
         opacity: 0.5;
     }
     
-    /* Mobile Responsive */
-    @media (max-width: 768px) {
-        body { padding-top: 10px !important; }
-        ul.nav.nav-pills.bg-light {
-            margin-top: 50px !important;
-            margin-bottom: 10px !important;
-            width: 100% !important;
-            display: flex !important;
-            border-radius: 12px !important;
-        }
-        ul.nav.nav-pills .nav-link {
-            padding: 6px 12px !important;
-            font-size: 13px;
-        }
-    }
 </style>
+
 {% endblock %}

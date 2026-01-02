@@ -861,16 +861,23 @@ class LogicAniLife(AnimeModuleBase):
 
             # tree = html.fromstring(response_data)
             # logger.debug(response_data)
-            main_title = tree.xpath('//div[@class="infox"]/h1/text()')[0]
-            image = tree.xpath('//div[@class="thumb"]/img/@src')[0]
-            des_items = tree.xpath(
-                '//div[@class="info-content"]/div[@class="spe"]/span'
-            )
-            des_items1 = (
-                tree.xpath('//div[@class="info-content"]/div[@class="spe"]')[0]
-                .text_content()
-                .strip()
-            )
+            try:
+                main_title_node = tree.xpath('//div[@class="infox"]/h1/text()')
+                main_title = main_title_node[0] if main_title_node else "Unknown Title"
+                
+                image_node = tree.xpath('//div[@class="thumb"]/img/@src')
+                image = image_node[0] if image_node else ""
+                
+                des_items = tree.xpath(
+                    '//div[@class="info-content"]/div[@class="spe"]/span'
+                )
+                
+                des_spe_node = tree.xpath('//div[@class="info-content"]/div[@class="spe"]')
+                des_items1 = des_spe_node[0].text_content().strip() if des_spe_node else ""
+            except Exception as e:
+                logger.error(f"Error parsing series info: {e}")
+                logger.debug(f"HTML Content: {response.text[:1000]}") # Log first 1000 chars
+                return {"ret": "error", "log": "HTML 파싱 중 오류가 발생했습니다."}
 
             des = {}
             des_key = [

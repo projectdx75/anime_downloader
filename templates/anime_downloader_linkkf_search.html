@@ -1,4 +1,7 @@
 {% extends "base.html" %} {% block content %}
+<link rel="stylesheet" href="{{ url_for('.static', filename='css/mobile_custom.css') }}"/>
+<link rel="stylesheet" href="{{ url_for('.static', filename='css/' ~ arg['sub'] ~ '.css') }}"/>
+
 <!--<div id="preloader"></div>-->
 <div id="anime_downloader_wrapper" class="content-cloak">
   <div id="preloader" class="loader">
@@ -978,6 +981,7 @@
       padding: 0 !important;
       display: -webkit-box;
       -webkit-line-clamp: 2;
+      line-clamp: 2;
       -webkit-box-orient: vertical;
       overflow: hidden;
   }

@@ -1,5 +1,9 @@
 {% extends "base.html" %}
 {% block content %}
+    <link rel="stylesheet" href="{{ url_for('.static', filename='css/mobile_custom.css') }}"/>
+    <link rel="stylesheet" href="{{ url_for('.static', filename='css/' ~ arg['sub'] ~ '.css') }}"/>
+
+
 
     <div class="content-cloak">
         <div class="d-flex justify-content-start align-items-center gap-2 mb-4">
@@ -190,6 +194,7 @@
             str += '      <div class="meta-item"><i class="fa fa-clock-o"></i> <span id="card_download_time_' + data.idx + '">' + data.download_time + '</span></div>';
             str += '      <div class="meta-item"><i class="fa fa-bolt"></i> <span id="card_current_speed_' + data.idx + '">' + data.current_speed + '</span></div>';
             str += '      <div class="meta-item"><i class="fa fa-exclamation-triangle"></i> <span id="card_current_pf_count_' + data.idx + '">' + data.current_pf_count + '</span></div>';
+
             str += '    </div>';
             str += '  </div>';
             str += '  <div id="card_button_' + data.idx + '" class="card-footer-actions">';
@@ -576,24 +581,9 @@
         box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
     }
 
-    /* Mobile Logic Fix */
-    @media (max-width: 768px) {
-        body { 
-            padding-top: 10px !important; 
-        }
-        ul.nav.nav-pills.bg-light {
-            border-radius: 12px !important;
-            width: 100% !important;
-            display: flex !important;
-            margin-top: 50px !important; /* Ensure visibility below SJVA navbar */
-            margin-bottom: 10px !important;
-        }
-        ul.nav.nav-pills .nav-link {
-            padding: 6px 12px !important;
-            font-size: 13px;
-        }
-    }
 </style>
+
+
 
 <script type="text/javascript">
 $(document).ready(function(){

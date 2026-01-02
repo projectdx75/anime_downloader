@@ -1,59 +1,9 @@
 {% extends "base.html" %}
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('.static', filename='css/mobile_custom.css') }}"/>
+<link rel="stylesheet" href="{{ url_for('.static', filename='css/' ~ arg['sub'] ~ '.css') }}"/>
 
-<style>
-    :root {
-        --forest-950: #022c22;
-        --forest-900: #064e3b;
-        --forest-800: #065f46;
-        --forest-500: #10b981;
-        --forest-400: #34d399;
-        --forest-accent: #6ee7b7;
-    }
 
-    body { background-color: var(--forest-950) !important; color: #ecfdf5; }
-    
-    /* Layout Expansion */
-    #main_container, .container, .container-fluid, #anime_downloader_wrapper {
-      max-width: 100% !important;
-      padding-left: 5px !important;
-      padding-right: 5px !important;
-      margin: 0 auto !important;
-    }
-
-    /* Navigation Menu Override */
-    ul.nav.nav-pills.bg-light {
-        background-color: rgba(6, 78, 59, 0.4) !important;
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(16, 185, 129, 0.1);
-        border-radius: 50rem !important;
-        padding: 6px !important;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2) !important;
-        display: inline-flex !important;
-        gap: 4px;
-        margin-bottom: 20px;
-    }
-
-    ul.nav.nav-pills .nav-link {
-        color: #d1fae5 !important;
-        font-weight: 600 !important;
-        padding: 8px 20px !important;
-        border-radius: 50rem !important;
-        transition: all 0.3s ease !important;
-        border: 1px solid transparent !important;
-    }
-
-    ul.nav.nav-pills .nav-link:hover {
-        background-color: rgba(16, 185, 129, 0.1) !important;
-        color: #fff !important;
-        transform: translateY(-1px);
-    }
-
-    ul.nav.nav-pills .nav-link.active {
-        background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
-        color: #fff !important;
-        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3) !important;
-    }
 
     .queue-header-container {
         display: flex; justify-content: space-between; align-items: flex-end;
