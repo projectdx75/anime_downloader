@@ -1320,22 +1320,24 @@ class AniLifeQueueEntity(FfmpegQueueEntity):
         tmp["filename"] = self.filename
         return tmp
 
-    def donwload_completed(self):
+    def download_completed(self):
+        """Override to update DB status after download completes."""
+        # Call parent's download_completed first (handles file move)
+        super().download_completed()
+        
+        # Update DB status
         db_entity = ModelAniLifeItem.get_by_anilife_id(self.info["_id"])
         if db_entity is not None:
             db_entity.status = "completed"
             db_entity.completed_time = datetime.now()
             # 메타데이터 동기화
             db_entity.filename = self.filename
-            db_entity.save_fullpath = self.save_fullpath
-            db_entity.filesize = self.filesize
-            db_entity.duration = self.duration
-            db_entity.quality = self.quality
+            db_entity.save_fullpath = getattr(self, 'save_fullpath', None)
+            db_entity.filesize = getattr(self, 'filesize', None)
+            db_entity.duration = getattr(self, 'duration', None)
+            db_entity.quality = getattr(self, 'quality', None)
             db_entity.save()
-            
-            # Discord 알림 (이미 메인에서 처리될 수도 있으나 명시적으로 필요한 경우)
-            # if self.P.ModelSetting.get_bool('anilife_discord_notification'):
-            #    ...
+            logger.info(f"[Anilife] DB status updated to 'completed': {self.info.get('title', 'Unknown')}")
 
     def prepare_extra(self):
         """

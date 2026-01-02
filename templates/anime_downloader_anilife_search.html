@@ -1229,17 +1229,33 @@ $(document).ready(function(){
 <style>
 /* Mobile Margin Fix */
 @media (max-width: 768px) {
-    body { overflow-x: hidden !important; padding: 0 !important; margin: 0 !important; padding-top: 10px !important; }
-    ul.nav.nav-pills.bg-light {
+    body { overflow-x: hidden !important; padding: 0 !important; margin: 0 !important; padding-top: 5px !important; }
+    
+    /* First nav (main menu) */
+    ul.nav.nav-pills.bg-light:first-of-type {
         margin-top: 50px !important;
-        margin-bottom: 10px !important;
+        margin-bottom: 5px !important;
+    }
+    
+    /* Second nav (sub menu) */
+    ul.nav.nav-pills.bg-light {
+        margin-top: 0 !important;
+        margin-bottom: 8px !important;
         width: 100% !important;
         display: flex !important;
-        border-radius: 12px !important;
+        flex-wrap: wrap !important;
+        justify-content: center !important;
+        border-radius: 10px !important;
+        padding: 4px !important;
+        gap: 2px !important;
     }
+    
     ul.nav.nav-pills .nav-link {
-        padding: 6px 12px !important;
-        font-size: 13px;
+        padding: 5px 10px !important;
+        font-size: 12px !important;
+    }
+    ul.nav.nav-pills .nav-item {
+        margin: 1px !important;
     }
     .container, .container-fluid, .row, form, #program_list, #program_auto_form, #episode_list, .queue-container, #yommi_wrapper, #main_container {
         width: 100% !important; max-width: 100% !important;
