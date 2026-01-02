@@ -681,12 +681,119 @@
         background-color: #e0ff42;
     }
 
+    /* ========== Cosmic Violet Theme (Anilife Exclusive) ========== */
     body {
-        font-family: NanumSquareNeo, system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Noto Sans, Liberation Sans, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji;
+        font-family: 'Inter', 'Noto Sans KR', system-ui, sans-serif;
+        background: linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #4c1d95 100%) !important;
+        background-attachment: fixed;
+        color: #e0e7ff;
+        min-height: 100vh;
     }
 
-    body {
-        background-image: linear-gradient(90deg, #233f48, #6c6fa2, #768dae);
+    /* Search Bar Styling */
+    .input-group {
+        background: rgba(49, 46, 129, 0.5);
+        border-radius: 12px;
+        padding: 6px;
+        border: 1px solid rgba(167, 139, 250, 0.25);
+        backdrop-filter: blur(10px);
+        margin-bottom: 15px;
+    }
+
+    #input_search {
+        background: rgba(30, 27, 75, 0.7) !important;
+        border: 1px solid rgba(167, 139, 250, 0.2) !important;
+        color: #e0e7ff !important;
+        border-radius: 8px !important;
+    }
+
+    #input_search::placeholder {
+        color: #c4b5fd;
+        opacity: 0.7;
+    }
+
+    #btn_search {
+        background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%) !important;
+        border: none !important;
+        border-radius: 8px !important;
+    }
+
+    /* Category Buttons */
+    #anime_category {
+        margin: 15px 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    #anime_category .btn {
+        background: rgba(49, 46, 129, 0.5) !important;
+        border: 1px solid rgba(167, 139, 250, 0.3) !important;
+        color: #c4b5fd !important;
+        border-radius: 20px !important;
+        padding: 8px 20px !important;
+    }
+
+    #anime_category .btn:hover {
+        background: rgba(139, 92, 246, 0.3) !important;
+        color: #fff !important;
+    }
+
+    #anime_category .btn-success {
+        background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%) !important;
+        color: white !important;
+    }
+
+    #anime_category .btn-primary {
+        background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%) !important;
+        color: white !important;
+    }
+
+    #anime_category .btn-grey {
+        background: linear-gradient(135deg, #f472b6 0%, #ec4899 100%) !important;
+        color: white !important;
+    }
+
+    /* Card Styling */
+    .card {
+        background: rgba(49, 46, 129, 0.5) !important;
+        border: 1px solid rgba(167, 139, 250, 0.15) !important;
+        border-radius: 12px !important;
+        overflow: hidden;
+    }
+
+    .card:hover {
+        border-color: rgba(167, 139, 250, 0.4) !important;
+        box-shadow: 0 8px 30px rgba(139, 92, 246, 0.2) !important;
+    }
+
+    .card-body {
+        background: rgba(30, 27, 75, 0.85) !important;
+    }
+
+    .card-title {
+        color: #a78bfa !important;
+    }
+
+    .card-text {
+        color: #c4b5fd !important;
+    }
+
+    .card .btn-primary {
+        background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%) !important;
+        border: none !important;
+    }
+
+    /* Page Badge */
+    .btn-info {
+        background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%) !important;
+        border: none !important;
+        border-radius: 8px !important;
+    }
+
+    /* Spinner */
+    #spinner {
+        color: #a78bfa;
     }
 
     .demo {
@@ -808,6 +915,22 @@
         top: 0;
         z-index: 99999;
         opacity: 0.5;
+    }
+    
+    /* Mobile Responsive */
+    @media (max-width: 768px) {
+        body { padding-top: 10px !important; }
+        ul.nav.nav-pills.bg-light {
+            margin-top: 50px !important;
+            margin-bottom: 10px !important;
+            width: 100% !important;
+            display: flex !important;
+            border-radius: 12px !important;
+        }
+        ul.nav.nav-pills .nav-link {
+            padding: 6px 12px !important;
+            font-size: 13px;
+        }
     }
 </style>
 {% endblock %}

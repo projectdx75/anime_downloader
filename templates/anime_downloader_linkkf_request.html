@@ -1367,6 +1367,58 @@ $(document).ready(function(){
 }
 .playlist-item:hover { background: rgba(16, 185, 129, 0.1); color: #fff; }
 .playlist-item.active { background: rgba(16, 185, 129, 0.2); color: #10b981; font-weight: 600; border-left: 3px solid #10b981; }
+
+/* ========== Mobile Video Modal Fix ========== */
+@media (max-width: 768px) {
+    /* 모달 크기 조정 */
+    #videoModal .modal-dialog {
+        margin: 10px auto !important;
+        max-width: calc(100vw - 20px) !important;
+    }
+    
+    /* 모달 바디 높이 조정 */
+    #videoModal .modal-body {
+        height: auto !important;
+        max-height: 75vh !important;
+    }
+    
+    /* 비디오 높이 제한 */
+    #video-player, .video-js {
+        max-height: 40vh !important;
+    }
+    
+    /* 플레이리스트 높이 제한 */
+    #playlist-list-container {
+        max-height: 20vh !important;
+    }
+    
+    /* 플레이리스트 컨트롤 간소화 */
+    .playlist-nav-btn {
+        width: 32px !important;
+        height: 32px !important;
+        font-size: 12px !important;
+    }
+    
+    .playlist-toggle-btn {
+        padding: 6px 10px !important;
+        font-size: 11px !important;
+    }
+    
+    #playlist-progress {
+        font-size: 12px !important;
+    }
+}
+
+/* 초소형 모바일 (400px 미만) */
+@media (max-width: 400px) {
+    #video-player, .video-js {
+        max-height: 35vh !important;
+    }
+    
+    #playlist-list-container {
+        max-height: 15vh !important;
+    }
+}
 </style>
 
 <script>

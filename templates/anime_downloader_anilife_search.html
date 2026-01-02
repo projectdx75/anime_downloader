@@ -180,21 +180,20 @@
             str += '<div id="inner_screen_movie" class="row infinite-scroll">';
             for (let i in data.anime_list) {
 
-                tmp = '<div class="col-6 col-sm-4 col-md-3">';
-                tmp += '<div class="card">';
+                tmp = '<div class=\"col-6 col-sm-4 col-md-3\">';
+                tmp += '<div class=\"card\">';
                 // 이미지 프록시를 통해 CDN 이미지 로드 (hotlink 보호 우회)
                 let airingImgUrl = data.anime_list[i].image_link;
                 if (airingImgUrl && airingImgUrl.includes('cdn.anilife.live')) {
                     airingImgUrl = '/' + package_name + '/ajax/' + sub + '/proxy_image?url=' + encodeURIComponent(airingImgUrl);
                 }
-                tmp += '<img class="lazyload" src="../static/img_loader_x200.svg" data-original="' + airingImgUrl + '" style="cursor: pointer" onerror="this.src=\'../static/img_loader_x200.svg\'" onclick="location.href=\'./request?code=' + data.anime_list[i].code + '\'"/>';
-                tmp += '<div class="card-body">'
-                // {#tmp += '<button id="code_button" data-code="' + data.episode[i].code + '" type="button" class="btn btn-primary code-button bootstrap-tooltip" data-toggle="button" data-tooltip="true" aria-pressed="true" autocomplete="off" data-placement="top">' +#}
-                //  {#    '<span data-tooltip-text="'+data.episode[i].title+'">' + data.episode[i].code + '</span></button></div>';#}
-                tmp += '<h5 class="card-title">' + data.anime_list[i].title + '</h5>';
-                tmp += '<p class="card-text">' + data.anime_list[i].code + '</p>';
-                tmp += '<p class="card-text">' + data.anime_list[i].epx + '</p>';
-                tmp += '<a href="./request?code=' + data.anime_list[i].code + '" class="btn btn-primary cut-text">' + data.anime_list[i].title + '</a>';
+                tmp += '<div class=\"card-img-container\">';
+                tmp += '<img class=\"lazyload\" src=\"../static/img_loader_x200.svg\" data-original=\"' + airingImgUrl + '\" style=\"cursor: pointer\" onerror=\"this.src=\'../static/img_loader_x200.svg\'\" onclick=\"location.href=\'./request?code=' + data.anime_list[i].code + '\'\"/>';
+                tmp += '<span class=\"episode-badge\">' + data.anime_list[i].epx + '</span>';
+                tmp += '</div>';
+                tmp += '<div class=\"card-body\">'
+                tmp += '<h5 class=\"card-title\">' + data.anime_list[i].title + '</h5>';
+                tmp += '<a href=\"./request?code=' + data.anime_list[i].code + '\" class=\"btn btn-primary cut-text\">' + data.anime_list[i].title + '</a>';
                 tmp += '</div>';
                 tmp += '</div>';
                 tmp += '</div>';
@@ -253,13 +252,12 @@
                 if (imgUrl && imgUrl.includes('cdn.anilife.live')) {
                     imgUrl = '/' + package_name + '/ajax/' + sub + '/proxy_image?url=' + encodeURIComponent(imgUrl);
                 }
+                tmp += '<div class="card-img-container">';
                 tmp += '<img class="card-img-top" src="' + imgUrl + '" onerror="this.src=\'../static/img_loader_x200.svg\'" />';
+                tmp += '<span class="episode-badge">' + data.anime_list[i].epx + '</span>';
+                tmp += '</div>';
                 tmp += '<div class="card-body">'
-                // {#tmp += '<button id="code_button" data-code="' + data.episode[i].code + '" type="button" class="btn btn-primary code-button bootstrap-tooltip" data-toggle="button" data-tooltip="true" aria-pressed="true" autocomplete="off" data-placement="top">' +#}
-                //  {#    '<span data-tooltip-text="'+data.episode[i].title+'">' + data.episode[i].code + '</span></button></div>';#}
                 tmp += '<h5 class="card-title">' + data.anime_list[i].title + '</h5>';
-                tmp += '<p class="card-text">' + data.anime_list[i].code + '</p>';
-                tmp += '<p class="card-text">' + data.anime_list[i].epx + '</p>';
                 tmp += '<a href="' + request_url + '" class="btn btn-primary cut-text">' + data.anime_list[i].title + '</a>';
                 tmp += '</div>';
                 tmp += '</div>';
@@ -304,10 +302,14 @@
                 if (screenImgUrl && screenImgUrl.includes('cdn.anilife.live')) {
                     screenImgUrl = '/' + package_name + '/ajax/' + sub + '/proxy_image?url=' + encodeURIComponent(screenImgUrl);
                 }
+                tmp += '<div class="card-img-container">';
                 tmp += '<img class="card-img-top" src="' + screenImgUrl + '" onerror="this.src=\'../static/img_loader_x200.svg\'" />';
+                if (data.anime_list[i].epx) {
+                    tmp += '<span class="episode-badge">' + data.anime_list[i].epx + '</span>';
+                }
+                tmp += '</div>';
                 tmp += '<div class="card-body">'
                 tmp += '<h5 class="card-title">' + data.anime_list[i].title + '</h5>';
-                tmp += '<p class="card-text">' + data.anime_list[i].code + '</p>';
                 tmp += '<a href="./request?code=' + data.anime_list[i].code + '" class="btn btn-primary cut-text">' + data.anime_list[i].title + '</a>';
                 tmp += '</div>';
                 tmp += '</div>';
@@ -762,6 +764,27 @@
             border-radius: 12px 12px 0 0;
         }
 
+        /* Card Image Container for Badge Overlay */
+        .card-img-container {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        /* Episode Badge Overlay */
+        .episode-badge {
+            position: absolute;
+            bottom: 8px;
+            right: 8px;
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            color: white;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        }
+
         .card-body {
             padding: 12px !important;
             flex-grow: 1;
@@ -854,11 +877,162 @@
         }
 
         body {
-            font-family: NanumSquareNeo, system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Noto Sans, Liberation Sans, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji;
+            font-family: 'Inter', 'Noto Sans KR', NanumSquareNeo, system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, sans-serif;
         }
 
+        /* ========== Cosmic Violet Theme (Anilife Exclusive) ========== */
         body {
-            background-image: linear-gradient(90deg, #233f48, #6c6fa2, #768dae);
+            background: linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #4c1d95 100%) !important;
+            background-attachment: fixed;
+            color: #e0e7ff;
+            min-height: 100vh;
+        }
+
+        /* Search Bar Styling */
+        #yommi_wrapper {
+            padding: 20px 15px;
+        }
+        
+        .input-group {
+            background: rgba(49, 46, 129, 0.5);
+            border-radius: 12px;
+            padding: 6px;
+            border: 1px solid rgba(167, 139, 250, 0.25);
+            backdrop-filter: blur(10px);
+        }
+        
+        .input-group #input_search {
+            background: rgba(30, 27, 75, 0.7) !important;
+            border: 1px solid rgba(167, 139, 250, 0.2) !important;
+            color: #e0e7ff !important;
+            border-radius: 8px !important;
+            padding: 12px 16px !important;
+            font-size: 15px;
+        }
+        
+        .input-group #input_search::placeholder {
+            color: #c4b5fd;
+            opacity: 0.7;
+        }
+        
+        .input-group #input_search:focus {
+            outline: none !important;
+            border-color: #a78bfa !important;
+            box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.3) !important;
+        }
+        
+        .input-group #btn_search {
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%) !important;
+            border: none !important;
+            border-radius: 8px !important;
+            padding: 10px 24px !important;
+            font-weight: 600;
+            color: white;
+            transition: all 0.3s ease;
+        }
+        
+        .input-group #btn_search:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+        }
+
+        /* Category Buttons */
+        #anime_category {
+            margin: 20px 0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        
+        #anime_category .btn {
+            background: rgba(49, 46, 129, 0.5) !important;
+            border: 1px solid rgba(167, 139, 250, 0.3) !important;
+            color: #c4b5fd !important;
+            border-radius: 20px !important;
+            padding: 8px 20px !important;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        #anime_category .btn:hover {
+            background: rgba(139, 92, 246, 0.3) !important;
+            border-color: #a78bfa !important;
+            color: #fff !important;
+            transform: translateY(-2px);
+        }
+        
+        #anime_category .btn-success {
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%) !important;
+            border-color: transparent !important;
+            color: white !important;
+        }
+        
+        #anime_category .btn-primary {
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%) !important;
+            border-color: transparent !important;
+            color: white !important;
+        }
+        
+        #anime_category .btn-dark {
+            background: linear-gradient(135deg, #475569 0%, #334155 100%) !important;
+            border-color: transparent !important;
+        }
+        
+        #anime_category .btn-grey {
+            background: linear-gradient(135deg, #f472b6 0%, #ec4899 100%) !important;
+            border-color: transparent !important;
+            color: white !important;
+        }
+
+        /* Page Badge */
+        .btn-info {
+            background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%) !important;
+            border: none !important;
+            border-radius: 8px !important;
+            margin-bottom: 15px;
+        }
+        
+        .badge.bg-warning {
+            background: #fbbf24 !important;
+            color: #1e293b !important;
+        }
+
+        /* Card Styling Override */
+        .card {
+            background: rgba(49, 46, 129, 0.5) !important;
+            border: 1px solid rgba(167, 139, 250, 0.15) !important;
+            backdrop-filter: blur(8px);
+        }
+        
+        .card:hover {
+            border-color: rgba(167, 139, 250, 0.4) !important;
+            box-shadow: 0 8px 30px rgba(139, 92, 246, 0.2) !important;
+        }
+        
+        .card-body {
+            background: linear-gradient(180deg, rgba(30, 27, 75, 0.85) 0%, rgba(30, 27, 75, 0.95) 100%) !important;
+        }
+        
+        .card-title {
+            color: #a78bfa !important;
+        }
+        
+        .card-text {
+            color: #c4b5fd !important;
+        }
+        
+        .card .btn-primary {
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%) !important;
+            border: none !important;
+        }
+        
+        .card .btn-primary:hover {
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+        }
+
+        /* Spinner */
+        #spinner {
+            color: #a78bfa;
         }
 
         .demo {
@@ -1055,7 +1229,18 @@ $(document).ready(function(){
 <style>
 /* Mobile Margin Fix */
 @media (max-width: 768px) {
-    body { overflow-x: hidden !important; padding: 0 !important; margin: 0 !important; }
+    body { overflow-x: hidden !important; padding: 0 !important; margin: 0 !important; padding-top: 10px !important; }
+    ul.nav.nav-pills.bg-light {
+        margin-top: 50px !important;
+        margin-bottom: 10px !important;
+        width: 100% !important;
+        display: flex !important;
+        border-radius: 12px !important;
+    }
+    ul.nav.nav-pills .nav-link {
+        padding: 6px 12px !important;
+        font-size: 13px;
+    }
     .container, .container-fluid, .row, form, #program_list, #program_auto_form, #episode_list, .queue-container, #yommi_wrapper, #main_container {
         width: 100% !important; max-width: 100% !important;
         padding-left: 4px !important; padding-right: 4px !important;
@@ -1075,6 +1260,12 @@ $(document).ready(function(){
     .badge {
         white-space: normal !important; text-align: left !important;
         line-height: 1.4 !important; height: auto !important; display: inline-block !important;
+    }
+    
+    /* Search Button Size Reduction */
+    .input-group #btn_search {
+        padding: 8px 14px !important;
+        font-size: 13px !important;
     }
 }
 </style>

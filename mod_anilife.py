@@ -57,7 +57,7 @@ from .lib.crawler import Crawler
 
 # 패키지
 # from .plugin import P
-from .lib.util import Util, yommi_timeit
+from .lib.util import Util as AniUtil, yommi_timeit
 from typing import Awaitable, TypeVar
 
 T = TypeVar("T")
@@ -78,6 +78,7 @@ class LogicAniLife(AnimeModuleBase):
         "anilife_finished_insert": "[완결]",
         "anilife_max_ffmpeg_process_count": "1",
         "anilife_download_method": "ffmpeg",  # ffmpeg or ytdlp
+        "anilife_download_threads": "16",     # yt-dlp/aria2c 병렬 쓰레드 수
         "anilife_order_desc": "False",
         "anilife_auto_start": "False",
         "anilife_interval": "* 5 * * *",
@@ -164,8 +165,41 @@ class LogicAniLife(AnimeModuleBase):
     def __init__(self, P):
         super(LogicAniLife, self).__init__(P, setup_default=self.db_default, name=name, first_menu='setting', scheduler_desc="애니라이프 자동 다운로드")
         self.queue = None
+        self.web_list_model = ModelAniLifeItem
         self.OS_PLATFORM = platform.system()
         default_route_socketio_module(self, attach="/search")
+
+    def process_command(self, command, arg1, arg2, arg3, req):
+        try:
+            if command == "list":
+                ret = self.queue.get_entity_list() if self.queue else []
+                return jsonify(ret)
+            elif command == "stop":
+                entity_id = int(arg1) if arg1 else -1
+                result = self.queue.command("cancel", entity_id) if self.queue else {"ret": "error"}
+                return jsonify(result)
+            elif command == "remove":
+                entity_id = int(arg1) if arg1 else -1
+                result = self.queue.command("remove", entity_id) if self.queue else {"ret": "error"}
+                return jsonify(result)
+            elif command in ["reset", "delete_completed"]:
+                result = self.queue.command(command, 0) if self.queue else {"ret": "error"}
+                return jsonify(result)
+            elif command == "merge_subtitle":
+                # AniUtil already imported at module level
+                db_id = int(arg1)
+                db_item = ModelAniLifeItem.get_by_id(db_id)
+                if db_item and db_item.status == 'completed':
+                    import threading
+                    threading.Thread(target=AniUtil.merge_subtitle, args=(self.P, db_item)).start()
+                    return jsonify({"ret": "success", "log": "자막 합칩을 시작합니다."})
+                return jsonify({"ret": "fail", "log": "파일을 찾을 수 없거나 완료된 상태가 아닙니다."})
+            
+            return jsonify({"ret": "fail", "log": f"Unknown command: {command}"})
+        except Exception as e:
+            self.P.logger.error(f"process_command Error: {e}")
+            self.P.logger.error(traceback.format_exc())
+            return jsonify({'ret': 'fail', 'log': str(e)})
 
     # @staticmethod
     def get_html(
@@ -578,11 +612,18 @@ class LogicAniLife(AnimeModuleBase):
                     socketio.emit(
                         "notify", notify, namespace="/framework", broadcast=True
                     )
-
                 thread = threading.Thread(target=func, args=())
                 thread.daemon = True
                 thread.start()
                 return jsonify("")
+            elif sub == "proxy_image":
+                image_url = request.args.get("url") or request.args.get("image_url")
+                return self.proxy_image(image_url)
+            elif sub == "entity_list":
+                if self.queue is not None:
+                    return jsonify(self.queue.get_entity_list())
+                else:
+                    return jsonify([])
             elif sub == "web_list":
                 return jsonify(ModelAniLifeItem.web_list(request))
             elif sub == "db_remove":
@@ -657,48 +698,14 @@ class LogicAniLife(AnimeModuleBase):
                 except Exception as e:
                     logger.error(f"browse_dir error: {e}")
                     return jsonify({"ret": "error", "error": str(e)}), 500
+            
+            return jsonify({"ret": "fail", "log": f"Unknown sub: {sub}"})
+
         except Exception as e:
-            P.logger.error("Exception:%s", e)
+            P.logger.error("AniLife process_ajax Exception:%s", e)
             P.logger.error(traceback.format_exc())
+            return jsonify({"ret": "exception", "log": str(e)})
 
-    def process_command(self, command, arg1, arg2, arg3, req):
-        ret = {"ret": "success"}
-        logger.debug("queue_list")
-        if command == "queue_list":
-            logger.debug(
-                f"self.queue.get_entity_list():: {self.queue.get_entity_list()}"
-            )
-            ret = [x for x in self.queue.get_entity_list()]
-
-            return ret
-        elif command == "download_program":
-            _pass = arg2
-            db_item = ModelOhli24Program.get(arg1)
-            if _pass == "false" and db_item != None:
-                ret["ret"] = "warning"
-                ret["msg"] = "이미 DB에 있는 항목 입니다."
-            elif (
-                _pass == "true"
-                and db_item != None
-                and ModelOhli24Program.get_by_id_in_queue(db_item.id) != None
-            ):
-                ret["ret"] = "warning"
-                ret["msg"] = "이미 큐에 있는 항목 입니다."
-            else:
-                if db_item == None:
-                    db_item = ModelOhli24Program(arg1, self.get_episode(arg1))
-                    db_item.save()
-                db_item.init_for_queue()
-                self.download_queue.put(db_item)
-                ret["msg"] = "다운로드를 추가 하였습니다."
-
-        elif command == "list":
-            # Anilife 큐의 entity_list 반환 (이전: SupportFfmpeg.get_list() - 잘못된 소스)
-            ret = []
-            for entity in self.queue.entity_list:
-                ret.append(entity.as_dict())
-
-        return jsonify(ret)
 
     @staticmethod
     def add_whitelist(*args):
@@ -765,16 +772,50 @@ class LogicAniLife(AnimeModuleBase):
         self.queue = FfmpegQueue(
             P, P.ModelSetting.get_int("anilife_max_ffmpeg_process_count"), name, self
         )
+        self.queue.queue_start()
+
+        # 데이터 마이그레이션/동기화: 파일명이 비어있는 항목들 처리
+        from framework import app
+        with app.app_context():
+            try:
+                items = ModelAniLifeItem.get_list_uncompleted()
+                for item in items:
+                    if not item.filename or item.filename == item.title:
+                        # 임시로 Entity를 만들어 파일명 생성 로직 활용
+                        tmp_info = item.anilife_info if item.anilife_info else {}
+                        # dict가 아닐 경우 처리 (문자열 등)
+                        if isinstance(tmp_info, str):
+                            try: tmp_info = json.loads(tmp_info)
+                            except: tmp_info = {}
+                        
+                        tmp_entity = AniLifeQueueEntity(P, self, tmp_info)
+                        if tmp_entity.filename:
+                            item.filename = tmp_entity.filename
+                            item.save()
+                            logger.info(f"Synced filename for item {item.id}: {item.filename}")
+            except Exception as e:
+                logger.error(f"Data sync error: {e}")
+                logger.error(traceback.format_exc())
+
         self.current_data = None
         self.queue.queue_start()
 
         # Camoufox 미리 준비 (백그라운드에서 설치 및 바이너리 다운로드)
         threading.Thread(target=self.ensure_camoufox_installed, daemon=True).start()
 
+    def db_delete(self, day):
+        try:
+            # 전체 삭제 (일수 기준 또는 전체)
+            return ModelAniLifeItem.delete_all()
+        except Exception as e:
+            logger.error(f"Exception: {str(e)}")
+            logger.error(traceback.format_exc())
+            return False
+
     def scheduler_function(self):
         logger.debug(f"ohli24 scheduler_function::=========================")
 
-        content_code_list = P.ModelSetting.get_list("ohli24_auto_code_list", "|")
+        content_code_list = P.ModelSetting.get_list("anilife_auto_code_list", "|")
         url = f'{P.ModelSetting.get("anilife_url")}/dailyani'
         if "all" in content_code_list:
             ret_data = LogicAniLife.get_auto_anime_info(self, url=url)
@@ -1158,9 +1199,39 @@ class LogicAniLife(AnimeModuleBase):
             return data
 
         except Exception as e:
-            P.logger.error(f"Exception: {str(e)}")
+            P.logger.error(f"AniLife process_ajax Error: {str(e)}")
             P.logger.error(traceback.format_exc())
-            return {"ret": "exception", "log": str(e)}
+            return jsonify({"ret": "exception", "log": str(e)})
+
+    def proxy_image(self, image_url):
+        try:
+            if not image_url or image_url == "None":
+                return ""
+            import requests
+            headers = {
+                'Referer': 'https://anilife.live/',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            }
+            res = requests.get(image_url, headers=headers, stream=True, timeout=10)
+            from flask import Response
+            return Response(res.content, mimetype=res.headers.get('content-type', 'image/jpeg'))
+        except Exception as e:
+            P.logger.error(f"AniLife proxy_image error: {e}")
+            return ""
+
+    def vtt_proxy(self, vtt_url):
+        try:
+            import requests
+            headers = {
+                'Referer': 'https://anilife.live/',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            }
+            res = requests.get(vtt_url, headers=headers, timeout=10)
+            from flask import Response
+            return Response(res.text, mimetype='text/vtt')
+        except Exception as e:
+            P.logger.error(f"AniLife vtt_proxy error: {e}")
+            return ""
 
     #########################################################
     def add(self, episode_info):
@@ -1210,8 +1281,27 @@ class AniLifeQueueEntity(FfmpegQueueEntity):
         self.content_title = None
         self.srt_url = None
         self.headers = None
-        # [Lazy Extraction] __init__에서는 무거운 분석을 하지 않습니다.
-        # self.make_episode_info()
+        self.filename = info.get("title")
+        self.epi_queue = info.get("ep_num")
+        self.content_title = info.get("title")
+
+    def get_downloader(self, video_url, output_file, callback=None, callback_function=None):
+        from .lib.downloader_factory import DownloaderFactory
+        # Anilife는 설정이 따로 없으면 기본 ytdlp 사용하거나 ffmpeg
+        method = self.P.ModelSetting.get("anilife_download_method") or "ffmpeg"
+        threads = self.P.ModelSetting.get_int("anilife_download_threads") or 16
+        logger.info(f"AniLife get_downloader using method: {method}, threads: {threads}")
+        
+        return DownloaderFactory.get_downloader(
+            method=method,
+            video_url=video_url,
+            output_file=output_file,
+            headers=self.headers,
+            callback=callback,
+            callback_id="anilife",
+            threads=threads,
+            callback_function=callback_function
+        )
 
     def refresh_status(self):
         self.module_logic.socketio_callback("status", self.as_dict())
@@ -1223,16 +1313,29 @@ class AniLifeQueueEntity(FfmpegQueueEntity):
         tmp["vtt"] = self.vtt
         tmp["season"] = self.season
         tmp["content_title"] = self.content_title
+        # 큐 리스트에서 '에피소드 제목'으로 명확히 인지되도록 함
+        tmp["episode_title"] = self.info.get("title") 
         tmp["anilife_info"] = self.info
         tmp["epi_queue"] = self.epi_queue
+        tmp["filename"] = self.filename
         return tmp
 
     def donwload_completed(self):
         db_entity = ModelAniLifeItem.get_by_anilife_id(self.info["_id"])
         if db_entity is not None:
             db_entity.status = "completed"
-            db_entity.complated_time = datetime.now()
+            db_entity.completed_time = datetime.now()
+            # 메타데이터 동기화
+            db_entity.filename = self.filename
+            db_entity.save_fullpath = self.save_fullpath
+            db_entity.filesize = self.filesize
+            db_entity.duration = self.duration
+            db_entity.quality = self.quality
             db_entity.save()
+            
+            # Discord 알림 (이미 메인에서 처리될 수도 있으나 명시적으로 필요한 경우)
+            # if self.P.ModelSetting.get_bool('anilife_discord_notification'):
+            #    ...
 
     def prepare_extra(self):
         """
@@ -1305,7 +1408,11 @@ class AniLifeQueueEntity(FfmpegQueueEntity):
                 def log_stderr(pipe):
                     for line in iter(pipe.readline, ''):
                         if line.strip():
-                            logger.info(f"[Camoufox] {line.strip()}")
+                            # tqdm 진행바나 불필요한 로그는 debug 레벨로 출력하여 로그 도배 방지
+                            if '%' in line or '|' in line or 'addon' in line.lower():
+                                logger.debug(f"[Camoufox-Progress] {line.strip()}")
+                            else:
+                                logger.info(f"[Camoufox] {line.strip()}")
                 
                 stderr_thread = threading.Thread(target=log_stderr, args=(process.stderr,))
                 stderr_thread.start()
@@ -1314,7 +1421,13 @@ class AniLifeQueueEntity(FfmpegQueueEntity):
                 for line in iter(process.stdout.readline, ''):
                     stdout_data.append(line)
                 
-                process.wait(timeout=120)
+                try:
+                    process.wait(timeout=120)
+                except subprocess.TimeoutExpired:
+                    logger.error("Camoufox subprocess timed out (120s)")
+                    process.kill()
+                    return
+                    
                 stderr_thread.join(timeout=5)
                 
                 stdout_full = "".join(stdout_data)
@@ -1468,26 +1581,25 @@ class AniLifeQueueEntity(FfmpegQueueEntity):
 
             self.epi_queue = epi_no
 
-            self.filename = Util.change_text_for_use_filename(ret)
+            self.filename = AniUtil.change_text_for_use_filename(ret)
             logger.info(f"Filename: {self.filename}")
             
-            # anilife 전용 다운로드 경로 설정 (ohli24_download_path 대신 anilife_download_path 사용)
+            # anilife 전용 다운로드 경로 설정
             self.savepath = P.ModelSetting.get("anilife_download_path")
-            if not self.savepath:
-                self.savepath = P.ModelSetting.get("ohli24_download_path")
             logger.info(f"Savepath: {self.savepath}")
 
-            if P.ModelSetting.get_bool("ohli24_auto_make_folder"):
+            if P.ModelSetting.get_bool("anilife_auto_make_folder"):
                 if self.info.get("day", "").find("완결") != -1:
                     folder_name = "%s %s" % (
-                        P.ModelSetting.get("ohli24_finished_insert"),
+                        P.ModelSetting.get("anilife_finished_insert"),
                         self.content_title,
                     )
                 else:
                     folder_name = self.content_title
-                folder_name = Util.change_text_for_use_filename(folder_name.strip())
+                folder_name = AniUtil.change_text_for_use_filename(folder_name.strip())
                 self.savepath = os.path.join(self.savepath, folder_name)
-                if P.ModelSetting.get_bool("ohli24_auto_make_season_folder"):
+                
+                if P.ModelSetting.get_bool("anilife_auto_make_season_folder"):
                     self.savepath = os.path.join(
                         self.savepath, "Season %s" % int(self.season)
                     )
@@ -1547,12 +1659,17 @@ class ModelAniLifeItem(db.Model):
 
     def as_dict(self):
         ret = {x.name: getattr(self, x.name) for x in self.__table__.columns}
-        ret["created_time"] = self.created_time.strftime("%Y-%m-%d %H:%M:%S")
+        ret["created_time"] = self.created_time.strftime("%Y-%m-%d %H:%M:%S") if self.created_time is not None else None
         ret["completed_time"] = (
             self.completed_time.strftime("%Y-%m-%d %H:%M:%S")
             if self.completed_time is not None
             else None
         )
+        # 템플릿 호환용 (anilife_list.html)
+        ret["image_link"] = self.thumbnail
+        ret["ep_num"] = self.episode_no
+        # content_title이 없으면 제목(시리즈명)으로 활용
+        ret["content_title"] = self.anilife_info.get("content_title") if self.anilife_info else self.title
         return ret
 
     def save(self):
@@ -1569,9 +1686,33 @@ class ModelAniLifeItem(db.Model):
 
     @classmethod
     def delete_by_id(cls, idx):
-        db.session.query(cls).filter_by(id=idx).delete()
-        db.session.commit()
-        return True
+        try:
+            logger.debug(f"delete_by_id: {idx} (type: {type(idx)})")
+            if isinstance(idx, str) and ',' in idx:
+                id_list = [int(x.strip()) for x in idx.split(',') if x.strip()]
+                logger.debug(f"Batch delete: {id_list}")
+                count = db.session.query(cls).filter(cls.id.in_(id_list)).delete(synchronize_session='fetch')
+                logger.debug(f"Deleted count: {count}")
+            else:
+                db.session.query(cls).filter_by(id=int(idx)).delete()
+                logger.debug(f"Single delete: {idx}")
+            db.session.commit()
+            return True
+        except Exception as e:
+            logger.error(f"Exception: {str(e)}")
+            logger.error(traceback.format_exc())
+            return False
+
+    @classmethod
+    def delete_all(cls):
+        try:
+            db.session.query(cls).delete()
+            db.session.commit()
+            return True
+        except Exception as e:
+            logger.error(f"Exception: {str(e)}")
+            logger.error(traceback.format_exc())
+            return False
 
     @classmethod
     def web_list(cls, req):
@@ -1622,22 +1763,28 @@ class ModelAniLifeItem(db.Model):
 
     @classmethod
     def append(cls, q):
+        # 중복 체크
+        existing = cls.get_by_anilife_id(q["_id"])
+        if existing:
+            logger.debug(f"Item already exists in DB: {q['_id']}")
+            return existing
+            
         item = ModelAniLifeItem()
         item.content_code = q["content_code"]
         item.season = q["season"]
-        item.episode_no = q["epi_queue"]
+        item.episode_no = q.get("epi_queue")
         item.title = q["content_title"]
         item.episode_title = q["title"]
-        item.ohli24_va = q["va"]
-        item.ohli24_vi = q["_vi"]
-        item.ohli24_id = q["_id"]
+        item.anilife_va = q.get("va")
+        item.anilife_vi = q.get("_vi")
+        item.anilife_id = q["_id"]
         item.quality = q["quality"]
-        item.filepath = q["filepath"]
-        item.filename = q["filename"]
-        item.savepath = q["savepath"]
-        item.video_url = q["url"]
-        item.vtt_url = q["vtt"]
-        item.thumbnail = q["thumbnail"]
+        item.filepath = q.get("filepath")
+        item.filename = q.get("filename")
+        item.savepath = q.get("savepath")
+        item.video_url = q.get("url")
+        item.vtt_url = q.get("vtt")
+        item.thumbnail = q.get("thumbnail")
         item.status = "wait"
-        item.ohli24_info = q["anilife_info"]
+        item.anilife_info = q.get("anilife_info")
         item.save()

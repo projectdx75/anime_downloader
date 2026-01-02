@@ -131,6 +131,8 @@ class AnimeModuleBase(PluginModuleBase):
                 arg3 = request.form.get('arg3') or request.args.get('arg3')
                 return self.process_command(command, arg1, arg2, arg3, req)
 
+            return jsonify({'ret': 'fail', 'log': f"Unknown sub: {sub}"})
+
         except Exception as e:
             self.P.logger.error(f"AJAX Error: {e}")
             self.P.logger.error(traceback.format_exc())

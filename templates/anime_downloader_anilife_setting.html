@@ -45,7 +45,10 @@
       </div>
       
       {{ macros.setting_input_int('anilife_max_ffmpeg_process_count', '동시 다운로드 수', value=arg['anilife_max_ffmpeg_process_count'], desc='동시에 다운로드 할 에피소드 갯수입니다.') }}
-      {{ macros.setting_select('anilife_download_method', '다운로드 방법', [['ffmpeg', 'ffmpeg (기본)'], ['ytdlp', 'yt-dlp']], value=arg.get('anilife_download_method', 'ffmpeg'), desc='m3u8 다운로드에 사용할 도구를 선택합니다.') }}
+      {{ macros.setting_select('anilife_download_method', '다운로드 방법', [['ffmpeg', 'ffmpeg (기본)'], ['ytdlp', 'yt-dlp (단일쓰레드)'], ['aria2c', 'yt-dlp (멀티쓰레드/aria2c)']], value=arg.get('anilife_download_method', 'ffmpeg'), desc='m3u8 다운로드에 사용할 도구를 선택합니다.') }}
+      <div id="anilife_download_threads_div">
+        {{ macros.setting_select('anilife_download_threads', '다운로드 속도', [['1', '1배속 (1개, 안정)'], ['2', '2배속 (2개, 권장)'], ['4', '4배속 (4개)'], ['8', '8배속 (8개)'], ['16', '16배속 (16개, 빠름)']], value=arg.get('anilife_download_threads', '16'), desc='yt-dlp 모드에서 사용할 동시 다운로드 수입니다.') }}
+      </div>
       {{ macros.setting_checkbox('anilife_order_desc', '요청 화면 최신순 정렬', value=arg['anilife_order_desc'], desc='On : 최신화부터, Off : 1화부터') }}
       {{ macros.setting_checkbox('anilife_auto_make_folder', '제목 폴더 생성', value=arg['anilife_auto_make_folder'], desc='제목으로 폴더를 생성하고 폴더 안에 다운로드합니다.') }}
       <div id="anilife_auto_make_folder_div" class="collapse pl-4 border-left ml-3" style="border-color: rgba(255,255,255,0.1) !important;">
@@ -304,6 +307,22 @@
     .folder-item.selected {
         background: rgba(59, 130, 246, 0.3) !important;
     }
+    
+    /* Mobile Responsive */
+    @media (max-width: 768px) {
+        body { padding-top: 10px !important; }
+        ul.nav.nav-pills.bg-light {
+            margin-top: 50px !important;
+            margin-bottom: 10px !important;
+            width: 100% !important;
+            display: flex !important;
+            border-radius: 12px !important;
+        }
+        ul.nav.nav-pills .nav-link {
+            padding: 6px 12px !important;
+            font-size: 13px;
+        }
+    }
 </style>
 
 <script type="text/javascript">
@@ -322,6 +341,22 @@ $(document).ready(function(){
 $('#ani365_auto_make_folder').change(function() {
   use_collapse('anilife_auto_make_folder');
 });
+
+function toggle_download_threads() {
+  var method = $('#anilife_download_method').val();
+  if (method == 'ytdlp' || method == 'aria2c') {
+    $('#anilife_download_threads_div').slideDown();
+  } else {
+    $('#anilife_download_threads_div').slideUp();
+  }
+}
+
+$('#anilife_download_method').change(function() {
+  toggle_download_threads();
+});
+
+// Initial check
+toggle_download_threads();
 
 
 $("body").on('click', '#go_btn', function(e){

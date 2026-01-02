@@ -20,7 +20,7 @@
         background-image: radial-gradient(circle at top right, #1e293b 0%, transparent 60%), radial-gradient(circle at bottom left, #1e293b 0%, transparent 60%);
         color: var(--text-color);
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-        overflow: hidden; /* 외부 스크롤 방지 - 흔들림 해결 */
+        /* overflow: hidden 제거 - 모바일 스크롤 허용 */
     }
 
     /* Container & Typography */
@@ -29,6 +29,10 @@
     }
     
     @media (max-width: 768px) {
+        body {
+            overflow-x: hidden !important;
+            overflow-y: auto !important; /* 세로 스크롤 허용 */
+        }
         .container-fluid {
             padding: 4px; /* 모바일 더 작은 여백 */
         }
@@ -38,6 +42,12 @@
         .dashboard-card {
             margin-top: 8px;
             border-radius: 6px;
+        }
+        /* 로그 테이블 뷰포트 기반 높이 */
+        textarea#log, textarea#add {
+            max-height: 60vh !important;
+            height: auto !important;
+            min-height: 300px !important;
         }
     }
 

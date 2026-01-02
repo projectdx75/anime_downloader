@@ -110,7 +110,7 @@ class Util(object):
         i = 0
         while i < len(lines):
             line = lines[i].strip()
-            # WEBVTT, NOTE, STYLE 등 메타데이터 스킵
+            # WEBWTT, NOTE, STYLE 등 메타데이터 스킵
             if line.startswith("WEBVTT") or line.startswith("NOTE") or line.startswith("STYLE"):
                 i += 1
                 continue
@@ -135,3 +135,50 @@ class Util(object):
                 # 캡션 텍스트가 바로 나오는 경우 등을 대비
                 i += 1
         return "\n".join(srt_lines)
+
+    @staticmethod
+    def merge_subtitle(P, db_item):
+        """
+        ffmpeg를 사용하여 SRT 자막을 MP4에 삽입 (soft embed)
+        """
+        try:
+            import subprocess
+            mp4_path = db_item.filepath
+            if not mp4_path or not os.path.exists(mp4_path):
+                logger.error(f"MP4 file not found: {mp4_path}")
+                return
+            
+            srt_path = os.path.splitext(mp4_path)[0] + ".srt"
+            if not os.path.exists(srt_path):
+                logger.error(f"SRT file not found: {srt_path}")
+                return
+            
+            # 출력 파일: *_subed.mp4
+            base_name = os.path.splitext(mp4_path)[0]
+            output_path = f"{base_name}_subed.mp4"
+            
+            if os.path.exists(output_path):
+                os.remove(output_path)
+            
+            ffmpeg_cmd = [
+                "ffmpeg", "-y",
+                "-i", mp4_path,
+                "-i", srt_path,
+                "-c:v", "copy",
+                "-c:a", "copy",
+                "-c:s", "mov_text",
+                "-metadata:s:s:0", "language=kor",
+                output_path
+            ]
+            
+            logger.info(f"[Merge Subtitle] Running ffmpeg: {' '.join(ffmpeg_cmd)}")
+            result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True, timeout=600)
+            
+            if result.returncode == 0 and os.path.exists(output_path):
+                logger.info(f"[Merge Subtitle] Success: {output_path}")
+                # 원본 삭제 옵션 등이 필요할 수 있으나 여기서는 생성만 함
+            else:
+                logger.error(f"ffmpeg failed: {result.stderr}")
+        except Exception as e:
+            logger.error(f"merge_subtitle error: {e}")
+            logger.error(traceback.format_exc())

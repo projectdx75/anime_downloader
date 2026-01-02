@@ -1691,9 +1691,10 @@ class LinkkfQueueEntity(FfmpegQueueEntity):
         """
         from .lib.downloader_factory import DownloaderFactory
         
-        # 설정에서 다운로드 방식 읽기
+        # 설정에서 다운로드 방식 및 쓰레드 수 읽기
         method = self.P.ModelSetting.get("linkkf_download_method") or "ytdlp"
-        logger.info(f"Linkkf get_downloader using method: {method}")
+        threads = self.P.ModelSetting.get_int("linkkf_download_threads") or 16
+        logger.info(f"Linkkf get_downloader using method: {method}, threads: {threads}")
         
         return DownloaderFactory.get_downloader(
             method=method,
@@ -1702,6 +1703,7 @@ class LinkkfQueueEntity(FfmpegQueueEntity):
             headers=self.headers,
             callback=callback,
             callback_id="linkkf",
+            threads=threads,
             callback_function=callback_function
         )
 

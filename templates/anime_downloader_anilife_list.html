@@ -1,305 +1,662 @@
 {% extends "base.html" %}
 {% block content %}
- 
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+
+<style>
+    body { 
+        background: linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #4c1d95 100%) !important;
+        background-attachment: fixed;
+        color: #e0e7ff; 
+        font-family: 'Inter', 'Noto Sans KR', sans-serif; 
+    }
+    
+    /* Layout Expansion */
+    #main_container, .container, .container-fluid, .content-cloak {
+        max-width: 100% !important;
+        padding-left: 15px !important;
+        padding-right: 15px !important;
+        margin: 0 auto !important;
+    }
+    
+    .content-cloak { padding-top: 10px; }
+
+    /* Navigation (Tabs) Optimization */
+    ul.nav.nav-pills.bg-light {
+        background-color: rgba(30, 41, 59, 0.6) !important;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 50rem !important;
+        padding: 6px !important;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2) !important;
+        display: inline-flex !important;
+        gap: 4px;
+        margin-bottom: 20px;
+    }
+
+    ul.nav.nav-pills .nav-link {
+        color: #94a3b8 !important;
+        font-weight: 600 !important;
+        padding: 8px 20px !important;
+        border-radius: 50rem !important;
+        transition: all 0.3s ease !important;
+    }
+
+    ul.nav.nav-pills .nav-link:hover {
+        background-color: rgba(255, 255, 255, 0.1) !important;
+        color: #fff !important;
+        transform: translateY(-1px);
+    }
+
+    ul.nav.nav-pills .nav-link.active {
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+        color: #fff !important;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4) !important;
+    }
+
+    /* Search Container */
+    .search-container {
+        background: rgba(49, 46, 129, 0.4);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(167, 139, 250, 0.1);
+        border-radius: 12px;
+        padding: 15px;
+        margin-top: 10px;
+        margin-bottom: 20px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+        align-items: center;
+        justify-content: space-between; /* Align groups to edges */
+    }
+
+    .search-group-left { display: flex; gap: 8px; flex: 1; min-width: 200px; }
+    .search-group-right { display: flex; gap: 8px; flex: 1.5; min-width: 320px; justify-content: flex-end; }
+    
+    .custom-select { min-width: 100px; flex: 1; }
+    .custom-input { flex: 2; min-width: 150px; }
+    
+    .custom-select, .custom-input {
+        background-color: rgba(30, 27, 75, 0.6) !important;
+        border: 1px solid rgba(167, 139, 250, 0.2) !important;
+        color: #e0e7ff !important;
+        border-radius: 8px !important;
+        padding: 0 12px !important;
+        height: 38px !important;
+        font-size: 13px !important;
+    }
+    .custom-select:focus, .custom-input:focus {
+        box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.3) !important;
+        border-color: #8b5cf6 !important;
+    }
+
+    /* Bootstrap Toggle Custom Styling (Match Request Page) */
+    .toggle.btn-success, .toggle.btn-success:hover {
+        background: linear-gradient(135deg, #f472b6 0%, #db2777 100%) !important;
+        border: none !important;
+        box-shadow: 0 2px 8px rgba(236, 72, 153, 0.3) !important;
+    }
+    
+    .toggle-on.btn-success {
+        background: transparent !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+    
+    .toggle-off.btn-secondary {
+        background: rgba(30, 27, 75, 0.6) !important;
+        color: #94a3b8 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+    
+    .custom-btn {
+        border-radius: 8px !important;
+        border: none !important;
+        padding: 0 16px !important;
+        height: 38px !important;
+        font-weight: 600 !important;
+        display: flex; align-items: center; gap: 6px;
+        transition: all 0.2s;
+    }
+    
+    .btn-search {
+        background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+        color: white !important;
+    }
+    .btn-search:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4); }
+    
+    .btn-reset {
+        background: rgba(139, 92, 246, 0.1);
+        color: #c4b5fd !important;
+    }
+    .btn-reset:hover { background: rgba(139, 92, 246, 0.2); color: white !important; }
+
+    /* List Styling */
+    #list_div { display: flex; flex-direction: column; gap: 8px; }
+
+    .item-row {
+        background: rgba(49, 46, 129, 0.25);
+        border: 1px solid rgba(167, 139, 250, 0.1);
+        border-radius: 12px;
+        padding: 12px;
+        display: flex; gap: 15px;
+        transition: all 0.2s;
+        position: relative; overflow: hidden;
+    }
+    .item-row:hover {
+        background: rgba(49, 46, 129, 0.45);
+        border-color: rgba(167, 139, 250, 0.35);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+    }
+
+    .poster-container {
+        width: 100px; height: 140px; flex-shrink: 0; border-radius: 8px; overflow: hidden; position: relative;
+        background: #1e1b4b;
+    }
+    .poster-img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s; }
+    .item-row:hover .poster-img { transform: scale(1.05); }
+    
+    .episode-badge {
+        position: absolute; top: 0; left: 0;
+        background: rgba(139, 92, 246, 0.9);
+        color: white;
+        font-size: 10px; font-weight: 800;
+        padding: 2px 6px;
+        border-bottom-right-radius: 6px;
+        box-shadow: 1px 1px 4px rgba(0,0,0,0.3);
+        z-index: 5;
+    }
+
+    .info-container { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
+
+    .item-title {
+        font-size: 16px; font-weight: 700; color: #fff;
+        margin-bottom: 6px; line-height: 1.3;
+        overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical;
+        line-clamp: 1;
+    }
+    
+    .item-meta-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+    .meta-program { font-size: 13px; color: #a78bfa; font-weight: 600; display: flex; align-items: center; gap: 4px; }
+    .meta-date { font-size: 12px; color: #94a3b8; }
+    
+    .filename-text {
+        font-size: 11px; color: #94a3b8; background: rgba(0,0,0,0.2); padding: 5px 10px; border-radius: 6px;
+        word-break: break-all; margin-bottom: 12px;
+        border: 1px solid rgba(255,255,255,0.05);
+        line-height: 1.4;
+    }
+
+    .item-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .action-btn {
+        padding: 6px 14px; font-size: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);
+        background: rgba(255,255,255,0.05); color: #c4b5fd; white-space: nowrap;
+        display: flex; align-items: center; gap: 6px; transition: all 0.2s;
+    }
+    .action-btn:hover { background: rgba(139, 92, 246, 0.2); color: white; border-color: rgba(139, 92, 246, 0.4); }
+    .action-btn.btn-play { background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; border: none; font-weight: 700; }
+
+    /* Modal Styling */
+    .modal-content {
+        background: #1e1b4b; border-radius: 16px; border: 1px solid rgba(167, 139, 250, 0.2);
+    }
+    .modal-header { border-bottom: 1px solid rgba(167, 139, 250, 0.1); }
+    .modal-title { color: #e0e7ff; }
+    
+    .status-badge {
+        font-size: 11px; font-weight: 700; padding: 2px 10px; border-radius: 50rem;
+        text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .status-completed { background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.3); }
+    .status-downloading { background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+    .status-wait { background: rgba(148, 163, 184, 0.2); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.3); }
+    .status-fail { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+
+    /* Checkbox Styling */
+    .custom-checkbox-worker {
+        width: 22px; height: 22px; cursor: pointer;
+        background: rgba(167, 139, 250, 0.1); border: 2px solid rgba(167, 139, 250, 0.3);
+        border-radius: 6px; position: relative; transition: all 0.2s;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .custom-checkbox-worker:hover { background: rgba(167, 139, 250, 0.2); }
+    .custom-checkbox-worker.checked { background: #8b5cf6; border-color: #8b5cf6; }
+    .custom-checkbox-worker.checked::after {
+        content: '\f00c'; font-family: 'FontAwesome'; color: white; font-size: 12px;
+    }
+    
+    .all-select-container {
+        display: flex; align-items: center; gap: 8px; font-size: 13px; color: #94a3b8;
+        cursor: pointer; padding: 4px 10px; border-radius: 8px; transition: all 0.2s;
+    }
+    .all-select-container:hover { background: rgba(255,255,255,0.05); color: #fff; }
+
+    .btn-delete-selected {
+        background: rgba(239, 68, 68, 0.1);
+        color: #fca5a5 !important;
+    }
+    .btn-delete-selected:hover { background: rgba(239, 68, 68, 0.2); color: #fff !important; }
+
+    /* Smooth Load */
+    .content-cloak, #menu_page_div { opacity: 0; transition: opacity 0.5s ease-out; }
+    .content-cloak.visible, #menu_page_div.visible { opacity: 1; }
+    
+    /* Mobile Responsive */
+    @media (max-width: 768px) {
+        body { 
+            padding-top: 10px !important; 
+            overflow-x: hidden !important;
+        }
+        ul.nav.nav-pills.bg-light {
+            margin-top: 50px !important;
+            margin-bottom: 10px !important;
+            width: 100% !important;
+            display: flex !important;
+            border-radius: 12px !important;
+        }
+        ul.nav.nav-pills .nav-link {
+            padding: 6px 12px !important;
+            font-size: 13px;
+        }
+        
+        /* Search Container Mobile Fix */
+        .search-container {
+            flex-direction: column;
+            gap: 10px;
+            padding: 10px !important;
+            margin: 0 !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
+        }
+        .search-group-left, .search-group-right {
+            width: 100% !important;
+            min-width: unset !important;
+            flex-wrap: wrap !important;
+            gap: 6px !important;
+        }
+        .search-group-right {
+            justify-content: flex-start !important;
+        }
+        
+        /* Button Size Reduction */
+        .search-group-right .btn {
+            padding: 6px 10px !important;
+            font-size: 12px !important;
+        }
+        .btn-reset {
+            padding: 6px 8px !important;
+        }
+        .btn-reset i + span,
+        .btn-reset::after {
+            display: none !important;
+        }
+        
+        /* Content Overflow Prevention */
+        .content-cloak, #form_search, #list_div, .item-row {
+            width: 100% !important;
+            max-width: 100% !important;
+            box-sizing: border-box !important;
+            overflow-x: hidden !important;
+        }
+        
+        /* Item Row Fixes */
+        .item-row {
+            padding: 8px !important;
+            margin: 4px 0 !important;
+        }
+        .info-container {
+            overflow: hidden !important;
+        }
+        .item-title, .filename-text, .meta-program {
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            max-width: 100% !important;
+        }
+        
+        /* Toggle and Action Buttons */
+        .item-actions {
+            flex-wrap: wrap !important;
+            gap: 6px !important;
+        }
+        .action-btn {
+            padding: 4px 8px !important;
+            font-size: 11px !important;
+        }
+    }
+    
+    /* Custom Notify Styling for Mobile */
+    .bootstrap-notify-container,
+    [data-notify="container"] {
+        max-width: 90vw !important;
+        width: auto !important;
+        right: 5vw !important;
+        left: 5vw !important;
+        padding: 12px 16px !important;
+        border-radius: 10px !important;
+        background: rgba(30, 27, 75, 0.95) !important;
+        backdrop-filter: blur(10px) !important;
+        border: 1px solid rgba(139, 92, 246, 0.3) !important;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4) !important;
+        color: #e0e7ff !important;
+        font-size: 13px !important;
+        z-index: 10000 !important;
+    }
+    [data-notify="container"].alert-success {
+        border-color: rgba(16, 185, 129, 0.4) !important;
+        background: rgba(6, 78, 59, 0.95) !important;
+    }
+    [data-notify="container"].alert-warning {
+        border-color: rgba(245, 158, 11, 0.4) !important;
+        background: rgba(120, 53, 15, 0.95) !important;
+    }
+    [data-notify="container"].alert-danger {
+        border-color: rgba(239, 68, 68, 0.4) !important;
+        background: rgba(127, 29, 29, 0.95) !important;
+    }
+    [data-notify="message"] {
+        color: #e0e7ff !important;
+    }
+    [data-notify="title"] {
+        color: #fff !important;
+        font-weight: 600 !important;
+    }
+</style>
+
 <div class="content-cloak">
-  <form id="form_search" class="form-inline" style="text-align:left">
-    <div class="container-fluid">
-      <div class="row show-grid">
-        <span class="col-md-4">
-          <select id="order" name="order" class="form-control form-control-sm">
-            <option value="desc">최근순</option>
-            <option value="asc">오래된순</option>
-          </select>
-          <select id="option" name="option" class="form-control form-control-sm">
-            <option value="all">전체</option>
-            <option value="completed">완료</option>
-          </select>
-        </span>
-        <span class="col-md-8">
-          <input id="search_word" name="search_word" class="form-control form-control-sm w-75" type="text" placeholder="" aria-label="Search">
-          <button id="search" class="btn btn-sm btn-outline-success">검색</button>
-          <button id="reset_btn" class="btn btn-sm btn-outline-success">리셋</button>
-        </span>
-      </div>
+    <form id="form_search" class="form-inline" style="text-align:left; width:100%;">
+        <div class="search-container">
+            <div class="search-group-left">
+                 <select id="order" name="order" class="form-control custom-select">
+                    <option value="desc">최근순</option>
+                    <option value="asc">오래된 순</option>
+                  </select>
+                  <select id="option" name="option" class="form-control custom-select">
+                    <option value="all">전체</option>
+                    <option value="completed">완료</option>
+                  </select>
+            </div>
+            <div class="search-group-right">
+                  <input id="search_word" name="search_word" class="form-control custom-input" type="text" placeholder="애니라이프 검색..." aria-label="Search">
+                  <button id="search" class="btn custom-btn btn-search"><i class="fa fa-search"></i> 검색</button>
+                  <button id="delete_selected_btn" class="btn custom-btn btn-delete-selected" style="display:none;"><i class="fa fa-trash"></i> 선택 삭제</button>
+                  <button id="reset_btn" class="btn custom-btn btn-reset"><i class="fa fa-refresh"></i> 초기화</button>
+            </div>
+        </div>
+    </form>
+    
+    <div class="d-flex justify-content-start align-items:center mb-3 px-1">
+        <div class="d-flex align-items-center gap-2">
+            <input type="checkbox" id="all_check_box" data-toggle="toggle" data-on="전체 선택" data-off="전체 선택" data-onstyle="success" data-offstyle="secondary" data-size="small">
+        </div>
     </div>
-  </form>
-  <div id='page1'></div>
-  {{ macros.m_hr_head_top() }}
-  {{ macros.m_row_start('0') }}
-  {{ macros.m_col(2,  macros.m_strong('Poster')) }}
-  {{ macros.m_col(10,  macros.m_strong('Info')) }}
-  {{ macros.m_row_end() }}
-  {{ macros.m_hr_head_bottom() }}
-  <div id="list_div"></div>
-  <div id='page2'></div>
+
+    <div id='page1'></div>
+    <div id="list_div"></div>
+    <div id='page2'></div>
 </div>
 
-<script type="text/javascript">
-var package_name = "{{arg['package_name']}}";
-var sub = "{{arg['sub']}}";
-var current_data = null;
+<!-- DB Reset Confirmation Modal -->
+<div class="modal fade animate__animated animate__fadeIn" id="db_reset_modal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content" style="border-color: rgba(239, 68, 68, 0.3);">
+            <div class="modal-header">
+                <h5 class="modal-title font-weight-bold text-danger"><i class="fa fa-trash mr-2"></i> DB 초기화 확인</h5>
+                <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body text-center py-4">
+                <p class="mb-0" style="font-size: 1.1rem; color: #fecaca;">정말로 **모든** 다운로드 목록을 삭제하시겠습니까?</p>
+                <small class="text-muted">이 작업은 DB의 모든 기록을 삭제하며 복구할 수 없습니다.</small>
+            </div>
+            <div class="modal-footer" style="border-top: 1px solid rgba(167, 139, 250, 0.1);">
+                <button type="button" class="btn btn-secondary custom-btn" data-dismiss="modal" style="background: rgba(255,255,255,0.1); border: none;">취소</button>
+                <button type="button" id="confirm_db_reset_btn" class="btn btn-danger custom-btn" style="background: linear-gradient(135deg, #ef4444, #b91c1c); border: none;">전체 삭제 실행</button>
+            </div>
+        </div>
+    </div>
+</div>
 
-$(document).ready(function(){
-  global_sub_request_search('1');
-});
+<!-- Delete Confirmation Modal -->
+<div class="modal fade animate__animated animate__fadeIn" id="delete_modal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title font-weight-bold"><i class="fa fa-warning text-warning mr-2"></i> 삭제 확인</h5>
+                <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body text-center py-4">
+                <p id="delete_modal_body_text" class="mb-0" style="font-size: 1.1rem; color: #cbd5e1;">정말로 이 항목을 삭제하시겠습니까?</p>
+                <small class="text-muted">이 작업은 되돌릴 수 없으며 원본 파일은 삭제되지 않습니다.</small>
+            </div>
+            <div class="modal-footer" style="border-top: 1px solid rgba(167, 139, 250, 0.1);">
+                <button type="button" class="btn btn-secondary custom-btn" data-dismiss="modal" style="background: rgba(255,255,255,0.1); border: none;">취소</button>
+                <button type="button" id="confirm_delete_btn" class="btn btn-danger custom-btn" style="background: linear-gradient(135deg, #ef4444, #dc2626); border: none;">삭제 실행</button>
+            </div>
+        </div>
+    </div>
+</div>
 
-$("#search").click(function(e) {
-  e.preventDefault();
-  global_sub_request_search('1');
-});
-
-$("body").on('click', '#page', function(e){
-  e.preventDefault();
-  global_sub_request_search($(this).data('page'));
-});
-
-$("#reset_btn").click(function(e) {
-  e.preventDefault();
-  document.getElementById("order").value = 'desc';
-  document.getElementById("option").value = 'all';
-  document.getElementById("search_word").value = '';
-  global_sub_request_search('1')
-});
-
-
-$("body").on('click', '#json_btn', function(e){
-  e.preventDefault();
-  var id = $(this).data('id');
-  for (i in current_data.list) {
-    if (current_data.list[i].id == id) {
-      m_modal(current_data.list[i])
-    }
-  }
-});
-
-$("body").on('click', '#self_search_btn', function(e){
-  e.preventDefault();
-  var search_word = $(this).data('title');
-  document.getElementById("search_word").value = search_word;
-  global_sub_request_search('1')
-});
-
-$("body").on('click', '#remove_btn', function(e) {
-  e.preventDefault();
-  id = $(this).data('id');
-  $.ajax({
-    url: '/'+package_name+'/ajax/'+sub+ '/db_remove',
-    type: "POST", 
-    cache: false,
-    data: {id:id},
-    dataType: "json",
-    success: function (data) {
-      if (data) {
-        $.notify('<strong>삭제되었습니다.</strong>', {
-          type: 'success'
-        });
-        global_sub_request_search(current_data.paging.current_page, false)
-      } else {
-        $.notify('<strong>삭제 실패</strong>', {
-          type: 'warning'
-        });
-      }
-    }
-  });
-});
-
-$("body").on('click', '#request_btn', function(e){
-  e.preventDefault();
-  var content_code = $(this).data('content_code');
-  $(location).attr('href', '/' + package_name + '/' + sub + '/request?content_code=' + content_code)
-});
-
-
-
-function make_list(data) {
-  //console.log(data)
-  str = '';
-  for (i in data) {
-    //console.log(data[i])
-    str += m_row_start();
-    str += m_col(1, data[i].id);
-    tmp = (data[i].status == 'completed') ? '완료' : '미완료';
-    str += m_col(1, tmp);
-    tmp = data[i].created_time + '(추가)';
-    if (data[i].completed_time != null)
-      tmp += data[i].completed_time + '(완료)';
-    str += m_col(3, tmp)
-    tmp = data[i].savepath + '<br>' + data[i].filename + '<br><br>';
-    tmp2 = m_button('json_btn', 'JSON', [{'key':'id', 'value':data[i].id}]);
-    tmp2 += m_button('request_btn', '작품 검색', [{'key':'content_code', 'value':data[i].content_code}]);
-    tmp2 += m_button('self_search_btn', '목록 검색', [{'key':'title', 'value':data[i].title}]);
-    tmp2 += m_button('remove_btn', '삭제', [{'key':'id', 'value':data[i].id}]);
-    tmp += m_button_group(tmp2)
-    str += m_col(7, tmp)
-    str += m_row_end();
-    if (i != data.length -1) str += m_hr();
-  }
-  document.getElementById("list_div").innerHTML = str;
-}
-
-
-
-
-</script>
-<style>
-body {
-  width: 100%;
-  /*height: 100vh;*/
-  /*display: flex;*/
-  align-items: center;
-  justify-content: center;
-  background-size: 300% 300%;
-  background-image: linear-gradient(
-        -45deg,
-        rgba(59,173,227,1) 0%,
-        rgba(87,111,230,1) 25%,
-        rgba(152,68,183,1) 51%,
-        rgba(255,53,127,1) 100%
-  );
-  animation: AnimateBG 20s ease infinite;
-}
-#main_container {
-  background-color: white;
-}
-
-@keyframes AnimateBG {
-  0%{background-position:0% 50%}
-  50%{background-position:100% 50%}
-  100%{background-position:0% 50%}
-}
-
-    /* Navigation Menu Override */
-    ul.nav.nav-pills.bg-light {
-        background-color: rgba(30, 41, 59, 0.6) !important;
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 50rem !important;
-        padding: 6px !important;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2) !important;
-        display: inline-flex !important;
-        flex-wrap: wrap;
-        justify-content: center;
-        width: auto !important;
-        margin-bottom: 20px;
-    }
-
-    ul.nav.nav-pills .nav-item {
-        margin: 0 2px;
-    }
-
-    ul.nav.nav-pills .nav-link {
-        border-radius: 50rem !important;
-        padding: 8px 20px !important;
-        color: #94a3b8 !important;
-        font-weight: 600;
-        transition: all 0.3s ease;
-    }
-
-    ul.nav.nav-pills .nav-link:hover {
-        background-color: rgba(255, 255, 255, 0.1);
-        color: #fff !important;
-        transform: translateY(-1px);
-    }
-
-    ul.nav.nav-pills .nav-link.active {
-        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
-        color: #fff !important;
-        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
-    }
-</style>
-
-<style>
-    /* Smooth Load Transition */
-    .content-cloak, 
-    #menu_module_div, 
-    #menu_page_div {
-        opacity: 0;
-        transition: opacity 0.5s ease-out;
-    }
-    
-    /* Staggered Delays for Natural Top-Down Flow */
-    #menu_module_div.visible {
-        opacity: 1;
-        transition-delay: 0ms;
-    }
-
-    #menu_page_div.visible {
-        opacity: 1;
-        transition-delay: 150ms;
-    }
-
-    .content-cloak.visible {
-        opacity: 1;
-        transition-delay: 300ms;
-    }
-    
-    /* Navigation Menu Override (Top Sub-menu) */
-    ul.nav.nav-pills.bg-light {
-        background-color: rgba(30, 41, 59, 0.6) !important;
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 50rem !important;
-        padding: 6px !important;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2) !important;
-        display: inline-flex !important;
-        flex-wrap: wrap;
-        justify-content: center;
-        width: auto !important;
-        margin-bottom: 20px;
-    }
-
-    ul.nav.nav-pills .nav-item { margin: 0 2px; }
-    ul.nav.nav-pills .nav-link {
-        border-radius: 50rem !important;
-        padding: 8px 20px !important;
-        color: #94a3b8 !important;
-        font-weight: 600;
-        transition: all 0.3s ease;
-    }
-    ul.nav.nav-pills .nav-link:hover {
-        background-color: rgba(255, 255, 255, 0.1);
-        color: #fff !important;
-        transform: translateY(-1px);
-    }
-    ul.nav.nav-pills .nav-link.active {
-        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
-        color: #fff !important;
-        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
-    }
-</style>
+<script src="{{ url_for('.static', filename='js/sjva_global1.js') }}"></script>
+<script src="{{ url_for('.static', filename='js/sjva_ui14.js') }}"></script>
 
 <script type="text/javascript">
-$(document).ready(function(){
-  // Smooth Load Trigger
-  setTimeout(function() {
-      $('.content-cloak, #menu_module_div, #menu_page_div').addClass('visible');
-  }, 100);
-});
+    var package_name = "{{arg['package_name']}}";
+    var sub = "{{arg['sub']}}";
+    var current_data = null;
+
+    $(document).ready(function(){
+        setTimeout(function() { $('.content-cloak, #menu_page_div').addClass('visible'); }, 100);
+        global_sub_request_search('1');
+    });
+
+    function global_sub_request_search(page, move_top = true) {
+        var formData = get_formdata('#form_search')
+        formData += '&page=' + page;
+        $.ajax({
+            url: '/' + package_name + '/ajax/' + sub + '/web_list',
+            type: "POST",
+            cache: false,
+            data: formData,
+            dataType: "json",
+            success: function (data) {
+                current_data = data;
+                if (move_top) window.scrollTo(0,0);
+                make_list(data.list);
+                make_page_html(data.paging);
+                $('#all_check_box').bootstrapToggle('off');
+                update_batch_btn();
+            }
+        });
+    }
+
+    $("#search").click(function (e) {
+        e.preventDefault();
+        global_sub_request_search('1');
+    });
+
+    $("body").on('click', '#page', function (e) {
+        e.preventDefault();
+        global_sub_request_search($(this).data('page'));
+    });
+
+    $("#reset_btn").click(function (e) {
+        e.preventDefault();
+        // search_reset 기능 (필터 초기화)
+        $('#order').val('desc');
+        $('#option').val('all');
+        $('#search_word').val('');
+        global_sub_request_search('1');
+        
+        // 사용자 요청에 따라 '초기화' 버튼이 DB 전체 삭제 기능도 포함하도록 모달 띄움
+        $('#db_reset_modal').modal('show');
+    });
+
+    $('#confirm_db_reset_btn').click(function(e) {
+        e.preventDefault();
+        $('#db_reset_modal').modal('hide');
+        $.ajax({
+            url: '/' + package_name + '/ajax/' + sub + '/db_delete',
+            type: "POST",
+            cache: false,
+            data: {day: 'all'},
+            dataType: "json",
+            success: function (data) {
+                if (data) {
+                    $.notify('DB를 초기화하였습니다.', {type: 'success'});
+                    global_sub_request_search('1');
+                } else {
+                    $.notify('초기화 실패', {type: 'warning'});
+                }
+            }
+        });
+    });
+
+    function make_list(data) {
+        str = '';
+        for (i in data) {
+            str += '<div class="item-row animate__animated animate__fadeInUp" style="animation-delay: ' + (i * 0.05) + 's;">';
+            
+            // Poster
+            str += '<div class="poster-container">';
+            if (data[i].image_link) {
+                // Use proxy to bypass Referer restriction
+                var proxy_url = '/' + package_name + '/ajax/' + sub + '/proxy_image?url=' + encodeURIComponent(data[i].image_link);
+                str += '<img src="' + proxy_url + '" class="poster-img" loading="lazy" onerror="this.src=\'https://placehold.co/100x140?text=No+Image\'">';
+            }
+            str += '<div class="episode-badge">' + (data[i].episode_no || '?') + '화</div>';
+            str += '</div>';
+
+            // Info
+            str += '<div class="info-container">';
+            str += '<div class="item-title-row" style="display:flex; justify-content:space-between; align-items:center;">';
+            // Use episode_title if available, fallback to title
+            var display_title = data[i].episode_title || data[i].title;
+            str += '<div class="item-title" title="' + display_title + '">' + display_title + '</div>';
+            
+            var status_cls = 'status-wait';
+            var status_kor = '대기';
+            if (data[i].status == 'completed') { status_cls = 'status-completed'; status_kor = '완료'; }
+            else if (data[i].status == 'downloading') { status_cls = 'status-downloading'; status_kor = '다운로드 중'; }
+            else if (data[i].status == 'fail') { status_cls = 'status-fail'; status_kor = '실패'; }
+            
+            str += '<span class="status-badge ' + status_cls + '">' + status_kor + '</span>';
+            str += '</div>';
+            
+            str += '<div class="item-meta-row">';
+            // Show Series Title from content_title or title
+            var series_title = data[i].content_title || data[i].title;
+            str += '<span class="meta-program" title="' + series_title + '"><i class="fa fa-tv"></i> ' + series_title + '</span>';
+            str += '<span class="meta-date"><i class="fa fa-clock-o"></i> ' + data[i].created_time + '</span>';
+            str += '</div>';
+
+            str += '<div class="filename-text" title="' + data[i].filename + '">';
+            str += '<i class="fa fa-file-movie-o mr-1"></i> ' + (data[i].filename || '파일명 생성 전');
+            str += '</div>';
+
+            // Actions
+            str += '<div class="item-actions">';
+            str += '<input type="checkbox" class="item-check-box" data-id="' + data[i].id + '" data-toggle="toggle" data-on="선택" data-off="-" data-onstyle="success" data-offstyle="secondary" data-size="small">';
+            if (data[i].status == 'completed') {
+                str += '<button id="merge_subtitle_btn" class="action-btn" data-id="' + data[i].id + '"><i class="fa fa-file-text-o"></i> 자막합침</button>';
+            }
+            str += '<button id="remove_btn" class="action-btn" data-id="' + data[i].id + '"><i class="fa fa-trash"></i> 삭제</button>';
+            str += '</div>';
+
+            str += '</div>'; // End Info
+            str += '</div>'; // End Row
+        }
+        if (str == '') str = '<div class="text-center p-5"><h4>결과가 없습니다.</h4></div>';
+        $("#list_div").html(str);
+        $('.item-check-box').bootstrapToggle();
+    }
+
+    var delete_id = null;
+    $("body").on('click', '#remove_btn', function (e) {
+        e.preventDefault();
+        delete_id = $(this).data('id');
+        $('#delete_modal_body_text').html('정말로 이 항목을 삭제하시겠습니까?');
+        $('#delete_modal').modal('show');
+    });
+
+    // Batch Selection Logic (Bootstrap Toggle)
+    $("body").on('change', '.item-check-box', function(e) {
+        update_batch_btn();
+    });
+
+    $('#all_check_box').change(function() {
+        var is_checked = $(this).prop('checked');
+        $('.item-check-box').bootstrapToggle(is_checked ? 'on' : 'off');
+        update_batch_btn();
+    });
+
+    function update_batch_btn() {
+        var count = $('.item-check-box:checked').length;
+        if (count > 0) {
+            $('#delete_selected_btn').show().html('<i class="fa fa-trash"></i> 선택 삭제 (' + count + ')');
+        } else {
+            $('#delete_selected_btn').hide();
+        }
+    }
+
+    $("#delete_selected_btn").click(function(e) {
+        e.preventDefault();
+        var ids = [];
+        $('.item-check-box:checked').each(function() {
+            ids.push($(this).data('id'));
+        });
+        
+        if (ids.length > 0) {
+            delete_id = ids.join(',');
+            $('#delete_modal_body_text').html('선택한 <b>' + ids.length + '개</b>의 항목을 정말로 삭제하시겠습니까?');
+            $('#delete_modal').modal('show');
+        }
+    });
+
+    $('#confirm_delete_btn').click(function(e) {
+        e.preventDefault();
+        $('#delete_modal').modal('hide');
+        
+        $.ajax({
+            url: '/' + package_name + '/ajax/' + sub + '/db_delete_item',
+            type: "POST",
+            cache: false,
+            data: {db_id: delete_id},
+            dataType: "json",
+            success: function (ret) {
+                if (ret) {
+                    $.notify('삭제하였습니다.', {type: 'success'});
+                    $('#all_check_box').bootstrapToggle('off');
+                    update_batch_btn();
+                    global_sub_request_search(current_data.paging.current_page, false);
+                } else {
+                    $.notify('삭제 실패', {type: 'warning'});
+                }
+            }
+        });
+    });
+
+    $("body").on('click', '#merge_subtitle_btn', function (e) {
+        e.preventDefault();
+        var id = $(this).data('id');
+        $.ajax({
+            url: '/' + package_name + '/ajax/' + sub + '/command',
+            type: "POST",
+            cache: false,
+            data: {command: 'merge_subtitle', arg1: id},
+            dataType: "json",
+            success: function (data) {
+                if (data.ret == 'success') {
+                    $.notify('자막 합성이 백그라운드로 시작되었습니다.', {type: 'success'});
+                } else {
+                    $.notify('작업 실패: ' + data.log, {type: 'warning'});
+                }
+            }
+        });
+    });
 </script>
-<style>
-/* Mobile Margin Fix */
-@media (max-width: 768px) {
-    body { overflow-x: hidden !important; padding: 0 !important; margin: 0 !important; }
-    .container, .container-fluid, .row, form, #program_list, #program_auto_form, #episode_list, .queue-container, #yommi_wrapper, #main_container {
-        width: 100% !important; max-width: 100% !important;
-        padding-left: 4px !important; padding-right: 4px !important;
-        margin-left: 0 !important; margin-right: 0 !important;
-        box-sizing: border-box !important;
-    }
-    .form-group, .form-inline, [class*="col-"] {
-        flex: 0 0 100% !important; max-width: 100% !important; width: 100% !important;
-        padding-left: 0 !important; padding-right: 0 !important;
-    }
-    .row { margin-left: 0 !important; margin-right: 0 !important; }
-    .card, .card.p-4, .card.p-lg-5, .card.border-light {
-         width: calc(100% - 8px) !important; max-width: 100% !important;
-         padding: 8px !important; margin: 4px !important;
-         border-radius: 12px !important; box-sizing: border-box !important;
-    }
-    .badge {
-        white-space: normal !important; text-align: left !important;
-        line-height: 1.4 !important; height: auto !important; display: inline-block !important;
-    }
-}
-</style>
+
 {% endblock %}

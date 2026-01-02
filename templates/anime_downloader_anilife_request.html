@@ -1,37 +1,67 @@
 {% extends "base.html" %} {% block content %}
 
+<style>
+/* Global Container Margin Overrides */
+#main_container {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding-left: 15px !important;
+    padding-right: 15px !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+}
+.container, .container-fluid {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+</style>
 
-<div class="content-cloak">
+<div id="yommi_wrapper" class="container-fluid mt-2 mt-md-4 mx-auto content-cloak" style="max-width: 100%;">
     <div id="preloader" class="loader">
         <div class="loader-inner">
-            <div class="loader-line-wrap">
-                <div class="loader-line"></div>
-            </div>
-            <div class="loader-line-wrap">
-                <div class="loader-line"></div>
-            </div>
-            <div class="loader-line-wrap">
-                <div class="loader-line"></div>
-            </div>
-            <div class="loader-line-wrap">
-                <div class="loader-line"></div>
-            </div>
-            <div class="loader-line-wrap">
-                <div class="loader-line"></div>
-            </div>
+            <div class="loader-line-wrap"><div class="loader-line"></div></div>
+            <div class="loader-line-wrap"><div class="loader-line"></div></div>
+            <div class="loader-line-wrap"><div class="loader-line"></div></div>
+            <div class="loader-line-wrap"><div class="loader-line"></div></div>
+            <div class="loader-line-wrap"><div class="loader-line"></div></div>
         </div>
     </div>
-    <div id="main_content" style="display: none; opacity: 0; transition: opacity 0.3s ease-in;">
-        <form id="program_list">
-            {{ macros.setting_input_text_and_buttons('code', '작품 Code',
-            [['analysis_btn', '분석'], ['go_anilife_btn', 'Go 애니라이프']], desc='예)
-            "https://anilife.live/g/l?id=f6e83ec6-bd25-4d6c-9428-c10522687604" 이나 "f6e83ec6-bd25-4d6c-9428-c10522687604"')
-            }}
-        </form>
-        <form id="program_auto_form">
-            <div id="episode_list"></div>
-        </form>
-    </div>
+    
+    <form id="program_list">
+        <div class="card p-2 p-md-4 mb-2 mb-md-4 border-0" style="background: rgba(49, 46, 129, 0.6); backdrop-filter: blur(10px); box-shadow: 0 4px 20px rgba(139, 92, 246, 0.2); border-radius: 16px;">
+            <div class="form-group mb-0">
+                <label for="code" class="text-white font-weight-bold mb-2" style="color: #c4b5fd !important;">
+                    <i class="fa fa-search mr-2" style="color: #a78bfa;"></i>작품 Code
+                </label>
+                <div class="input-group input-group-lg">
+                    <input type="text" id="code" name="code" class="form-control border-0" 
+                           placeholder="URL 또는 코드를 입력하세요" 
+                           style="background: rgba(30, 27, 75, 0.8); color: #e0e7ff; box-shadow: inset 0 2px 4px rgba(0,0,0,0.3); border-radius: 12px 0 0 12px;">
+                    <div class="input-group-append">
+                        <button id="analysis_btn" class="btn px-2 px-md-4 font-weight-bold" type="button"
+                                style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: white; box-shadow: 0 0 15px rgba(139, 92, 246, 0.4);">
+                            <i class="fa fa-cogs mr-1"></i> 분석
+                        </button>
+                        <button id="go_anilife_btn" class="btn px-2 px-md-3" type="button"
+                                style="background: rgba(167, 139, 250, 0.2); border: 1px solid rgba(167, 139, 250, 0.4); color: #c4b5fd; border-radius: 0 12px 12px 0;">
+                            <span class="d-none d-md-inline">Go 애니라이프</span>
+                            <span class="d-md-none">Go</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center mt-2 small" style="color: #a78bfa;">
+                    <i class="fa fa-info-circle mr-1"></i> 
+                    <span>예) "https://anilife.live/g/l?id=xxx" 또는 "f6e83ec6-bd25-4d6c-9428-c10522687604"</span>
+                </div>
+            </div>
+        </div>
+    </form>
+    
+    <form id="program_auto_form">
+        <div id="episode_list"></div>
+    </form>
 </div>
 <!--전체-->
 <script src="{{ url_for('.static', filename='js/sjva_ui14.js') }}"></script>
@@ -40,7 +70,7 @@
     const package_name = "{{arg['package_name'] }}";
     const sub = "{{arg['sub'] }}";
     const anilife_url = "{{arg['anilife_url']}}";
-    {#let current_data = null;#}
+    // let current_data = null;
 
     const params = new Proxy(new URLSearchParams(window.location.search), {
         get: (searchParams, prop) => searchParams.get(prop),
@@ -133,33 +163,21 @@
         episodeList.style.transition = 'opacity 0.3s ease-in';
         
         str = '';
-        tmp = '<div class="form-inline">'
-        tmp += m_button('check_download_btn', '선택 다운로드 추가', []);
-        tmp += m_button('all_check_on_btn', '전체 선택', []);
-        tmp += m_button('all_check_off_btn', '전체 해제', []);
-        /*
-        tmp += '&nbsp;&nbsp;&nbsp;&nbsp;<input id="new_title" name="new_title" class="form-control form-control-sm" value="'+data.title+'">'
-        tmp += '</div>'
-        tmp += m_button('apply_new_title_btn', '저장폴더명, 파일명 제목 변경', []);
-        tmp += m_button('search_tvdb_btn', 'TVDB', []);
-        tmp = m_button_group(tmp)
-        */
-        str += tmp
+
         // program
-        str += m_hr_black();
         str += m_row_start(0);
-        tmp = ''
+        
+        let posterHtml = '';
         if (data.image != null) {
-            // CDN 이미지 프록시 적용
             let proxyImgSrc = data.image;
             if (data.image && data.image.includes('cdn.anilife.live')) {
-                proxyImgSrc = '/' + package_name + '/ajax/' + sub + '/proxy_image?image_url=' + encodeURIComponent(data.image);
+                proxyImgSrc = '/' + package_name + '/ajax/' + sub + '/proxy_image?url=' + encodeURIComponent(data.image);
             }
-            tmp = '<img src="' + proxyImgSrc + '" class="img-fluid series-main-img" onerror="this.src=\'../static/img_loader_x200.svg\'">';
+            posterHtml = '<div class="series-poster-side mb-3 mb-md-0"><img src="' + proxyImgSrc + '" class="img-fluid series-main-img" onerror="this.src=\'../static/img_loader_x200.svg\'"></div>';
         }
-        str += m_col(3, tmp)
-        tmp = ''
-        tmp += m_row_start(2) + m_col(3, '제목', 'right') + m_col(9, '<strong style="font-size:1.3em;">' + data.title + '</strong>') + m_row_end();
+
+        tmp = '';
+        tmp += '<div class="mb-3"><strong style="font-size:1.6em; color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.3);">' + data.title + '</strong></div>';
         
         // des1 데이터를 각 항목별로 파싱하여 표시
         if (data.des1) {
@@ -175,9 +193,22 @@
             // 첫 번째 br 태그 제거 (첫 줄에는 필요없음)
             formattedDes = formattedDes.replace(/^<br>/, '');
             
-            tmp += '<div class="series-info-box">' + formattedDes + '</div>';
+            tmp += '<div class="series-info-box d-flex flex-column flex-md-row animate__animated animate__fadeIn">';
+            if (posterHtml) {
+                tmp += posterHtml;
+            }
+            tmp += '<div class="series-info-side ml-md-4">' + formattedDes + '</div>';
+            tmp += '</div>';
+            
+            // Integrated Actions Toolbar (Linkkf Style)
+            tmp += '<div class="d-flex flex-wrap align-items-center gap-2 p-3 mt-3 rounded" style="background: rgba(30, 27, 75, 0.4); border: 1px solid rgba(167, 139, 250, 0.1);">';
+            tmp += '<button id="check_download_btn" class="action-btn action-btn-primary mr-2" style="padding: 8px 16px; font-size: 0.9em;"><i class="fa fa-download"></i> 선택 다운로드</button>';
+            tmp += '<button id="all_check_on_btn" class="action-btn action-btn-secondary mr-2" style="padding: 8px 16px; font-size: 0.9em;"><i class="fa fa-check-square-o"></i> 전체 선택</button>';
+            tmp += '<button id="all_check_off_btn" class="action-btn action-btn-outline mr-3" style="padding: 8px 16px; font-size: 0.9em;"><i class="fa fa-square-o"></i> 해제</button>';
+            tmp += '</div>';
         }
-        str += m_col(9, tmp)
+
+        str += m_col(12, tmp)
         str += m_row_end();
 
         str += '<div class="episode-list-container">';
@@ -185,7 +216,7 @@
             // CDN 이미지 프록시 적용
             let epThumbSrc = data.episode[i].thumbnail || '';
             if (epThumbSrc && epThumbSrc.includes('cdn.anilife.live')) {
-                epThumbSrc = '/' + package_name + '/ajax/' + sub + '/proxy_image?image_url=' + encodeURIComponent(epThumbSrc);
+                epThumbSrc = '/' + package_name + '/ajax/' + sub + '/proxy_image?url=' + encodeURIComponent(epThumbSrc);
             }
             
             str += '<div class="episode-card">';
@@ -291,25 +322,19 @@
     })
 
     $(document).ready(function () {
-        // DOM 로딩 완료 후 콘텐츠 표시
-        const mainContent = document.getElementById('main_content');
+        // DOM 로딩 완료 후 preloader 숨기기
         const preloader = document.getElementById('preloader');
         
-        // 메인 콘텐츠 보이기 (fade-in 효과)
-        mainContent.style.display = 'block';
         setTimeout(function() {
-            mainContent.style.opacity = '1';
-            // preloader 숨기기
             if (preloader) {
                 preloader.style.opacity = '0';
                 setTimeout(function() {
                     preloader.style.display = 'none';
                 }, 300);
             }
-        }, 100);
+        }, 500);
         
         $("#loader").css("display", 'none');
-        // console.log({{ arg['code'] }})
     });
 
     $("#analysis_btn").unbind("click").bind('click', function (e) {
@@ -452,22 +477,95 @@
         box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
     }
 
+    /* ========== Cosmic Violet Theme (Anilife Exclusive) ========== */
+    body {
+        background: linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #4c1d95 100%) !important;
+        background-attachment: fixed;
+        color: #e0e7ff;
+        min-height: 100vh;
+        font-family: 'Inter', 'Noto Sans KR', system-ui, sans-serif;
+    }
+
+
+    
+    .action-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 10px 18px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        border: none;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    
+    .action-btn-primary {
+        background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+        color: white;
+        box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+    }
+    
+    .action-btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
+    }
+    
+    .action-btn-secondary {
+        background: rgba(167, 139, 250, 0.2);
+        color: #c4b5fd;
+        border: 1px solid rgba(167, 139, 250, 0.3);
+    }
+    
+    .action-btn-secondary:hover {
+        background: rgba(167, 139, 250, 0.35);
+        color: white;
+    }
+    
+    .action-btn-outline {
+        background: transparent;
+        color: #a78bfa;
+        border: 1px solid rgba(167, 139, 250, 0.3);
+    }
+    
+    .action-btn-outline:hover {
+        background: rgba(167, 139, 250, 0.15);
+        color: #c4b5fd;
+    }
+
     /* 시리즈 정보 박스 스타일 */
     .series-info-box {
-        background: linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%);
+        background: linear-gradient(135deg, rgba(49, 46, 129, 0.95) 0%, rgba(30, 27, 75, 0.95) 100%);
         border-radius: 12px;
-        padding: 20px 25px;
+        padding: 25px;
         margin-top: 15px;
-        line-height: 2.2;
-        color: #e2e8f0;
-        border: 1px solid rgba(148, 163, 184, 0.2);
+        color: #e0e7ff;
+        border: 1px solid rgba(167, 139, 250, 0.2);
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        display: flex;
+        gap: 20px;
+    }
+    
+    .series-poster-side {
+        width: 180px;
+        min-width: 180px;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        align-self: flex-start;
+    }
+    
+    .series-info-side {
+        flex: 1;
+        line-height: 2.2;
     }
     
     .series-info-box strong {
-        color: #60a5fa;
+        color: #a78bfa;
         font-weight: 600;
-        min-width: 100px;
+        min-width: 90px;
         display: inline-block;
     }
 
@@ -485,18 +583,18 @@
         align-items: center;
         gap: 12px;
         padding: 10px 12px;
-        background: linear-gradient(135deg, rgba(30, 41, 59, 0.85) 0%, rgba(15, 23, 42, 0.85) 100%);
+        background: linear-gradient(135deg, rgba(49, 46, 129, 0.85) 0%, rgba(30, 27, 75, 0.85) 100%);
         border-radius: 8px;
-        border: 1px solid rgba(148, 163, 184, 0.12);
+        border: 1px solid rgba(167, 139, 250, 0.15);
         transition: all 0.2s ease;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     }
     
     .episode-card:hover {
-        background: linear-gradient(135deg, rgba(51, 65, 85, 0.95) 0%, rgba(30, 41, 59, 0.95) 100%);
-        border-color: rgba(96, 165, 250, 0.5);
+        background: linear-gradient(135deg, rgba(76, 29, 149, 0.9) 0%, rgba(49, 46, 129, 0.9) 100%);
+        border-color: rgba(167, 139, 250, 0.5);
         transform: translateY(-2px);
-        box-shadow: 0 4px 15px rgba(96, 165, 250, 0.2);
+        box-shadow: 0 4px 15px rgba(139, 92, 246, 0.25);
     }
     
     /* 에피소드 썸네일 */
@@ -507,7 +605,7 @@
         height: 42px;
         border-radius: 5px;
         overflow: hidden;
-        background: linear-gradient(135deg, rgba(0, 0, 0, 0.3) 0%, rgba(30, 41, 59, 0.5) 100%);
+        background: linear-gradient(135deg, rgba(0, 0, 0, 0.3) 0%, rgba(49, 46, 129, 0.5) 100%);
         flex-shrink: 0;
     }
     
@@ -527,7 +625,7 @@
         position: absolute;
         bottom: 2px;
         left: 2px;
-        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+        background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
         color: white;
         font-size: 9px;
         font-weight: 700;
@@ -548,7 +646,7 @@
     }
     
     .episode-title {
-        color: #e2e8f0;
+        color: #e0e7ff;
         font-weight: 500;
         font-size: 13px;
         line-height: 1.3;
@@ -560,7 +658,7 @@
     }
     
     .episode-date {
-        color: #64748b;
+        color: #a78bfa;
         font-size: 11px;
         white-space: nowrap;
         flex-shrink: 0;
@@ -578,14 +676,84 @@
         font-size: 11px;
         padding: 3px 10px;
         border-radius: 4px;
+        background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+        border: none;
+        color: white;
+    }
+    
+    /* Bootstrap Toggle Custom Styling */
+    .toggle.btn-success, .toggle.btn-success:hover {
+        background: linear-gradient(135deg, #f472b6 0%, #db2777 100%) !important; /* Vibrant Pink/Magenta */
+        border: none !important;
+        box-shadow: 0 2px 8px rgba(236, 72, 153, 0.3) !important;
+        transition: all 0.2s ease !important;
+    }
+    
+    .toggle.btn-success:hover {
+        transform: scale(1.05);
+        box-shadow: 0 4px 12px rgba(236, 72, 153, 0.4) !important;
+    }
+    
+    .toggle.btn-secondary {
+        background: rgba(30, 27, 75, 0.6) !important;
+        border: 1px solid rgba(167, 139, 250, 0.2) !important;
+    }
+
+    .toggle-on.btn-success {
+        background: linear-gradient(135deg, #f472b6 0%, #db2777 100%) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        padding: 0 !important;
+        font-weight: 800 !important;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4) !important;
+    }
+
+    .toggle-off.btn-secondary {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        padding: 0 !important;
+        color: #94a3b8 !important;
+    }
+
+    .toggle-handle {
+        background: rgba(255, 255, 255, 0.9) !important;
+        box-shadow: 0 0 10px rgba(255, 255, 255, 0.3) !important;
     }
     
     .episode-actions .toggle {
-        transform: scale(0.85);
+        transform: scale(0.9);
+        width: 60px !important;
+        height: 25px !important;
+        min-width: 60px !important;
+        min-height: 25px !important;
     }
     
     /* 모바일 반응형 - Bootstrap 모든 레이아웃 강제 덮어쓰기 */
     @media (max-width: 768px) {
+        /* 상단 서브메뉴가 SJVA 메인 navbar에 가려지지 않도록 여백 추가 */
+        ul.nav.nav-pills.bg-light {
+            margin-top: 60px !important;
+        }
+        
+        /* 입력창 크기 최적화 */
+        .input-group.input-group-lg {
+            flex-wrap: nowrap !important;
+        }
+        .input-group.input-group-lg .form-control {
+            flex: 1 1 auto !important;
+            min-width: 0 !important;
+        }
+        .input-group.input-group-lg .input-group-append {
+            flex: 0 0 auto !important;
+        }
+        .input-group.input-group-lg .btn {
+            padding-left: 10px !important;
+            padding-right: 10px !important;
+            font-size: 0.9rem !important;
+        }
+        
         /* 전체 페이지 기본 설정 */
         body {
             overflow-x: hidden !important;
