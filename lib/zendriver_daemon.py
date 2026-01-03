@@ -58,6 +58,7 @@ def find_browser_executable() -> Optional[str]:
     # 먼저 절대 경로 확인
     for path in common_paths:
         if path.startswith("/") and os.path.exists(path):
+            log_debug(f"[ZendriverDaemon] Found browser at absolute path: {path}")
             return path
             
     # shutil.which로 PATH 확인
@@ -65,6 +66,7 @@ def find_browser_executable() -> Optional[str]:
     for cmd in ["google-chrome", "google-chrome-stable", "chromium-browser", "chromium"]:
         found = shutil.which(cmd)
         if found:
+            log_debug(f"[ZendriverDaemon] Found browser via shutil.which: {found}")
             return found
             
     return None
