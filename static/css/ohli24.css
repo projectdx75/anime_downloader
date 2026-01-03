@@ -220,6 +220,50 @@ ul.nav.nav-pills .nav-link.active {
     border: 1px solid rgba(52, 211, 153, 0.2);
 }
 
+/* Episode Badge Overlay on Thumbnail */
+.ohli24-list-page .episode-badge {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    z-index: 10;
+    background: rgba(15, 23, 42, 0.75);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    color: #fbbf24 !important; /* High-visibility Amber */
+    font-size: 10px;
+    font-weight: 800;
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid rgba(251, 191, 36, 0.4);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    pointer-events: none;
+    line-height: 1;
+}
+
+/* Persistent Mobile Colors for action buttons */
+@media (max-width: 768px) {
+    .ohli24-list-page .btn-watch-primary {
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+        border: none !important;
+        color: white !important;
+        box-shadow: 0 4px 10px rgba(37, 99, 235, 0.4) !important;
+        font-weight: 700 !important;
+    }
+
+    .ohli24-list-page .btn-remove-alt {
+        background: rgba(220, 38, 38, 0.15) !important;
+        border: 1px solid rgba(220, 38, 38, 0.4) !important;
+        color: #f87171 !important;
+        font-weight: 600 !important;
+    }
+
+    .ohli24-list-page .btn-request {
+        background: rgba(59, 130, 246, 0.1) !important;
+        border: 1px solid rgba(59, 130, 246, 0.3) !important;
+        color: #93c5fd !important;
+    }
+}
+
 /* Desktop Adaptations - Scoped to List Page */
 @media (min-width: 768px) {
     .ohli24-list-page .episode-card { margin-bottom: 10px; }
@@ -246,14 +290,15 @@ ul.nav.nav-pills .nav-link.active {
     .ohli24-list-page .file-path { margin-top: 2px; padding: 4px 8px; display: inline-block; max-width: 100%; }
 
     .ohli24-list-page .episode-right-col { 
-        width: auto; 
+        flex: 1; /* Allow to take available space */
         margin-top: 0; 
         padding-top: 0; 
         border-top: none; 
         padding-left: 20px; 
         display: flex; 
         align-items: center; 
-        min-width: 320px;
+        justify-content: space-between; /* Push dates left, buttons right */
+        min-width: 450px; /* Increase min-width for better spacing */
     }
     
     .ohli24-list-page .episode-actions { 
@@ -331,9 +376,9 @@ ul.nav.nav-pills .nav-link.active {
 
 .ohli24-queue-page .progress-wrapper {
     position: relative;
-    height: 32px;
+    height: 36px;
     background: rgba(0, 0, 0, 0.3);
-    border-radius: 16px;
+    border-radius: 18px;
     overflow: hidden;
     width: 300px;
 }
@@ -341,7 +386,23 @@ ul.nav.nav-pills .nav-link.active {
 .ohli24-queue-page .progress-bar { height: 100%; transition: width 0.3s ease; }
 .ohli24-queue-page .status-waiting { background: linear-gradient(90deg, #94a3b8, #64748b); }
 .ohli24-queue-page .status-downloading { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
-.ohli24-queue-page .status-completed-bar { background: linear-gradient(90deg, #22c55e, #4ade80); }
+.ohli24-queue-page .status-completed { background: linear-gradient(90deg, #22c55e, #4ade80); }
+.ohli24-queue-page .status-failed { background: linear-gradient(90deg, #dc2626, #ef4444); }
+
+/* Progress Label - Text ON TOP of progress bar */
+.ohli24-queue-page .progress-label {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+    white-space: nowrap;
+    z-index: 10;
+    pointer-events: none;
+}
 
 /* Common Modal Fixes */
 .modal-content {
@@ -351,7 +412,15 @@ ul.nav.nav-pills .nav-link.active {
 }
 
 @media (max-width: 768px) {
-    .ohli24-queue-page .progress-wrapper { width: 100%; }
+    .ohli24-queue-page .progress-wrapper { 
+        width: 100%; 
+        height: 40px; /* Even taller on mobile for better visibility */
+        border-radius: 20px;
+    }
+    .ohli24-queue-page .progress-label {
+        font-size: 13px;
+        font-weight: 800;
+    }
     .ohli24-queue-page .queue-item { flex-direction: column; align-items: stretch; }
     .ohli24-queue-page ul.nav.nav-pills.bg-light { margin-top: 40px !important; }
 
@@ -385,5 +454,19 @@ ul.nav.nav-pills .nav-link.active {
         height: 32px !important;
         padding: 0 10px !important;
         font-size: 13px !important;
+    }
+
+    /* Persistent Mobile Colors for specific buttons */
+    .ohli24-list-page .btn-watch-primary {
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+        border: none !important;
+        color: white !important;
+        opacity: 1 !important;
+    }
+
+    .ohli24-list-page .btn-remove-alt {
+        background: rgba(239, 68, 68, 0.1) !important;
+        border-color: rgba(239, 68, 68, 0.3) !important;
+        color: #f87171 !important;
     }
 }

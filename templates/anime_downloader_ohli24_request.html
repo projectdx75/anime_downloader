@@ -277,6 +277,13 @@
 
         });
 
+        // Enter 키로 검색 트리거
+        $("#code").on('keypress', function (e) {
+            if (e.which === 13) { // Enter key
+                e.preventDefault();
+                $("#analysis_btn").click();
+            }
+        });
 
         $("#analysis_btn").unbind("click").bind('click', function (e) {
             e.preventDefault();
