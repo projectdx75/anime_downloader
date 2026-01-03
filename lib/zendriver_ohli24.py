@@ -15,7 +15,7 @@ import shutil
 
 
 def find_browser_executable(manual_path=None):
-    \"\"\"시스템에서 브라우저 실행 파일 찾기 (Docker/Ubuntu 환경 대응)\"\"\"
+    """시스템에서 브라우저 실행 파일 찾기 (Docker/Ubuntu 환경 대응)"""
     # 수동 설정 시 우선
     if manual_path and os.path.exists(manual_path):
         return manual_path
@@ -43,7 +43,7 @@ def find_browser_executable(manual_path=None):
 
 
 async def fetch_html(url: str, timeout: int = 60, browser_path: str = None) -> dict:
-    \"\"\"Zendriver로 HTML 페칭\"\"\"
+    """Zendriver로 HTML 페칭"""
     try:
         import zendriver as zd
     except ImportError as e:

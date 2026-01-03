@@ -139,11 +139,11 @@ class LogicOhli24(AnimeModuleBase):
                 
                 # 브라우저 존재 확인 안내
                 import shutil
-                browser_path = P.ModelSetting.get(\"ohli24_zendriver_browser_path\")
+                browser_path = P.ModelSetting.get("ohli24_zendriver_browser_path")
                 if browser_path and os.path.exists(browser_path):
                     has_browser = True
                 else:
-                    has_browser = any(shutil.which(cmd) for cmd in [\"google-chrome\", \"google-chrome-stable\", \"chromium-browser\", \"chromium\"])
+                    has_browser = any(shutil.which(cmd) for cmd in ["google-chrome", "google-chrome-stable", "chromium-browser", "chromium"])
                 
                 if not has_browser:
                     logger.warning("[Zendriver] 브라우저(Chrome/Chromium)가 시스템에 설치되어 있지 않습니다. Docker 환경에서는 직접 설치가 필요할 수 있습니다.")
@@ -176,10 +176,10 @@ class LogicOhli24(AnimeModuleBase):
                 return False
             
             # 데몬 프로세스 시작 (백그라운드)
-            browser_path = P.ModelSetting.get(\"ohli24_zendriver_browser_path\")
+            browser_path = P.ModelSetting.get("ohli24_zendriver_browser_path")
             cmd = [sys.executable, daemon_script]
             if browser_path:
-                cmd.extend([\"--browser_path\", browser_path])
+                cmd.extend(["--browser_path", browser_path])
                 
             cls.zendriver_daemon_process = subprocess.Popen(
                 cmd,
@@ -912,7 +912,7 @@ class LogicOhli24(AnimeModuleBase):
                     logger.info("Found item-subject in HTML")
                 else:
                     logger.warning("item-subject NOT found in HTML")
-                if "itemprop=\"image\"" in response_data:
+                if "itemprop="image"" in response_data:
                     logger.info("Found itemprop=image in HTML")
                 else:
                     logger.warning("itemprop=image NOT found in HTML")
@@ -1542,8 +1542,8 @@ class LogicOhli24(AnimeModuleBase):
                 try:
                     import subprocess
                     import contextlib
-                    script_path = os.path.join(os.path.dirname(__file__), \"lib\", \"zendriver_ohli24.py\")
-                    browser_path = P.ModelSetting.get(\"ohli24_zendriver_browser_path\")
+                    script_path = os.path.join(os.path.dirname(__file__), "lib", "zendriver_ohli24.py")
+                    browser_path = P.ModelSetting.get("ohli24_zendriver_browser_path")
                     
                     cmd = [sys.executable, script_path, url, str(timeout)]
                     if browser_path:
@@ -2417,8 +2417,8 @@ class Ohli24QueueEntity(AnimeQueueEntity):
                 if html_content:
                     # m3u8 URL 패턴 찾기
                     m3u8_patterns = [
-                        re.compile(r"file:\s*['\"]([^'\"]*(?:\.m3u8|master\.txt)[^'\"]*)['\"]"),
-                        re.compile(r"['\"]([^'\"]*(?:\.m3u8|master\.txt)[^'\"]*)['\"]"),
+                        re.compile(r"file:\s*['"]([^'"]*(?:\.m3u8|master\.txt)[^'"]*)['"]"),
+                        re.compile(r"['"]([^'"]*(?:\.m3u8|master\.txt)[^'"]*)['"]"),
                     ]
                     for pattern in m3u8_patterns:
                         match = pattern.search(html_content)
@@ -2437,7 +2437,7 @@ class Ohli24QueueEntity(AnimeQueueEntity):
                         logger.debug(f"HTML Content (First 2000 chars): {html_content[:2000]}")
                     
                     if not vtt_url:
-                        vtt_match = re.search(r"['\"]([^'\"]*\.vtt[^'\"]*)['\"]", html_content)
+                        vtt_match = re.search(r"['"]([^'"]*\.vtt[^'"]*)['"]", html_content)
                         if vtt_match:
                             vtt_url = vtt_match.group(1)
                             if vtt_url.startswith("//"): vtt_url = "https:" + vtt_url
