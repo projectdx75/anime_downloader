@@ -5,6 +5,12 @@
 
 
 <style>
+/* Cosmic Violet 배경 (즉시 적용) */
+body {
+    background: linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #4c1d95 100%) !important;
+    background-attachment: fixed !important;
+}
+
 /* Global Container Margin Overrides */
 #main_container {
     width: 100% !important;
@@ -132,11 +138,14 @@
     // window.addEventListener("DOMContentLoaded", wait_seconds);
 
     function analyze(wr_id, bo_table) {
-        // e.preventDefault();
-        // e.stopPropagation()
-        // e.preventDefault();
+        // 분석 시작 시 preloader 표시
+        const preloader = document.getElementById('preloader');
+        if (preloader) {
+            preloader.style.display = 'block';
+            preloader.style.opacity = '1';
+        }
+        
         const code = document.getElementById("code").value
-        // console.log(code)
         $.ajax({
             url: '/' + package_name + '/ajax/' + sub + '/analysis',
             type: "POST",
@@ -144,13 +153,28 @@
             data: {code: code, wr_id: wr_id, bo_table: bo_table},
             dataType: "json",
             success: function (ret) {
+                // 분석 완료 시 preloader 숨기기
+                if (preloader) {
+                    preloader.style.opacity = '0';
+                    setTimeout(function() {
+                        preloader.style.display = 'none';
+                    }, 300);
+                }
+                
                 if (ret.ret === 'success' && ret.data != null) {
-                    // {#// console.log(ret.code)#}
-                    // console.log(ret.data)
                     make_program(ret.data)
                     $("#loader").css("display", 'none')
                 } else {
                     $.notify('<strong>분석 실패</strong><br>' + ret.log, {type: 'warning'});
+                }
+            },
+            error: function() {
+                // 에러 시에도 preloader 숨기기
+                if (preloader) {
+                    preloader.style.opacity = '0';
+                    setTimeout(function() {
+                        preloader.style.display = 'none';
+                    }, 300);
                 }
             }
         });
@@ -326,17 +350,22 @@
     })
 
     $(document).ready(function () {
-        // DOM 로딩 완료 후 preloader 숨기기
-        const preloader = document.getElementById('preloader');
+        // content-cloak visible 클래스 추가 (즉시)
+        $('.content-cloak, #menu_module_div, #menu_page_div').addClass('visible');
         
-        setTimeout(function() {
-            if (preloader) {
-                preloader.style.opacity = '0';
-                setTimeout(function() {
-                    preloader.style.display = 'none';
-                }, 300);
-            }
-        }, 500);
+        // URL에 code가 없으면 preloader 숨기기 (있으면 analyze 함수에서 처리)
+        const hasAutoAnalysis = params.code || "{{arg['anilife_current_code']}}";
+        if (!hasAutoAnalysis) {
+            const preloader = document.getElementById('preloader');
+            setTimeout(function() {
+                if (preloader) {
+                    preloader.style.opacity = '0';
+                    setTimeout(function() {
+                        preloader.style.display = 'none';
+                    }, 300);
+                }
+            }, 100);
+        }
         
         $("#loader").css("display", 'none');
     });
@@ -1044,8 +1073,7 @@
     }
 
     .loader {
-        background: rgb(0, 0, 0, 0.8);
-        background: radial-gradient(#222, #000);
+        background: transparent;
         bottom: 0;
         left: 0;
         overflow: hidden;
@@ -1112,35 +1140,35 @@
     }
 
     .loader-line-wrap:nth-child(1) .loader-line {
-        border-color: hsl(0, 80%, 60%);
+        border-color: #a78bfa; /* Light Violet */
         height: 90px;
         width: 90px;
         top: 7px;
     }
 
     .loader-line-wrap:nth-child(2) .loader-line {
-        border-color: hsl(60, 80%, 60%);
+        border-color: #8b5cf6; /* Violet */
         height: 76px;
         width: 76px;
         top: 14px;
     }
 
     .loader-line-wrap:nth-child(3) .loader-line {
-        border-color: hsl(120, 80%, 60%);
+        border-color: #7c3aed; /* Purple */
         height: 62px;
         width: 62px;
         top: 21px;
     }
 
     .loader-line-wrap:nth-child(4) .loader-line {
-        border-color: hsl(180, 80%, 60%);
+        border-color: #6d28d9; /* Deep Purple */
         height: 48px;
         width: 48px;
         top: 28px;
     }
 
     .loader-line-wrap:nth-child(5) .loader-line {
-        border-color: hsl(240, 80%, 60%);
+        border-color: #5b21b6; /* Dark Violet */
         height: 34px;
         width: 34px;
         top: 35px;

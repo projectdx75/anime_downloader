@@ -1,6 +1,6 @@
 /* Shared Mobile Custom CSS for Anime Downloader */
 
-/* Custom Notify Styling for Mobile */
+/* Custom Notify Styling - Mobile Default */
 .bootstrap-notify-container,
 [data-notify="container"] {
     max-width: 90vw !important;
@@ -16,6 +16,18 @@
     color: #e0e7ff !important;
     font-size: 13px !important;
     z-index: 10000 !important;
+}
+
+/* Desktop Notify: 오른쪽 정렬, 적절한 사이즈 */
+@media (min-width: 769px) {
+    .bootstrap-notify-container,
+    [data-notify="container"] {
+        max-width: 450px !important;
+        min-width: 300px !important;
+        width: auto !important;
+        right: 20px !important;
+        left: auto !important;
+    }
 }
 
 [data-notify="container"].alert-success {

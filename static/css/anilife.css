@@ -7,6 +7,13 @@
     --notify-danger-bg: rgba(127, 29, 29, 0.95);
 }
 
+/* Cosmic Violet Body Background - Override theme CSS */
+body {
+    background: linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #4c1d95 100%) !important;
+    background-attachment: fixed !important;
+    color: #e0e7ff !important;
+}
+
 /* Common Layout Wrapper - Responsive */
 .anilife-common-wrapper {
     max-width: 100%;
