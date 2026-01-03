@@ -14,8 +14,12 @@ import os
 import shutil
 
 
-def find_browser_executable():
-    """시스템에서 브라우저 실행 파일 찾기 (Docker/Ubuntu 환경 대응)"""
+def find_browser_executable(manual_path=None):
+    \"\"\"시스템에서 브라우저 실행 파일 찾기 (Docker/Ubuntu 환경 대응)\"\"\"
+    # 수동 설정 시 우선
+    if manual_path and os.path.exists(manual_path):
+        return manual_path
+        
     common_paths = [
         "/usr/bin/google-chrome",
         "/usr/bin/google-chrome-stable",
@@ -38,8 +42,8 @@ def find_browser_executable():
     return None
 
 
-async def fetch_html(url: str, timeout: int = 60) -> dict:
-    """Zendriver로 HTML 페칭"""
+async def fetch_html(url: str, timeout: int = 60, browser_path: str = None) -> dict:
+    \"\"\"Zendriver로 HTML 페칭\"\"\"
     try:
         import zendriver as zd
     except ImportError as e:
@@ -51,7 +55,7 @@ async def fetch_html(url: str, timeout: int = 60) -> dict:
     
     try:
         # 실행 가능한 브라우저 찾기
-        exec_path = find_browser_executable()
+        exec_path = find_browser_executable(browser_path)
         
         # 브라우저 시작
         if exec_path:
@@ -98,9 +102,10 @@ if __name__ == "__main__":
     
     target_url = sys.argv[1]
     timeout_sec = int(sys.argv[2]) if len(sys.argv) > 2 else 60
+    manual_path = sys.argv[3] if len(sys.argv) > 3 else None
     
     try:
-        res = asyncio.run(fetch_html(target_url, timeout_sec))
+        res = asyncio.run(fetch_html(target_url, timeout_sec, manual_path))
         print(json.dumps(res, ensure_ascii=False))
     except Exception as e:
         print(json.dumps({"success": False, "error": str(e), "html": "", "elapsed": 0}))

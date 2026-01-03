@@ -139,7 +139,12 @@ class LogicOhli24(AnimeModuleBase):
                 
                 # 브라우저 존재 확인 안내
                 import shutil
-                has_browser = any(shutil.which(cmd) for cmd in ["google-chrome", "google-chrome-stable", "chromium-browser", "chromium"])
+                browser_path = P.ModelSetting.get(\"ohli24_zendriver_browser_path\")
+                if browser_path and os.path.exists(browser_path):
+                    has_browser = True
+                else:
+                    has_browser = any(shutil.which(cmd) for cmd in [\"google-chrome\", \"google-chrome-stable\", \"chromium-browser\", \"chromium\"])
+                
                 if not has_browser:
                     logger.warning("[Zendriver] 브라우저(Chrome/Chromium)가 시스템에 설치되어 있지 않습니다. Docker 환경에서는 직접 설치가 필요할 수 있습니다.")
                     logger.warning("[Zendriver] Ubuntu Tip: apt-get update && apt-get install -y chromium-browser")
@@ -171,8 +176,13 @@ class LogicOhli24(AnimeModuleBase):
                 return False
             
             # 데몬 프로세스 시작 (백그라운드)
+            browser_path = P.ModelSetting.get(\"ohli24_zendriver_browser_path\")
+            cmd = [sys.executable, daemon_script]
+            if browser_path:
+                cmd.extend([\"--browser_path\", browser_path])
+                
             cls.zendriver_daemon_process = subprocess.Popen(
-                [sys.executable, daemon_script],
+                cmd,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 start_new_session=True
@@ -245,6 +255,7 @@ class LogicOhli24(AnimeModuleBase):
             "ohli24_image_url_prefix_series": "https://www.jetcloud.cc/series/",
             "ohli24_image_url_prefix_episode": "https://www.jetcloud-list.cc/thumbnail/",
             "ohli24_discord_notify": "True",
+            "ohli24_zendriver_browser_path": "",
         }
         super(LogicOhli24, self).__init__(P, name=name, first_menu='setting', scheduler_desc="ohli24 자동 다운로드", setup_default=self.db_default)
         self.queue = None
@@ -1446,7 +1457,12 @@ class LogicOhli24(AnimeModuleBase):
                 try:
                     import subprocess
                     import contextlib
-                    script_path = os.path.join(os.path.dirname(__file__), "lib", "zendriver_ohli24.py")
+                    script_path = os.path.join(os.path.dirname(__file__), \"lib\", \"zendriver_ohli24.py\")
+                    browser_path = P.ModelSetting.get(\"ohli24_zendriver_browser_path\")
+                    
+                    cmd = [sys.executable, script_path, url, str(timeout)]
+                    if browser_path:
+                        cmd.append(browser_path)
                     
                     # gevent fork 경고 억제 (부모 프로세스 stderr 임시 리다이렉트)
                     with open(os.devnull, 'w') as devnull:
@@ -1454,7 +1470,7 @@ class LogicOhli24(AnimeModuleBase):
                         sys.stderr = devnull
                         try:
                             result = subprocess.run(
-                                [sys.executable, script_path, url, str(timeout)],
+                                cmd,
                                 capture_output=False,
                                 stdout=subprocess.PIPE,
                                 stderr=subprocess.DEVNULL,

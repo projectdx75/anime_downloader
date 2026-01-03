@@ -78,6 +78,9 @@
           {{ macros.setting_buttons([['global_one_execute_btn', '1회 실행']], left='1회 실행' ) }}
           <hr style="border-color: rgba(255,255,255,0.1);">
           {{ macros.setting_buttons([['global_reset_db_btn', 'DB 초기화']], left='DB정리' ) }}
+          <hr style="border-color: rgba(255,255,255,0.1);">
+          <h5 class="text-info mb-3"><i class="bi bi-browser-chrome mr-2"></i>Zendriver 설정</h5>
+          {{ macros.setting_input_text('ohli24_zendriver_browser_path', '브라우저 경로', value=arg.get('ohli24_zendriver_browser_path', ''), desc=['Zendriver가 사용할 Chrome/Chromium 실행 파일 경로입니다.', 'Docker 환경에서 자동 탐지에 실패할 경우 직접 입력하세요.', '예: /usr/bin/chromium-browser']) }}
       </div>
     {{ macros.m_tab_content_end() }}
   

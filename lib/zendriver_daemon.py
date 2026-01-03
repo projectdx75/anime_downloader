@@ -35,10 +35,15 @@ DAEMON_PORT: int = 19876
 browser: Optional[Any] = None
 browser_lock: Lock = Lock()
 loop: Optional[asyncio.AbstractEventLoop] = None
+manual_browser_path: Optional[str] = None
 
 
 def find_browser_executable() -> Optional[str]:
-    """시스템에서 브라우저 실행 파일 찾기 (Docker/Ubuntu 환경 대응)"""
+    \"\"\"시스템에서 브라우저 실행 파일 찾기 (Docker/Ubuntu 환경 대응)\"\"\"
+    # 수동 설정된 경로 최우선
+    if manual_browser_path and os.path.exists(manual_browser_path):
+        return manual_browser_path
+        
     common_paths: List[str] = [
         "/usr/bin/google-chrome",
         "/usr/bin/google-chrome-stable",
@@ -277,7 +282,17 @@ def signal_handler(sig: int, frame: Any) -> None:
     sys.exit(0)
 
 
-if __name__ == "__main__":
+if __name__ == \"__main__\":
+    # 인자 처리
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument(\"--browser_path\", type=str, default=None)
+    args = parser.parse_args()
+    
+    if args.browser_path:
+        manual_browser_path = args.browser_path
+        log_debug(f\"[ZendriverDaemon] Manual browser path set: {manual_browser_path}\")
+
     # 시그널 핸들러 등록
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
