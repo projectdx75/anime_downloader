@@ -604,12 +604,17 @@ function runSystemCheck() {
     type: 'POST',
     success: function(ret) {
       if (ret.browser_found) {
-        $('#browser_status_badge').removeClass('badge-secondary badge-danger').addClass('badge-success').text('발견됨');
+        $('#browser_status_badge').removeClass('badge-secondary badge-danger badge-warning').addClass('badge-success').text('발견됨');
         $('#browser_path_display').text('경로: ' + ret.browser_path);
         $('#install_guide_section').hide();
       } else {
-        $('#browser_status_badge').removeClass('badge-secondary badge-success').addClass('badge-danger').text('미설치');
-        $('#browser_path_display').text('');
+        if (ret.snap_error) {
+          $('#browser_status_badge').removeClass('badge-secondary badge-success badge-danger').addClass('badge-warning').text('스냅 오류');
+          $('#browser_path_display').html('<span class="text-warning">발견되었으나 Snap 버전입니다. 도커에서 작동하지 않습니다.</span>');
+        } else {
+          $('#browser_status_badge').removeClass('badge-secondary badge-success badge-warning').addClass('badge-danger').text('미설치');
+          $('#browser_path_display').text('');
+        }
         $('#install_guide_section').show();
         $('#manual_install_cmd').val(ret.install_cmd);
         if (ret.can_install) {

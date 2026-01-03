@@ -250,13 +250,27 @@ class LogicOhli24(AnimeModuleBase):
             res["browser_found"] = True
             res["browser_path"] = manual_path
         else:
-            # Snap 이슈를 피하기 위해 google-chrome을 우선순위로 둠
+            # Snap 이슈를 피하기 위해 google-chrome을 최우선으로 둠
             for cmd in ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser"]:
                 found = shutil.which(cmd)
                 if found:
-                    res["browser_found"] = True
-                    res["browser_path"] = found
-                    break
+                    # Snap Wrapper인지 확인 (도커 우분투 전용)
+                    is_snap_wrapper = False
+                    if "chromium-browser" in cmd:
+                        try:
+                            # --version 실행 시 Snap 안내가 나오면 래퍼임
+                            v_out = sp.check_output([found, "--version"], stderr=sp.STDOUT, timeout=5).decode().lower()
+                            if "snap" in v_out:
+                                is_snap_wrapper = True
+                        except:
+                            is_snap_wrapper = True # 실행 안 되면 일단 문제 있는 것으로 간주
+                    
+                    if not is_snap_wrapper:
+                        res["browser_found"] = True
+                        res["browser_path"] = found
+                        break
+                    else:
+                        res["snap_error"] = True # 스냅 래퍼 발견 알림용
         
         # OS 및 설치 가능 여부 확인
         if res["os"] == "Linux":
