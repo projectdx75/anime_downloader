@@ -217,7 +217,7 @@ class LogicAniLife(AnimeModuleBase):
         start_time = time.time()
         data = ""
         try:
-            # --- Zendriver Daemon 최적 최적화 (v0.5.0) ---
+            # --- Layer 1: Zendriver Daemon (최적) ---
             from .mod_ohli24 import LogicOhli24
             if LogicOhli24.is_zendriver_daemon_running():
                 logger.info(f"[Anilife] Trying Zendriver Daemon: {url}")
@@ -229,17 +229,86 @@ class LogicAniLife(AnimeModuleBase):
                 else:
                     logger.warning(f"[Anilife] Daemon failed in {elapsed:.2f}s: {daemon_res.get('error', 'Unknown')}")
 
-            # --- Fallback: Playwright ---
-            logger.info("[Anilife] Falling back to Playwright...")
-            from .lib.crawler import Crawler
-            res = asyncio.run(
-                Crawler().get_html_playwright(
-                    url, engine="chromium", headless=headless
-                )
-            )
-            elapsed = time.time() - start_time
-            logger.info(f"[Anilife] Playwright finished in {elapsed:.2f}s")
-            return res
+            # --- Layer 2: Zendriver Subprocess Fallback (Ohli24와 동일) ---
+            logger.info(f"[Anilife] Trying Zendriver subprocess: {url}")
+            if LogicOhli24.ensure_zendriver_installed():
+                try:
+                    import subprocess
+                    script_path = os.path.join(os.path.dirname(__file__), "lib", "zendriver_ohli24.py")
+                    browser_path = P.ModelSetting.get("ohli24_zendriver_browser_path")
+                    
+                    cmd = [sys.executable, script_path, url, str(30)]
+                    if browser_path:
+                        cmd.append(browser_path)
+                    
+                    with open(os.devnull, 'w') as devnull:
+                        old_stderr = sys.stderr
+                        sys.stderr = devnull
+                        try:
+                            result = subprocess.run(
+                                cmd,
+                                capture_output=False,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.DEVNULL,
+                                text=True,
+                                timeout=60
+                            )
+                        finally:
+                            sys.stderr = old_stderr
+                    
+                    if result.returncode == 0 and result.stdout.strip():
+                        import json as json_lib
+                        zd_result = json_lib.loads(result.stdout.strip())
+                        if zd_result.get("success") and zd_result.get("html"):
+                            elapsed = time.time() - start_time
+                            logger.info(f"[Anilife] Zendriver subprocess success in {elapsed:.2f}s, HTML len: {len(zd_result['html'])}")
+                            return zd_result["html"]
+                        else:
+                            logger.warning(f"[Anilife] Zendriver subprocess failed: {zd_result.get('error', 'Unknown')}")
+                    else:
+                        logger.warning(f"[Anilife] Zendriver subprocess returncode: {result.returncode}")
+                        
+                except subprocess.TimeoutExpired:
+                    logger.warning(f"[Anilife] Zendriver subprocess timed out")
+                except Exception as e:
+                    logger.warning(f"[Anilife] Zendriver subprocess exception: {e}")
+
+            # --- Layer 3: Camoufox Fallback (최후 수단) ---
+            logger.info("[Anilife] Falling back to Camoufox...")
+            try:
+                import subprocess
+                script_path = os.path.join(os.path.dirname(__file__), "lib", "camoufox_ohli24.py")
+                
+                with open(os.devnull, 'w') as devnull:
+                    old_stderr = sys.stderr
+                    sys.stderr = devnull
+                    try:
+                        result = subprocess.run(
+                            [sys.executable, script_path, url, str(30)],
+                            capture_output=False,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.DEVNULL,
+                            text=True,
+                            timeout=60
+                        )
+                    finally:
+                        sys.stderr = old_stderr
+                
+                if result.returncode == 0 and result.stdout.strip():
+                    import json as json_lib
+                    cf_result = json_lib.loads(result.stdout.strip())
+                    if cf_result.get("success") and cf_result.get("html"):
+                        elapsed = time.time() - start_time
+                        logger.info(f"[Anilife] Camoufox success in {elapsed:.2f}s, HTML len: {len(cf_result['html'])}")
+                        return cf_result["html"]
+                    else:
+                        logger.warning(f"[Anilife] Camoufox failed: {cf_result.get('error', 'Unknown')}")
+                else:
+                    logger.warning(f"[Anilife] Camoufox returncode: {result.returncode}")
+            except subprocess.TimeoutExpired:
+                logger.warning("[Anilife] Camoufox timed out")
+            except Exception as e:
+                logger.warning(f"[Anilife] Camoufox exception: {e}")
 
         except Exception as e:
             logger.error("Exception:%s", e)

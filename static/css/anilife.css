@@ -6,3 +6,26 @@
     --notify-warning-bg: rgba(120, 53, 15, 0.95);
     --notify-danger-bg: rgba(127, 29, 29, 0.95);
 }
+
+/* Common Layout Wrapper - Responsive */
+.anilife-common-wrapper {
+    max-width: 100%;
+    margin: 0 auto;
+    width: 100%;
+    transition: opacity 0.5s ease-out;
+}
+
+/* Desktop: 1400px max-width */
+@media (min-width: 992px) {
+    .anilife-common-wrapper {
+        max-width: 1400px;
+    }
+}
+
+.anilife-common-wrapper.content-cloak {
+    opacity: 0;
+}
+
+.anilife-common-wrapper.visible {
+    opacity: 1;
+}

@@ -23,9 +23,21 @@
             <!-- </div>-->
         </div>
     </div>
-    <div id="yommi_wrapper" class="container-fluid ohli24-request-page mt-2 mt-md-4 mx-auto" style="max-width: 100%;">
+    <div id="ohli24_request_wrapper" class="ohli24-common-wrapper container-fluid mt-4 content-cloak ohli24-request-page">
         <form id="program_list">
-            <div class="card p-2 p-md-4 mb-2 mb-md-4 border-light" style="background: rgba(30,30,40,0.6); backdrop-filter: blur(10px); box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <div class="glass-card p-4 mb-4">
+                <div class="ohli24-header">
+                    <div class="ohli24-header-left">
+                        <div class="ohli24-icon-box">
+                            <i class="bi bi-play-circle-fill text-primary" style="font-size: 1.5rem;"></i>
+                        </div>
+                        <div>
+                            <h3 class="ohli24-header-title">Ohli24 요청</h3>
+                            <span class="ohli24-header-subtitle">작품 분석 및 개별 에피소드 다운로드</span>
+                        </div>
+                    </div>
+                </div>
+                <hr style="border-color: rgba(255,255,255,0.05); margin-bottom: 25px;">
                 <div class="form-group mb-0">
                     <label for="code" class="text-white font-weight-bold mb-2"><i class="fa fa-search mr-2"></i>작품 Code / 제목</label>
                     <div class="input-group input-group-lg">
@@ -126,7 +138,7 @@
             let str = "";
             
             // 1. Info Card (Top)
-            str += `<div class='card p-2 p-md-4 mb-3 mb-md-4 border-light' style="background: rgba(30,30,40,0.6); backdrop-filter: blur(10px);">`;
+            str += `<div class='glass-card p-4 mb-4'>`;
             str += `<div class="row">`;
             
             // Poster
@@ -224,8 +236,13 @@
             }
             str += '</div>';
 
+            // 먼저 HTML을 삽입하고 레이아웃이 완료된 후 bootstrapToggle 적용
             document.getElementById("episode_list").innerHTML = str;
-            $('input[id^="checkbox_"]').bootstrapToggle()
+            
+            // 다음 프레임에서 bootstrapToggle 적용 (모든 카드가 먼저 표시됨)
+            requestAnimationFrame(function() {
+                $('input[id^="checkbox_"]').bootstrapToggle();
+            });
         }
 
         $(function () {
@@ -746,16 +763,16 @@
             }
             
             /* ===== 상단 정보 카드 ===== */
-            .card.p-lg-5, .card.border-light {
+            .glass-card {
                 width: calc(100% - 10px) !important;
                 max-width: 100% !important;
-                padding: 6px !important; /* Reduced from 15px */
+                padding: 10px !important;
                 margin: 5px !important;
                 border-radius: 12px !important;
                 box-sizing: border-box !important;
             }
             
-            .card.p-lg-5 > .row {
+            .glass-card > .row {
                 display: flex !important;
                 flex-direction: column !important;
                 width: 100% !important;

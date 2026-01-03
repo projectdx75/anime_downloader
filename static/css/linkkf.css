@@ -35,3 +35,19 @@ ul.nav.nav-pills .nav-link.active {
     background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
     box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3) !important;
 }
+
+/* Common Layout Wrapper */
+.linkkf-common-wrapper {
+    max-width: 1400px;
+    margin: 0 auto;
+    width: 100%;
+    transition: opacity 0.5s ease-out;
+}
+
+.linkkf-common-wrapper.content-cloak {
+    opacity: 0;
+}
+
+.linkkf-common-wrapper.visible {
+    opacity: 1;
+}

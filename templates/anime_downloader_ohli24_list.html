@@ -4,8 +4,21 @@
 <link rel="stylesheet" href="{{ url_for('.static', filename='css/' ~ arg['sub'] ~ '.css') }}"/>
 
 
-    <div class="content-cloak ohli24-list-page">
-        <form id="form_search" class="form-inline" style="text-align:left; width:100%;">
+<div id="ohli24_list_wrapper" class="ohli24-common-wrapper container-fluid mt-4 content-cloak ohli24-list-page">
+    <div class="glass-card p-4">
+        <div class="ohli24-header">
+            <div class="ohli24-header-left">
+                <div class="ohli24-icon-box">
+                    <i class="bi bi-collection-play-fill text-primary" style="font-size: 1.5rem;"></i>
+                </div>
+                <div>
+                    <h3 class="ohli24-header-title">다운로드 목록</h3>
+                    <span class="ohli24-header-subtitle">성공적으로 완료된 에피소드 라이브러리</span>
+                </div>
+            </div>
+        </div>
+        <hr style="border-color: rgba(255,255,255,0.05); margin-bottom: 25px;">
+        <form id="form_search" class="form-inline mb-4" style="text-align:left; width:100%;">
             <div class="search-container">
                 <div class="search-group-left">
                      <select id="order" name="order" class="form-control custom-select">
@@ -24,16 +37,11 @@
                 </div>
             </div>
         </form>
-        <div id='page1'></div>
-        {# {{ macros.m_hr_head_top() }} #}
-        {# {{ macros.m_row_start('0') }} #}
-        {# {{ macros.m_col(2,  macros.m_strong('Poster')) }} #}
-        {# {{ macros.m_col(10,  macros.m_strong('Info')) }} #}
-        {# {{ macros.m_row_end() }} #}
-        {# {{ macros.m_hr_head_bottom() }} #}
+        <div id='page1' class="mb-3"></div>
         <div id="list_div"></div>
-        <div id='page2'></div>
+        <div id='page2' class="mt-3"></div>
     </div>
+</div>
 
     <!-- Custom Confirmation Modal -->
     <div class="modal fade" id="confirmModal" tabindex="-1" role="dialog" aria-hidden="true">
@@ -120,6 +128,14 @@
         var current_data = null;
 
         $(document).ready(function () {
+            // Force parent container to be fluid to allow full width
+            $("#main_container").removeClass("container").addClass("container-fluid");
+            
+            // Smooth Load Trigger
+            setTimeout(function() {
+                $('.content-cloak, #menu_module_div, #menu_page_div').addClass('visible');
+            }, 100);
+            
             global_sub_request_search('1');
         });
 

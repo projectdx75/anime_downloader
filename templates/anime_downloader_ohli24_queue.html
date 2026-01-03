@@ -4,46 +4,232 @@
 <link rel="stylesheet" href="{{ url_for('.static', filename='css/' ~ arg['sub'] ~ '.css') }}"/>
 
 
-<div class="queue-container content-cloak ohli24-queue-page">
-    <!-- 헤더 버튼 그룹 -->
-    <div class="queue-header">
-        <div class="header-title">
-            <i class="fa fa-download"></i>
-            <span>다운로드 큐</span>
-            <span class="queue-count" id="queue_count">0</span>
+<div id="ohli24_queue_wrapper" class="ohli24-common-wrapper container-fluid mt-4 content-cloak ohli24-queue-page">
+    <div class="glass-card p-4">
+        <!-- 헤더 버튼 그룹 -->
+        <div class="ohli24-header">
+            <div class="ohli24-header-left">
+                <div class="ohli24-icon-box">
+                    <i class="bi bi-cloud-download-fill text-primary" style="font-size: 1.5rem;"></i>
+                </div>
+                <div>
+                    <h3 class="ohli24-header-title">다운로드 큐</h3>
+                    <span class="ohli24-header-subtitle">총 <span id="queue_count" class="text-info font-weight-bold">0</span>개의 항목</span>
+                </div>
+            </div>
+            <div class="ohli24-header-right d-flex flex-wrap">
+                <button id="reset_btn" class="btn-modern btn-modern-danger mr-2 mb-2">
+                    <i class="bi bi-arrow-counterclockwise mr-1"></i> 전체 초기화
+                </button>
+                <button id="delete_completed_btn" class="btn-modern btn-modern-warning mr-2 mb-2">
+                    <i class="bi bi-trash mr-1"></i> 완료 항목 삭제
+                </button>
+            </div>
         </div>
-        <div class="header-buttons">
-            <button id="reset_btn" class="queue-btn queue-btn-danger">
-                <i class="fa fa-refresh"></i> 초기화
-            </button>
-            <button id="delete_completed_btn" class="queue-btn queue-btn-warning">
-                <i class="fa fa-trash"></i> 완료 삭제
-            </button>
-            <button id="go_ffmpeg_btn" class="queue-btn queue-btn-info">
-                <i class="fa fa-external-link"></i> FFMPEG
-            </button>
+        
+        <!-- 다운로드 목록 -->
+        <div id="download_list_div" class="queue-list d-flex flex-column gap-3"></div>
+        
+        <!-- 빈 상태 표시 -->
+        <div id="empty_state" class="empty-state d-flex flex-column align-items-center justify-content-center py-5" style="display: none; min-height: 300px;">
+            <div class="empty-icon-wrapper mb-4">
+                <i class="bi bi-inbox-fill text-muted opacity-20" style="font-size: 5rem;"></i>
+            </div>
+            <h4 class="text-white-50 font-weight-bold mb-2">다운로드 대기 항목 없음</h4>
+            <p class="text-muted mb-0">새로운 에피소드를 추가하면 이곳에 실시간으로 나타납니다.</p>
+            <div class="mt-4">
+                <span class="badge badge-pill badge-dark py-2 px-3" style="background: rgba(255,255,255,0.05); color: #64748b; font-weight: 500;">
+                    <i class="bi bi-info-circle mr-1"></i> 에피소드 목록에서 '다운로드'를 눌러보세요
+                </span>
+            </div>
         </div>
-    </div>
-    
-    <!-- 다운로드 목록 -->
-    <div id="download_list_div" class="queue-list"></div>
-    
-    <!-- 빈 상태 표시 -->
-    <div id="empty_state" class="empty-state" style="display: none;">
-        <i class="fa fa-inbox"></i>
-        <p>다운로드 대기 중인 항목이 없습니다</p>
     </div>
 </div>
 
 <style>
-    /* Queue specific tweaks */
-    #download_list_div { display: flex; flex-direction: column; gap: 10px; width: 100%; }
-    .queue-item { margin-bottom: 5px; }
-    @media (max-width: 768px) {
-        .queue-item { padding: 10px; }
-        .item-info { flex: 1; }
-        .progress-wrapper { height: 24px; border-radius: 12px; }
-        .progress-label { font-size: 11px; }
+    /* Premium Glassmorphism UI */
+    .ohli24-queue-page {
+        animation: fadeIn 0.5s ease-out;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .icon-box {
+        width: 48px;
+        height: 48px;
+        background: rgba(59, 130, 246, 0.1);
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(59, 130, 246, 0.2);
+    }
+
+    /* Modern Buttons */
+    .btn-modern {
+        border: none;
+        border-radius: 12px;
+        padding: 10px 18px;
+        font-weight: 600;
+        font-size: 0.9rem;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        text-transform: none;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .btn-modern:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2);
+        filter: brightness(1.1);
+    }
+
+    .btn-modern:active {
+        transform: translateY(0);
+    }
+
+    .btn-modern-danger { background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%); }
+    .btn-modern-warning { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+    .btn-modern-info { background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%); }
+    .btn-modern-secondary { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); }
+
+    /* Queue Items */
+    .queue-item {
+        background: rgba(0, 0, 0, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 16px;
+        padding: 16px;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+
+    .queue-item:hover {
+        background: rgba(255, 255, 255, 0.03);
+        border-color: rgba(255, 255, 255, 0.1);
+        transform: translateX(4px);
+    }
+
+    .item-number {
+        font-family: 'JetBrains Mono', monospace;
+        font-weight: 700;
+        color: #64748b;
+        font-size: 1.1rem;
+        min-width: 40px;
+    }
+
+    .item-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .item-filename {
+        color: #f1f5f9;
+        font-weight: 600;
+        font-size: 0.95rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-bottom: 4px;
+    }
+
+    .item-meta {
+        font-size: 0.8rem;
+        color: #94a3b8;
+    }
+
+    /* Modern Progress Bar */
+    .progress-container {
+        flex: 1.5;
+        min-width: 150px;
+    }
+
+    .progress-wrapper {
+        position: relative;
+        height: 28px;
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 14px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .progress-bar {
+        height: 100%;
+        border-radius: 14px;
+        transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s ease;
+    }
+
+    .status-waiting { background: linear-gradient(90deg, #64748b, #475569); }
+    .status-downloading { 
+        background: linear-gradient(90deg, #3b82f6, #2563eb);
+        box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
+    }
+    .status-completed { 
+        background: linear-gradient(90deg, #10b981, #059669);
+        box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+    }
+    .status-failed { background: linear-gradient(90deg, #ef4444, #dc2626); }
+
+    .progress-label {
+        position: absolute;
+        top: 0; left: 0; width: 100%; height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: white;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        pointer-events: none;
+        padding: 0 10px;
+        white-space: nowrap;
+        overflow: hidden;
+    }
+
+    /* Actions */
+    .cancel-btn {
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.2);
+        color: #f87171;
+        padding: 6px 12px;
+        border-radius: 8px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        transition: all 0.2s;
+        cursor: pointer;
+    }
+
+    .cancel-btn:hover {
+        background: #ef4444;
+        color: white;
+    }
+
+    @media (max-width: 992px) {
+        .queue-item { flex-direction: column; align-items: stretch; }
+        .progress-container { flex: none; width: 100%; }
+        .item-actions { display: flex; justify-content: flex-end; }
+    }
+
+    .empty-state {
+        animation: fadeIn 0.8s ease-out;
+    }
+
+    .empty-icon-wrapper i {
+        display: inline-block;
+        transition: transform 0.3s ease;
+    }
+
+    .empty-state:hover .empty-icon-wrapper i {
+        transform: translateY(-10px);
+        color: #3b82f6 !important;
+        opacity: 0.4 !important;
     }
 </style>
 
@@ -54,6 +240,14 @@
     var current_data = null;
 
     $(document).ready(function () {
+        // Force parent container to be fluid to allow full width
+        $("#main_container").removeClass("container").addClass("container-fluid");
+        
+        // Smooth Load Trigger
+        setTimeout(function() {
+            $('.content-cloak, #menu_module_div, #menu_page_div').addClass('visible');
+        }, 100);
+        
         var socket = io.connect(window.location.href);
         socket.on('on_start', (data) => {})
         socket.on('start', function (data) {
@@ -128,11 +322,23 @@
         
         var progressBar = document.getElementById("progress_" + entity_id);
         if (progressBar != null) {
+            // Update percentage and label
             progressBar.style.width = percent + '%';
             var label = status_kor;
             if (percent != 0) label += " (" + percent + "%)";
             if (speed) label += " " + speed;
             document.getElementById("progress_" + entity_id + "_label").innerHTML = label;
+            
+            // Real-time status class (color) update
+            var statusClass = getStatusClass(status_kor);
+            $(progressBar).removeClass('status-waiting status-downloading status-completed status-failed').addClass(statusClass);
+            
+            // Auto-refresh list if completed to show 'Watch' button or other actions
+            if (status_kor === '완료' || status_kor === 'completed') {
+                // Throttle refresh to avoid flickering if multiple complete
+                if (window.statusRefreshTimeout) clearTimeout(window.statusRefreshTimeout);
+                window.statusRefreshTimeout = setTimeout(on_start, 1000);
+            }
         }
     }
 

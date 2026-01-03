@@ -3,12 +3,22 @@
 <link rel="stylesheet" href="{{ url_for('.static', filename='css/mobile_custom.css') }}"/>
 <link rel="stylesheet" href="{{ url_for('.static', filename='css/' ~ arg['sub'] ~ '.css') }}"/>
 
-<div id="ohli24_setting_wrapper" class="container-fluid mt-4 mx-auto content-cloak" style="max-width: 100%;">
+<div id="ohli24_setting_wrapper" class="ohli24-common-wrapper container-fluid mt-4 content-cloak">
   
   <div class="glass-card p-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="text-white font-weight-bold"><i class="bi bi-gear-fill mr-2"></i>Ohli24 설정</h2>
-        {{ macros.m_button_group([['globalSettingSaveBtn', '설정 저장']])}}
+    <div class="ohli24-header">
+        <div class="ohli24-header-left">
+            <div class="ohli24-icon-box">
+                <i class="bi bi-gear-fill text-primary" style="font-size: 1.5rem;"></i>
+            </div>
+            <div>
+                <h3 class="ohli24-header-title">Ohli24 설정</h3>
+                <span class="ohli24-header-subtitle">플러그인 설정 및 시스템 상태</span>
+            </div>
+        </div>
+        <div class="ohli24-header-right">
+            {{ macros.m_button_group([['globalSettingSaveBtn', '설정 저장']])}}
+        </div>
     </div>
 
     {{ macros.m_row_start('5') }}
@@ -161,105 +171,6 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
 
 <style>
-    /* Smooth Load Transition */
-    .content-cloak, 
-    #menu_module_div, 
-    #menu_page_div {
-        opacity: 0;
-        transition: opacity 0.5s ease-out;
-    }
-    
-    /* Staggered Delays for Natural Top-Down Flow */
-    #menu_module_div.visible {
-        opacity: 1;
-        transition-delay: 0ms;
-    }
-
-    #menu_page_div.visible {
-        opacity: 1;
-        transition-delay: 150ms;
-    }
-
-    .content-cloak.visible {
-        opacity: 1;
-        transition-delay: 300ms;
-    }
-
-    /* Navigation Menu Override (Top Sub-menu) */
-    ul.nav.nav-pills.bg-light {
-        background-color: rgba(30, 41, 59, 0.6) !important;
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 50rem !important; /* Pill shape container */
-        padding: 6px !important;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2) !important;
-        display: inline-flex !important; /* Fit content */
-        flex-wrap: wrap; /* allow wrap on small screens */
-        justify-content: center;
-        width: auto !important; /* Prevent full width */
-        margin-bottom: 20px;
-    }
-
-    ul.nav.nav-pills .nav-item {
-        margin: 0 2px;
-    }
-
-    ul.nav.nav-pills .nav-link {
-        border-radius: 50rem !important;
-        padding: 8px 20px !important;
-        color: #94a3b8 !important; /* Muted text */
-        font-weight: 600;
-        transition: all 0.3s ease;
-    }
-
-    ul.nav.nav-pills .nav-link:hover {
-        background-color: rgba(255, 255, 255, 0.1);
-        color: #fff !important;
-        transform: translateY(-1px);
-    }
-
-    ul.nav.nav-pills .nav-link.active {
-        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
-        color: #fff !important;
-        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
-    }
-    
-    /* Global Background */
-    body {
-        font-family: 'NamumSquareNeo', system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Noto Sans, Liberation Sans, Arial, sans-serif;
-        background-image: linear-gradient(135deg, #1f2937, #111827, #0f172a);
-        color: #e2e8f0;
-        min-height: 100vh;
-    }
-
-    /* Glass Card Container */
-    .glass-card {
-        background: rgba(30, 41, 59, 0.7);
-        backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 16px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    }
-
-    /* Tabs Styling */
-    .nav-tabs {
-        border-bottom: 2px solid rgba(255, 255, 255, 0.1);
-    }
-    
-    .nav-tabs .nav-link {
-        color: #94a3b8;
-        border: none;
-        font-weight: 600;
-        padding: 10px 20px;
-        border-radius: 8px 8px 0 0;
-        transition: all 0.2s;
-    }
-    
-    .nav-tabs .nav-link:hover {
-        color: #e2e8f0;
-        background: rgba(255, 255, 255, 0.05);
-    }
-    
     .nav-tabs .nav-link.active {
         color: #60a5fa !important;
         background: rgba(30, 41, 59, 0.8) !important;

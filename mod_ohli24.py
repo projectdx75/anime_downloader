@@ -1305,9 +1305,17 @@ class LogicOhli24(AnimeModuleBase):
                 # logger.debug(item.xpath(".//div[@class='post-title']/text()").join())
                 entity["title"] = "".join(item.xpath(".//div[@class='post-title']/text()")).strip()
                 
-                original_img = item.xpath(".//div[@class='img-item']/img/@src")[0].replace(
-                    "..", P.ModelSetting.get("ohli24_url")
-                )
+                # Use multiple image attributes for lazy-loading support
+                img_attributes = [".//div[@class='img-item']/img/@src", ".//div[@class='img-item']/img/@data-src", ".//div[@class='img-item']/img/@data-ezsrc"]
+                original_img = ""
+                for attr in img_attributes:
+                    matches = item.xpath(attr)
+                    if matches and matches[0].strip():
+                        original_img = matches[0].replace("..", P.ModelSetting.get("ohli24_url"))
+                        break
+                
+                if not original_img:
+                    original_img = "https://via.placeholder.com/200x300?text=No+Image"
                 
                 # Use Image Proxy
                 entity["image_link"] = "/%s/api/%s/image_proxy?url=%s" % (
@@ -1712,17 +1720,17 @@ class LogicOhli24(AnimeModuleBase):
                 epi_no = int(match.group("epi_no"))
                 
                 # Use glob pattern for quality: *-OHNI24.mp4 matches any quality
+            # Sanitize ONLY the fixed text parts to avoid breaking glob wildcards (*)
+            if match:
+                content_title_clean = Util.change_text_for_use_filename(content_title)
                 filename_pattern = "%s.S%sE%s.*-OHNI24.mp4" % (
-                    content_title,
+                    content_title_clean,
                     "0%s" % season if season < 10 else season,
                     "0%s" % epi_no if epi_no < 10 else epi_no,
                 )
             else:
-                # Fallback pattern for non-standard titles
-                filename_pattern = "%s.*-OHNI24.mp4" % title
-            
-            # Sanitize pattern (but keep glob wildcards)
-            filename_pattern = Util.change_text_for_use_filename(filename_pattern)
+                title_clean = Util.change_text_for_use_filename(title)
+                filename_pattern = "%s.*-OHNI24.mp4" % title_clean
             
             # Get save path
             savepath = P.ModelSetting.get("ohli24_download_path")

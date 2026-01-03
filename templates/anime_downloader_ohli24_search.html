@@ -17,9 +17,23 @@
     <div id="ajax_loader" class="ajax-loader-container" style="display: none;">
         <div class="ajax-spinner"></div>
     </div>
-    <div id="yommi_wrapper" class="container-fluid mt-4 mx-auto content-cloak" style="max-width: 100%;">
+    <div id="ohli24_search_wrapper" class="ohli24-common-wrapper container-fluid mt-4 content-cloak ohli24-search-page">
         <!-- Search Section -->
-        <div class="card p-4 mb-4 border-0" style="background: rgba(30,30,40,0.6); backdrop-filter: blur(10px); border-radius: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+        <div class="glass-card p-4 mb-4">
+            <div class="ohli24-header">
+                <div class="ohli24-header-left">
+                    <div class="ohli24-icon-box">
+                        <i class="bi bi-search text-primary" style="font-size: 1.5rem;"></i>
+                    </div>
+                    <div>
+                        <h3 class="ohli24-header-title">Ohli24 검색</h3>
+                        <span class="ohli24-header-subtitle">애니메이션 검색 및 탐색</span>
+                    </div>
+                </div>
+            </div>
+            
+            <hr style="border-color: rgba(255,255,255,0.05); margin-bottom: 25px;">
+
             <div class="row align-items-center">
                 <div class="col-md-8 mx-auto">
                      <div class="input-group input-group-lg">
@@ -42,23 +56,23 @@
             
             <!-- Category Buttons -->
             <div class="row mt-4 justify-content-center">
-                <div id="anime_category" class="d-flex flex-wrap justify-content-center gap-2" role="group">
-                    <button id="ing" type="button" class="btn btn-success btn-pill px-4 mx-1 active active-glow">방영중</button>
-                    <button id="fin" type="button" class="btn btn-outline-light btn-pill px-4 mx-1 active-glow">완결</button>
-                    <button id="theater" type="button" class="btn btn-outline-primary btn-pill px-4 mx-1 active-glow">극장판</button>
+                <div id="anime_category" class="d-flex flex-wrap justify-content-center" role="group">
+                    <button id="ing" type="button" class="btn btn-success btn-pill px-4 mx-1 active active-glow mb-2">방영중</button>
+                    <button id="fin" type="button" class="btn btn-outline-light btn-pill px-4 mx-1 active-glow mb-2">완결</button>
+                    <button id="theater" type="button" class="btn btn-outline-primary btn-pill px-4 mx-1 active-glow mb-2">극장판</button>
                 </div>
             </div>
 
             <!-- Year Selection (Sub-category) -->
             <div id="year_filter_row" class="row mt-3 justify-content-center animate__animated animate__fadeIn" style="display: none;">
-                <div id="year_category" class="d-flex flex-wrap justify-content-center gap-2" role="group">
-                    <button data-sca="" type="button" class="btn btn-sm btn-outline-secondary btn-pill px-3 active">전체</button>
-                    <button data-sca="2025" type="button" class="btn btn-sm btn-outline-secondary btn-pill px-3">2025</button>
-                    <button data-sca="2024" type="button" class="btn btn-sm btn-outline-secondary btn-pill px-3">2024</button>
-                    <button data-sca="2023" type="button" class="btn btn-sm btn-outline-secondary btn-pill px-3">2023</button>
-                    <button data-sca="2022" type="button" class="btn btn-sm btn-outline-secondary btn-pill px-3">2022</button>
-                    <button data-sca="2021" type="button" class="btn btn-sm btn-outline-secondary btn-pill px-3">2021</button>
-                    <button data-sca="2020" type="button" class="btn btn-sm btn-outline-secondary btn-pill px-3">2020</button>
+                <div id="year_category" class="d-flex flex-wrap justify-content-center" role="group">
+                    <button data-sca="" type="button" class="btn btn-sm btn-outline-secondary btn-pill px-3 mx-1 mb-2 active">전체</button>
+                    <button data-sca="2025" type="button" class="btn btn-sm btn-outline-secondary btn-pill px-3 mx-1 mb-2">2025</button>
+                    <button data-sca="2024" type="button" class="btn btn-sm btn-outline-secondary btn-pill px-3 mx-1 mb-2">2024</button>
+                    <button data-sca="2023" type="button" class="btn btn-sm btn-outline-secondary btn-pill px-3 mx-1 mb-2">2023</button>
+                    <button data-sca="2022" type="button" class="btn btn-sm btn-outline-secondary btn-pill px-3 mx-1 mb-2">2022</button>
+                    <button data-sca="2021" type="button" class="btn btn-sm btn-outline-secondary btn-pill px-3 mx-1 mb-2">2021</button>
+                    <button data-sca="2020" type="button" class="btn btn-sm btn-outline-secondary btn-pill px-3 mx-1 mb-2">2020</button>
                 </div>
             </div>
         </div>
@@ -68,7 +82,7 @@
                 <div id="airing_list"></div>
             </form>
             <form id="screen_movie_list_form">
-                <div id="screen_movie_list" class="container-fluid px-0"></div>
+                <div id="screen_movie_list"></div>
             </form>
 
             <form id="program_auto_form">
@@ -633,12 +647,7 @@
         document.addEventListener("scroll", debounce(onScroll, 300));
     </script>
     <style>
-        body {
-            font-family: 'NamumSquareNeo', system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Noto Sans, Liberation Sans, Arial, sans-serif;
-            background-image: linear-gradient(135deg, #1f2937, #111827, #0f172a);
-            color: #e2e8f0;
-            min-height: 100vh;
-        }
+    /* Responsive Grid System */
 
         /* Responsive Grid System */
         .anime-grid {
@@ -661,55 +670,6 @@
             }
         }
 
-    /* Navigation Menu Override */
-    ul.nav.nav-pills.bg-light {
-        background-color: rgba(30, 41, 59, 0.6) !important;
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 50rem !important;
-        padding: 6px !important;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2) !important;
-        display: inline-flex !important;
-        flex-wrap: wrap;
-        justify-content: center;
-        width: auto !important;
-        margin-bottom: 20px;
-    }
-
-    ul.nav.nav-pills .nav-item {
-        margin: 0 2px;
-    }
-
-    ul.nav.nav-pills .nav-link {
-        border-radius: 50rem !important;
-        padding: 8px 20px !important;
-        color: #94a3b8 !important;
-        font-weight: 600;
-        transition: all 0.3s ease;
-    }
-
-    ul.nav.nav-pills .nav-link:hover {
-        background-color: rgba(255, 255, 255, 0.1);
-        color: #fff !important;
-        transform: translateY(-1px);
-    }
-
-    ul.nav.nav-pills .nav-link.active {
-        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
-        color: #fff !important;
-        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
-    }
-
-        /* Glassmorphism Cards */
-        .glass-card {
-            background: rgba(30, 41, 59, 0.7) !important;
-            backdrop-filter: blur(12px) !important;
-            border: 1px solid rgba(255, 255, 255, 0.08) !important;
-            border-radius: 16px !important;
-            transition: transform 0.3s ease, box-shadow 0.3s ease !important;
-            overflow: hidden;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        }
 
         .glass-card:hover {
             transform: translateY(-5px);
@@ -894,39 +854,6 @@
         transition-delay: 300ms;
     }
     
-    /* Navigation Menu Override (Top Sub-menu) */
-    ul.nav.nav-pills.bg-light {
-        background-color: rgba(30, 41, 59, 0.6) !important;
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 50rem !important;
-        padding: 6px !important;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2) !important;
-        display: inline-flex !important;
-        flex-wrap: wrap;
-        justify-content: center;
-        width: auto !important;
-        margin-bottom: 20px;
-    }
-
-    ul.nav.nav-pills .nav-item { margin: 0 2px; }
-    ul.nav.nav-pills .nav-link {
-        border-radius: 50rem !important;
-        padding: 8px 20px !important;
-        color: #94a3b8 !important;
-        font-weight: 600;
-        transition: all 0.3s ease;
-    }
-    ul.nav.nav-pills .nav-link:hover {
-        background-color: rgba(255, 255, 255, 0.1);
-        color: #fff !important;
-        transform: translateY(-1px);
-    }
-    ul.nav.nav-pills .nav-link.active {
-        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
-        color: #fff !important;
-        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
-    }
 </style>
 
 <script type="text/javascript">
@@ -941,7 +868,7 @@ $(document).ready(function(){
 /* Mobile Margin Fix */
 @media (max-width: 768px) {
     body { overflow-x: hidden !important; padding: 0 !important; margin: 0 !important; }
-    .container, .container-fluid, .row, form, #program_list, #program_auto_form, #episode_list, .queue-container, #yommi_wrapper, #main_container {
+    .container, .container-fluid, .row, form, #program_list, #program_auto_form, #episode_list, .queue-container, #ohli24_search_wrapper, #main_container {
         width: 100% !important; max-width: 100% !important;
         padding-left: 4px !important; padding-right: 4px !important;
         margin-left: 0 !important; margin-right: 0 !important;
