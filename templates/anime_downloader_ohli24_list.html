@@ -70,31 +70,39 @@
                     </button>
                 </div>
                 <div class="modal-body" style="padding: 0;">
-                    <video id="video-player" class="video-js vjs-big-play-centered vjs-theme-fantasy" controls preload="auto" style="width: 100%; height: auto; max-height: 75vh;">
-                        <p class="vjs-no-js">JavaScript가 필요합니다.</p>
-                    </video>
+                    <div class="video-container" style="position: relative; overflow: hidden; background: #000;">
+                        <video id="video-player" class="video-js vjs-big-play-centered vjs-theme-fantasy" controls preload="auto" playsinline webkit-playsinline style="width: 100%; height: auto; max-height: 80vh;">
+                            <p class="vjs-no-js">JavaScript가 필요합니다.</p>
+                        </video>
+                        <!-- 화면 꽉 채우기 토글 버튼 (모바일용) -->
+                        <button id="btn-video-zoom" class="video-zoom-btn" title="화면 비율 조절">
+                            <i class="fa fa-expand"></i>
+                        </button>
+                    </div>
                     <!-- 플레이리스트 컨트롤 UI -->
-                    <div class="playlist-controls" style="padding: 12px 16px; background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.95) 100%); border-top: 1px solid rgba(255,255,255,0.1);">
+                    <div class="playlist-controls">
                         <!-- 현재 재생 정보 + 버튼 -->
-                        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-                            <button id="btn-prev-ep" class="playlist-nav-btn" style="display: none;" title="이전 에피소드">
-                                <i class="fa fa-step-backward"></i>
+                        <div class="playlist-header">
+                            <button id="btn-prev-ep" class="nav-btn" style="display: none;" title="이전 에피소드">
+                                <i class="fa fa-chevron-left"></i>
                             </button>
-                            <div style="flex: 1; min-width: 200px;">
-                                <div id="current-video-title" style="color: #fbbf24; font-weight: 600; font-size: 14px;"></div>
-                                <div id="playlist-progress" style="color: #64748b; font-size: 12px; margin-top: 2px;"></div>
+                            <div class="playing-info">
+                                <div id="current-video-title" class="video-title"></div>
+                                <div id="playlist-progress" class="progress-text"></div>
                             </div>
-                            <button id="btn-next-ep" class="playlist-nav-btn" style="display: none;" title="다음 에피소드">
-                                <i class="fa fa-step-forward"></i>
+                            <button id="btn-next-ep" class="nav-btn" style="display: none;" title="다음 에피소드">
+                                <i class="fa fa-chevron-right"></i>
                             </button>
-                            <button id="btn-toggle-playlist" class="playlist-toggle-btn" title="에피소드 목록">
-                                <i class="fa fa-list"></i>
-                            </button>
+                            <div class="control-group">
+                                <button id="btn-toggle-playlist" class="action-btn" title="목록 토글">
+                                    <i class="fa fa-list-ul"></i>
+                                </button>
+                            </div>
                         </div>
                         
-                        <!-- 에피소드 목록 (접히는) -->
-                        <div id="playlist-list-container" style="display: none; margin-top: 12px; max-height: 200px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 8px; padding: 8px;">
-                            <div id="playlist-list"></div>
+                        <!-- 에피소드 목록 -->
+                        <div id="playlist-list-container" class="playlist-drawer">
+                            <div id="playlist-list" class="playlist-grid"></div>
                         </div>
                     </div>
                 </div>
@@ -369,6 +377,28 @@
                 playVideoAtIndex(index);
             }
         });
+
+        // 비디오 줌/확장 처리 (모바일 Fullscreen 꽉 차게)
+        var isVideoZoomed = false;
+        $('#btn-video-zoom').click(function() {
+            isVideoZoomed = !isVideoZoomed;
+            const $video = $('#video-player_html5_api'); // Video.js 내부 태그
+            if (isVideoZoomed) {
+                $video.css({
+                    'object-fit': 'cover',
+                    'height': '100%'
+                });
+                $(this).addClass('active').find('i').removeClass('fa-expand').addClass('fa-compress');
+                $.notify('<strong>화면을 꽉 채웠습니다 (일부 잘릴 수 있음)</strong>', {type: 'info', delay: 1000});
+            } else {
+                $video.css({
+                    'object-fit': 'contain',
+                    'height': 'auto'
+                });
+                $(this).removeClass('active').find('i').removeClass('fa-compress').addClass('fa-expand');
+                $.notify('<strong>원래 비율로 복원되었습니다</strong>', {type: 'info', delay: 1000});
+            }
+        });
         
         // 모달 닫을 때 비디오 정지 + 포커스 해제 (aria-hidden 경고 방지)
         var playlistRefreshInterval = null;
@@ -517,7 +547,7 @@
     </script>
 
 <style>
-    /* Pagination & Modal Fixes (Moved to template for specific overrides) */
+    /* Pagination & Modal Fixes */
     .btn-toolbar { justify-content: center; margin: 20px 0; }
     #page1 .btn-group .btn, #page2 .btn-group .btn {
         background: rgba(30, 41, 59, 0.6);
@@ -530,6 +560,107 @@
     
     .modal-dialog { max-width: 95% !important; width: 900px !important; margin: 10px auto; }
     .modal-body pre { background: #000 !important; color: #4ade80 !important; padding: 15px !important; border-radius: 8px !important; max-height: 70vh !important; font-size: 12px !important; }
+
+    /* Video Player Enhancements */
+    .playlist-controls {
+        padding: 16px;
+        background: linear-gradient(to bottom, rgba(30, 41, 59, 0.98), rgba(15, 23, 42, 1));
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        border-bottom-left-radius: 12px;
+        border-bottom-right-radius: 12px;
+    }
+    
+    .playlist-header {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+    
+    .playing-info { flex: 1; min-width: 0; }
+    .video-title { 
+        color: #fbbf24; font-weight: 700; font-size: 15px; 
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; 
+    }
+    .progress-text { color: #94a3b8; font-size: 12px; margin-top: 2px; }
+    
+    .nav-btn, .action-btn {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: #fff;
+        width: 36px; height: 36px;
+        border-radius: 10px;
+        display: flex; align-items: center; justify-content: center;
+        transition: all 0.2s;
+        cursor: pointer;
+    }
+    .nav-btn:hover, .action-btn:hover { background: rgba(59, 130, 246, 0.2); border-color: #3b82f6; }
+    .action-btn.active { background: #3b82f6; box-shadow: 0 0 15px rgba(59, 130, 246, 0.4); }
+
+    .playlist-drawer {
+        display: none;
+        margin-top: 15px;
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 10px;
+        padding: 10px;
+        max-height: 250px;
+        overflow-y: auto;
+    }
+    
+    .playlist-grid { display: flex; flex-direction: column; gap: 4px; }
+    .playlist-item {
+        padding: 10px 15px;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 8px;
+        display: flex; align-items: center; gap: 12px;
+        cursor: pointer; transition: all 0.2s;
+        font-size: 13px; color: #cbd5e1;
+    }
+    .playlist-item:hover { background: rgba(255, 255, 255, 0.08); transform: translateX(5px); }
+    .playlist-item.active { background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.3); color: #60a5fa; }
+    .playlist-item .ep-num { font-weight: 800; color: #fbbf24; min-width: 30px; }
+
+    /* Zoom Button overlay */
+    .video-zoom-btn {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        z-index: 10;
+        background: rgba(15, 23, 42, 0.6);
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        color: white;
+        width: 38px; height: 38px;
+        border-radius: 10px;
+        opacity: 0; transition: opacity 0.3s;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .video-container:hover .video-zoom-btn { opacity: 1; }
+    .video-zoom-btn.active { background: #3b82f6; border-color: transparent; }
+
+    /* Video.js skin overrides */
+    .video-js.vjs-theme-fantasy .vjs-big-play-button {
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.9) 0%, rgba(37, 99, 235, 0.9) 100%) !important;
+        border: none !important;
+        width: 90px !important; height: 90px !important;
+        line-height: 90px !important;
+        border-radius: 50% !important;
+        box-shadow: 0 0 30px rgba(37, 99, 235, 0.6) !important;
+        transition: all 0.3s ease !important;
+    }
+    .video-js.vjs-theme-fantasy .vjs-big-play-button .vjs-icon-placeholder:before {
+        font-size: 60px !important;
+        line-height: 90px !important;
+    }
+    .video-js .vjs-control-bar { background: rgba(15, 23, 42, 0.8) !important; backdrop-filter: blur(10px) !important; }
+
+    @media (max-width: 768px) {
+        #videoModal .modal-dialog { width: 100% !important; margin: 0 !important; }
+        #videoModal .modal-content { border-radius: 0 !important; height: 100vh; display: flex; flex-direction: column; }
+        #video-player { max-height: 100vh !important; height: 100% !important; }
+        .video-container { flex: 1; display: flex; align-items: center; }
+        .playlist-controls { padding-bottom: 25px; } /* Mobile safe area */
+        .video-zoom-btn { opacity: 0.8; top: 10px; right: 10px; }
+    }
 
     @media (max-width: 768px) {
         #videoModal .modal-dialog { width: 100% !important; margin: 5px !important; }

@@ -297,17 +297,19 @@ class LogicOhli24(AnimeModuleBase):
                 self.current_data = data
                 return jsonify({"ret": "success", "data": data, "code": code})
             elif sub == "anime_list":
-                data = self.get_anime_info(cate, page)
+                sca = request.form.get("sca", None)
+                data = self.get_anime_info(cate, page, sca=sca)
                 if isinstance(data, dict) and data.get("ret") == "error":
                     return jsonify(data)
-                return jsonify({"ret": "success", "cate": cate, "page": page, "data": data})
+                return jsonify({"ret": "success", "cate": cate, "page": page, "data": data, "sca": sca})
             elif sub == "complete_list":
                 logger.debug("cate:: %s", cate)
                 page = request.form["page"]
-                data = self.get_anime_info(cate, page)
+                sca = request.form.get("sca", None)
+                data = self.get_anime_info(cate, page, sca=sca)
                 if isinstance(data, dict) and data.get("ret") == "error":
                     return jsonify(data)
-                return jsonify({"ret": "success", "cate": cate, "page": page, "data": data})
+                return jsonify({"ret": "success", "cate": cate, "page": page, "data": data, "sca": sca})
             elif sub == "search":
                 query = request.form["query"]
                 page = request.form["page"]
@@ -1073,17 +1075,13 @@ class LogicOhli24(AnimeModuleBase):
             P.logger.error(traceback.format_exc())
             return {"ret": "error", "log": str(e)}
 
-    def get_anime_info(self, cate: str, page: str) -> Dict[str, Any]:
+    def get_anime_info(self, cate: str, page: str, sca: Optional[str] = None) -> Dict[str, Any]:
         """카테고리별 애니메이션 목록 조회."""
-        logger.debug(f"get_anime_info: cate={cate}, page={page}")
+        logger.debug(f"get_anime_info: cate={cate}, page={page}, sca={sca}")
         try:
-            if cate == "ing":
-                url = P.ModelSetting.get("ohli24_url") + "/bbs/board.php?bo_table=" + cate + "&page=" + page
-            elif cate == "movie":
-                url = P.ModelSetting.get("ohli24_url") + "/bbs/board.php?bo_table=" + cate + "&page=" + page
-            else:
-                url = P.ModelSetting.get("ohli24_url") + "/bbs/board.php?bo_table=" + cate + "&page=" + page
-                # cate == "complete":
+            url = P.ModelSetting.get("ohli24_url") + "/bbs/board.php?bo_table=" + cate + "&page=" + page
+            if sca:
+                url += "&sca=" + sca
             logger.info("url:::> %s", url)
             data = {}
             response_data = LogicOhli24.get_html(url, timeout=10)

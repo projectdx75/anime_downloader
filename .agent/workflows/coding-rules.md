@@ -14,6 +14,10 @@ description: anime_downloader 플러그인 코딩 규칙
 - 로거 메시지는 영어/한국어 혼용 가능
 - 에러 메시지는 간결하게
 
+## 커맨드 실행 규칙
+- `rm`, `mv`, `cp` 등 파일을 변조하거나 삭제할 수 있는 파괴적인 명령은 반드시 사용자 승인 필요 (`SafeToAutoRun: false`)
+- `cat`, `grep`, `sed`, `ps`, `lsof`, `curl` (단순 조회용) 등 부수 효과가 없는 조회성 명령은 자동 실행 허용 (`SafeToAutoRun: true`)
+
 ## FlaskFarm 관련
 - flaskfarm 코어 소스 수정 최소화 (외부 프로젝트)
 - 플러그인 내에서 해결 가능한 것은 플러그인에서 처리

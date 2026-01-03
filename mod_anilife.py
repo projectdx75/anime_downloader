@@ -210,25 +210,34 @@ class LogicAniLife(AnimeModuleBase):
         is_stealth: bool = False,
         timeout: int = 5,
         headless: bool = False,
-    ):
+    ) -> str:
+        import time
+        start_time = time.time()
         data = ""
         try:
-            print("cloudflare protection bypass ==================")
-            # print(self)
-            # return LogicAniLife.get_html_cloudflare(url)
-            # return self.get_html_selenium(url=url, referer=referer, is_stealth=is_stealth)
-            # url: str,
-            # headless: bool = False,
-            # referer: str = None,
-            # engine: str = "chrome",
-            # stealth: bool = False,
-            # return asyncio.run(LogicAniLife.get_html_playwright(url, engine="chrome", headless=True))
-            return asyncio.run(
-                LogicAniLife.get_html_playwright(
+            # --- Zendriver Daemon 최적 최적화 (v0.5.0) ---
+            from .mod_ohli24 import LogicOhli24
+            if LogicOhli24.is_zendriver_daemon_running():
+                logger.info(f"[Anilife] Trying Zendriver Daemon: {url}")
+                daemon_res = LogicOhli24.fetch_via_daemon(url, timeout=30)
+                elapsed = time.time() - start_time
+                if daemon_res.get("success") and daemon_res.get("html"):
+                    logger.info(f"[Anilife] Daemon success in {elapsed:.2f}s, HTML len: {len(daemon_res['html'])}")
+                    return daemon_res["html"]
+                else:
+                    logger.warning(f"[Anilife] Daemon failed in {elapsed:.2f}s: {daemon_res.get('error', 'Unknown')}")
+
+            # --- Fallback: Playwright ---
+            logger.info("[Anilife] Falling back to Playwright...")
+            from .lib.crawler import Crawler
+            res = asyncio.run(
+                Crawler().get_html_playwright(
                     url, engine="chromium", headless=headless
                 )
             )
-            # return LogicAniLife.get_html_playwright_sync(url, engine="chrome", headless=True)
+            elapsed = time.time() - start_time
+            logger.info(f"[Anilife] Playwright finished in {elapsed:.2f}s")
+            return res
 
         except Exception as e:
             logger.error("Exception:%s", e)
@@ -543,7 +552,7 @@ class LogicAniLife(AnimeModuleBase):
                 page = request.form["page"]
                 try:
                     data = self.get_anime_info(cate, page)
-                    logger.debug(data)
+                    # logger.debug(data)
                     if data is not None:
                         return jsonify(
                             {"ret": "success", "cate": cate, "page": page, "data": data}
@@ -829,7 +838,7 @@ class LogicAniLife(AnimeModuleBase):
         return True
 
     # 시리즈 정보를 가져오는 함수 (cloudscraper 버전)
-    def get_series_info(self, code):
+    def get_series_info(self, code: str) -> Dict[str, Any]:
         try:
             if code.isdigit():
                 url = P.ModelSetting.get("anilife_url") + "/detail/id/" + code
@@ -838,26 +847,14 @@ class LogicAniLife(AnimeModuleBase):
 
             logger.debug("get_series_info()::url > %s", url)
 
-            # cloudscraper를 사용하여 Cloudflare 우회
-            scraper = cloudscraper.create_scraper(
-                browser={
-                    "browser": "chrome",
-                    "platform": "windows",
-                    "desktop": True
-                }
-            )
+            # self.get_html을 사용하여 Zendriver Daemon 우선 시도
+            html_content = self.get_html(url)
             
-            # 리다이렉트 자동 처리 (숫자 ID → UUID 페이지로 리다이렉트됨)
-            response = scraper.get(url, timeout=15, allow_redirects=True)
-            
-            if response.status_code != 200:
-                logger.error(f"Failed to fetch series info: HTTP {response.status_code}")
-                return {"ret": "error", "log": f"HTTP {response.status_code}"}
-            
-            # 최종 URL 로깅 (리다이렉트된 경우)
-            logger.debug(f"Final URL after redirect: {response.url}")
+            if not html_content:
+                logger.error(f"Failed to fetch series info: Empty content")
+                return {"ret": "error", "log": "Empty content"}
 
-            tree = html.fromstring(response.text)
+            tree = html.fromstring(html_content)
 
             # tree = html.fromstring(response_data)
             # logger.debug(response_data)
@@ -992,7 +989,7 @@ class LogicAniLife(AnimeModuleBase):
             return {"ret": "exception", "log": str(e)}
 
     @staticmethod
-    def get_real_link(url):
+    def get_real_link(url: str) -> str:
         response = requests.get(url)
         if response.history:
             print("Request was redirected")
@@ -1004,8 +1001,7 @@ class LogicAniLife(AnimeModuleBase):
         else:
             print("Request was not redirected")
 
-    @staticmethod
-    def get_anime_info(cate, page):
+    def get_anime_info(self, cate: str, page: str) -> Dict[str, Any]:
         logger.debug(f"get_anime_info() routine")
         logger.debug(f"cate:: {cate}")
         wrapper_xpath = '//div[@class="bsx"]'
@@ -1028,35 +1024,26 @@ class LogicAniLife(AnimeModuleBase):
                     + "/vodtype/categorize/Movie/"
                     + page
                 )
-                # cate == "complete":
             logger.info("url:::> %s", url)
-            data = {}
+            data: Dict[str, Any] = {}
 
-            # cloudscraper를 사용하여 Cloudflare 우회
-            scraper = cloudscraper.create_scraper(
-                browser={
-                    "browser": "chrome",
-                    "platform": "windows",
-                    "desktop": True
-                }
-            )
+            url = url.split("?")[0]
+            html_content: str = self.get_html(url)
             
-            response = scraper.get(url, timeout=15)
-            
-            if response.status_code != 200:
-                logger.error(f"Failed to fetch anime info: HTTP {response.status_code}")
-                return {"ret": "error", "log": f"HTTP {response.status_code}"}
+            if not html_content:
+                logger.error("Failed to fetch anime info: Empty content")
+                return {"ret": "error", "log": "Empty content"}
 
-            LogicAniLife.episode_url = response.url
-            logger.info(response.url)
-            logger.debug(LogicAniLife.episode_url)
+            LogicAniLife.episode_url = url
+            # logger.info(response.url)
+            # logger.debug(LogicAniLife.episode_url)
 
-            soup_text = BeautifulSoup(response.text, "lxml")
+            soup_text = BeautifulSoup(html_content, "lxml")
 
-            tree = html.fromstring(response.text)
+            tree = html.fromstring(html_content)
             tmp_items = tree.xpath(wrapper_xpath)
 
-            logger.debug(tmp_items)
+            # logger.debug(tmp_items)
             data["anime_count"] = len(tmp_items)
             data["anime_list"] = []
 
@@ -1115,7 +1102,7 @@ class LogicAniLife(AnimeModuleBase):
         # cloudscraper 버전 직접 사용 (외부 playwright API 서버 불필요)
         return self.get_search_result_v2(query, page, cate)
 
-    def get_search_result_v2(self, query, page, cate):
+    def get_search_result_v2(self, query: str, page: int, cate: str) -> Dict[str, Any]:
         """
         anilife.live 검색 결과를 가져오는 함수 (cloudscraper 버전)
         외부 playwright API 서버 없이 직접 cloudscraper를 사용
@@ -1135,22 +1122,14 @@ class LogicAniLife(AnimeModuleBase):
             logger.info("get_search_result_v2()::url> %s", url)
             data = {}
 
-            # cloudscraper를 사용하여 Cloudflare 우회
-            scraper = cloudscraper.create_scraper(
-                browser={
-                    "browser": "chrome",
-                    "platform": "windows",
-                    "desktop": True
-                }
-            )
+            # self.get_html을 사용하여 Zendriver Daemon 우선 시도
+            html_content = self.get_html(url)
             
-            response = scraper.get(url, timeout=15)
-            
-            if response.status_code != 200:
-                logger.error(f"Failed to fetch search results: HTTP {response.status_code}")
-                return {"ret": "error", "log": f"HTTP {response.status_code}"}
+            if not html_content:
+                logger.error(f"Failed to fetch search results: Empty content")
+                return {"ret": "error", "log": "Empty content"}
 
-            tree = html.fromstring(response.text)
+            tree = html.fromstring(html_content)
             
             # 검색 결과 항목들 (div.bsx)
             tmp_items = tree.xpath('//div[@class="bsx"]')

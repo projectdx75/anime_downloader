@@ -3,24 +3,19 @@
 <link rel="stylesheet" href="{{ url_for('.static', filename='css/' ~ arg['sub'] ~ '.css') }}"/>
 
 
-    <div id="preloader" class="loader">
-        <div class="loader-inner">
-            <div class="loader-line-wrap">
-                <div class="loader-line"></div>
-            </div>
-            <div class="loader-line-wrap">
-                <div class="loader-line"></div>
-            </div>
-            <div class="loader-line-wrap">
-                <div class="loader-line"></div>
-            </div>
-            <div class="loader-line-wrap">
-                <div class="loader-line"></div>
-            </div>
-            <div class="loader-line-wrap">
-                <div class="loader-line"></div>
-            </div>
+    <!-- Modern UI Loader -->
+    <div id="preloader" class="loader-bg">
+        <div class="modern-loader">
+            <div class="spinner-ring"></div>
+            <div class="spinner-ring"></div>
+            <div class="spinner-ring"></div>
+            <div class="loader-text">Loading Ohli24</div>
         </div>
+    </div>
+    
+    <!-- AJAX Loading Spinner (Global) -->
+    <div id="ajax_loader" class="ajax-loader-container" style="display: none;">
+        <div class="ajax-spinner"></div>
     </div>
     <div id="yommi_wrapper" class="container-fluid mt-4 mx-auto content-cloak" style="max-width: 100%;">
         <!-- Search Section -->
@@ -48,9 +43,22 @@
             <!-- Category Buttons -->
             <div class="row mt-4 justify-content-center">
                 <div id="anime_category" class="d-flex flex-wrap justify-content-center gap-2" role="group">
-                    <button id="ing" type="button" class="btn btn-outline-success btn-pill px-4 mx-1 active-glow">방영중</button>
+                    <button id="ing" type="button" class="btn btn-success btn-pill px-4 mx-1 active active-glow">방영중</button>
+                    <button id="fin" type="button" class="btn btn-outline-light btn-pill px-4 mx-1 active-glow">완결</button>
                     <button id="theater" type="button" class="btn btn-outline-primary btn-pill px-4 mx-1 active-glow">극장판</button>
-                    <button id="complete_anilist" type="button" class="btn btn-outline-light btn-pill px-4 mx-1 active-glow">완결</button>
+                </div>
+            </div>
+
+            <!-- Year Selection (Sub-category) -->
+            <div id="year_filter_row" class="row mt-3 justify-content-center animate__animated animate__fadeIn" style="display: none;">
+                <div id="year_category" class="d-flex flex-wrap justify-content-center gap-2" role="group">
+                    <button data-sca="" type="button" class="btn btn-sm btn-outline-secondary btn-pill px-3 active">전체</button>
+                    <button data-sca="2025" type="button" class="btn btn-sm btn-outline-secondary btn-pill px-3">2025</button>
+                    <button data-sca="2024" type="button" class="btn btn-sm btn-outline-secondary btn-pill px-3">2024</button>
+                    <button data-sca="2023" type="button" class="btn btn-sm btn-outline-secondary btn-pill px-3">2023</button>
+                    <button data-sca="2022" type="button" class="btn btn-sm btn-outline-secondary btn-pill px-3">2022</button>
+                    <button data-sca="2021" type="button" class="btn btn-sm btn-outline-secondary btn-pill px-3">2021</button>
+                    <button data-sca="2020" type="button" class="btn btn-sm btn-outline-secondary btn-pill px-3">2020</button>
                 </div>
             </div>
         </div>
@@ -85,7 +93,8 @@
         // let current_data = null;
         let page = 1;
         let next_page = Number
-        let current_cate = ''
+        let current_cate = 'ing'
+        let current_sca = ''
         let current_query = ''
 
         const loader = document.getElementById("preloader");
@@ -111,10 +120,12 @@
         observer.observe();
 
 
-        const get_anime_list = (type, page) => {
-            // console.log(`type: ${type}, page: ${page}`)
+        const get_anime_list = (type, page, sca = '') => {
+            // console.log(`type: ${type}, page: ${page}, sca: ${sca}`)
             let url = ''
             let data = {"page": page, "type": type}
+            if (sca) data.sca = sca;
+            current_sca = sca;
 
             switch (type) {
                 case 'ing':
@@ -137,12 +148,17 @@
                     break;
             }
 
+            $('#ajax_loader').show();
             $.ajax({
                 url: url,
                 type: "POST",
                 data: data,
                 cache: false,
+                global: false,
                 dataType: "json",
+                complete: () => {
+                    $('#ajax_loader').hide();
+                },
                 success: (ret) => {
                     let current_screen_movie_data = ret
                     // console.log('ret::>', ret)
@@ -297,6 +313,7 @@
             
             str += '<div class="d-flex justify-content-between align-items-center mb-3">';
              let title = current_cate === 'movie' ? '극장판' : (current_cate === 'theater' ? '극장판(구)' : '완결 애니메이션');
+             if (current_sca) title += ' (' + current_sca + ')';
             str += '<h5 class="text-white font-weight-bold border-left pl-3" style="border-width: 4px !important; border-color: #ffd700 !important;">' + title + '</h5>';
             str += '<button type="button" class="btn btn-sm btn-dark rounded-pill px-3">Page <span class="badge badge-warning ml-1">' + page + '</span></button>';
             str += '</div>';
@@ -367,13 +384,18 @@
                 return false;
             }
 
+            $('#ajax_loader').show();
             $.ajax({
                 url: "/" + package_name + "/ajax/" + sub + "/search",
                 type: "POST",
                 cache: false,
+                global: false,
                 data: {query: query, type: current_cate, page: page},
                 // dataType: "json",
                 contentType: "application/x-www-form-urlencoded; charset=UTF-8",
+                complete: () => {
+                    $('#ajax_loader').hide();
+                },
                 success: function (ret) {
                     if (ret.ret) {
                         // console.log('ret:::', ret)
@@ -388,24 +410,44 @@
             });
         });
 
+        // Category button active state handling
+        function updateActiveButton(id) {
+            $('#anime_category button').removeClass('active btn-success btn-light btn-primary text-dark');
+            $('#anime_category button#ing').addClass('btn-outline-success');
+            $('#anime_category button#fin').addClass('btn-outline-light');
+            $('#anime_category button#theater').addClass('btn-outline-primary');
+
+            const btn = $('#' + id);
+            btn.addClass('active');
+            if (id === 'ing') btn.removeClass('btn-outline-success').addClass('btn-success');
+            else if (id === 'fin') btn.removeClass('btn-outline-light').addClass('btn-light text-dark');
+            else if (id === 'theater') btn.removeClass('btn-outline-primary').addClass('btn-primary');
+        }
+
         $('#anime_category #ing').on("click", function () {
-            // {#// console.log(this.id)#}
-            // let spinner = document.getElementById('spinner');
-            // spinner.style.visibility = 'visible';
+            updateActiveButton('ing');
             get_anime_list("ing", 1)
         })
 
-        $('#anime_category #complete_anilist').on("click", function () {
-            // {#// console.log(this.id)#}
-            // let spinner = document.getElementById('spinner');
-            // spinner.style.visibility = 'visible';
-            get_anime_list("fin", 1)
+        $('#anime_category #fin').on("click", function () {
+            updateActiveButton('fin');
+            $('#year_filter_row').fadeIn();
+            get_anime_list("fin", 1, current_sca)
         })
 
+        $('#year_category button').on("click", function() {
+            $('#year_category button').removeClass('active btn-secondary').addClass('btn-outline-secondary');
+            $(this).removeClass('btn-outline-secondary').addClass('active btn-secondary');
+            current_sca = $(this).data('sca');
+            get_anime_list("fin", 1, current_sca);
+        });
+
+        $('#anime_category #ing, #anime_category #theater').on("click", function() {
+            $('#year_filter_row').hide();
+        });
+
         $('#anime_category #theater').on("click", function () {
-            // {#// console.log(this.id)#}
-            // let spinner = document.getElementById('spinner');
-            // spinner.style.visibility = 'visible';
+            updateActiveButton('theater');
             get_anime_list("theater", 1)
         })
 
@@ -414,12 +456,17 @@
             e.preventDefault();
             const code = document.getElementById("code").value
             // console.log(code)
+            $('#ajax_loader').show();
             $.ajax({
                 url: '/' + package_name + '/ajax/' + sub + '/analysis',
                 type: "POST",
                 cache: false,
+                global: false,
                 data: {code: code},
                 dataType: "json",
+                complete: () => {
+                    $('#ajax_loader').hide();
+                },
                 success: function (ret) {
                     if (ret.ret === 'success' && ret.data != null) {
                         // // console.log(ret.code)
@@ -504,6 +551,7 @@
         const loadNextAnimes = (cate, page) => {
             // spinner.style.display = "block";
             let data = {type: cate, page: String(page)};
+            if (current_sca) data.sca = current_sca;
             let url = ''
             switch (cate) {
                 case 'ing':
@@ -531,6 +579,7 @@
                     break;
             }
 
+            $('#ajax_loader').show();
             fetch(url, {
                 method: "POST",
                 cache: "no-cache",
@@ -554,7 +603,10 @@
                     page++;
                     next_page++;
                 })
-                .catch((error) => console.error("Error:", error));
+                .catch((error) => console.error("Error:", error))
+                .finally(() => {
+                    $('#ajax_loader').hide();
+                });
         };
 
 
@@ -719,19 +771,67 @@
              box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         }
 
-        /* Preloader (Original but styled) */
-        #preloader {
-            background-color: #0f172a;
+        /* Modern Premium Preloader */
+        .loader-bg {
             position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            z-index: 9999;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #0f172a;
+            display: flex; align-items: center; justify-content: center;
+            z-index: 10000;
         }
         
-        .loader-inner {
+        .modern-loader {
             position: relative;
+            width: 120px; height: 120px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        
+        .spinner-ring {
+            position: absolute;
+            width: 100%; height: 100%;
+            border: 4px solid transparent;
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 1.5s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+        }
+        
+        .spinner-ring:nth-child(2) { border-top-color: #00d4ff; animation-delay: -0.3s; width: 80%; height: 80%; }
+        .spinner-ring:nth-child(3) { border-top-color: #fbbf24; animation-delay: -0.6s; width: 60%; height: 60%; }
+        
+        .loader-text {
+            position: absolute;
+            bottom: -40px;
+            color: #94a3b8;
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+
+        /* AJAX Global Spinner */
+        .ajax-loader-container {
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 9999;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(8px);
+            padding: 25px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+        
+        .ajax-spinner {
+            width: 50px; height: 50px;
+            border: 4px solid rgba(59, 130, 246, 0.1);
+            border-left-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
         }
 
         /* Scrollbar */
