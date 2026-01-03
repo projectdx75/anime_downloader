@@ -62,13 +62,13 @@ async def fetch_html(url: str, timeout: int = 60, browser_path: str = None) -> d
             browser = await zd.start(
                 headless=True, 
                 browser_executable_path=exec_path, 
-                no_sandbox=True,
+                sandbox=False,
                 browser_args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--no-first-run"]
             )
         else:
             browser = await zd.start(
                 headless=True, 
-                no_sandbox=True,
+                sandbox=False,
                 browser_args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--no-first-run"]
             )
             
