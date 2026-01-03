@@ -912,7 +912,7 @@ class LogicOhli24(AnimeModuleBase):
                     logger.info("Found item-subject in HTML")
                 else:
                     logger.warning("item-subject NOT found in HTML")
-                if "itemprop="image"" in response_data:
+                if 'itemprop="image"' in response_data:
                     logger.info("Found itemprop=image in HTML")
                 else:
                     logger.warning("itemprop=image NOT found in HTML")
@@ -2417,8 +2417,8 @@ class Ohli24QueueEntity(AnimeQueueEntity):
                 if html_content:
                     # m3u8 URL 패턴 찾기
                     m3u8_patterns = [
-                        re.compile(r"file:\s*['"]([^'"]*(?:\.m3u8|master\.txt)[^'"]*)['"]"),
-                        re.compile(r"['"]([^'"]*(?:\.m3u8|master\.txt)[^'"]*)['"]"),
+                        re.compile(r"file:\s*['\"]([^'\"]*(?:\.m3u8|master\.txt)[^'\"]*)['\"]"),
+                        re.compile(r"['\"]([^'\"]*(?:\.m3u8|master\.txt)[^'\"]*)['\"]"),
                     ]
                     for pattern in m3u8_patterns:
                         match = pattern.search(html_content)
@@ -2437,7 +2437,7 @@ class Ohli24QueueEntity(AnimeQueueEntity):
                         logger.debug(f"HTML Content (First 2000 chars): {html_content[:2000]}")
                     
                     if not vtt_url:
-                        vtt_match = re.search(r"['"]([^'"]*\.vtt[^'"]*)['"]", html_content)
+                        vtt_match = re.search(r"['\"]([^'\"]*\.vtt[^'\"]*)['\"]", html_content)
                         if vtt_match:
                             vtt_url = vtt_match.group(1)
                             if vtt_url.startswith("//"): vtt_url = "https:" + vtt_url
