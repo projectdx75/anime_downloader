@@ -79,8 +79,36 @@
           <hr style="border-color: rgba(255,255,255,0.1);">
           {{ macros.setting_buttons([['global_reset_db_btn', 'DB 초기화']], left='DB정리' ) }}
           <hr style="border-color: rgba(255,255,255,0.1);">
+          
+          <h5 class="text-info mb-3"><i class="bi bi-cpu-fill mr-2"></i>시스템 상태 및 의존성</h5>
+          <div id="system_check_result" class="mb-3 p-3 rounded" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05);">
+            <div class="d-flex align-items-center mb-2">
+              <span class="mr-2">Chromium/Chrome:</span>
+              <span id="browser_status_badge" class="badge badge-secondary">확인 중...</span>
+            </div>
+            <div id="browser_path_display" class="small text-muted mb-2" style="font-family: monospace;"></div>
+            <div id="install_guide_section" style="display:none;">
+              <p class="small text-warning mb-2"><i class="bi bi-exclamation-triangle-fill mr-1"></i>브라우저가 발견되지 않았습니다. Zendriver 기능을 위해 설치가 필요합니다.</p>
+              <div id="auto_install_div" style="display:none;">
+                <button type="button" id="auto_install_btn" class="btn btn-sm btn-outline-info mb-2">
+                  <i class="bi bi-download mr-1"></i>자동 설치 (Ubuntu/Docker)
+                </button>
+              </div>
+              <div class="mt-2">
+                <small class="d-block text-muted mb-1">수동 설치 명령어:</small>
+                <div class="input-group input-group-sm">
+                  <input type="text" id="manual_install_cmd" class="form-control form-control-sm bg-dark border-secondary text-info" readonly value="apt-get update && apt-get install -y chromium-browser">
+                  <div class="input-group-append">
+                    <button class="btn btn-outline-secondary" type="button" id="copy_cmd_btn"><i class="bi bi-clipboard"></i></button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <hr style="border-color: rgba(255,255,255,0.1);">
           <h5 class="text-info mb-3"><i class="bi bi-browser-chrome mr-2"></i>Zendriver 설정</h5>
-          {{ macros.setting_input_text('ohli24_zendriver_browser_path', '브라우저 경로', value=arg.get('ohli24_zendriver_browser_path', ''), desc=['Zendriver가 사용할 Chrome/Chromium 실행 파일 경로입니다.', 'Docker 환경에서 자동 탐지에 실패할 경우 직접 입력하세요.', '예: /usr/bin/chromium-browser']) }}
+          {{ macros.setting_input_text('ohli24_zendriver_browser_path', '브라우저 경로', value=arg.get('ohli24_zendriver_browser_path', ''), desc=['Zendriver가 사용할 Chrome/Chromium 실행 파일 경로입니다.', '위의 시스템 상태에서 자동으로 찾은 경우 비워두셔도 됩니다 (수동 설정 시 우선 적용).']) }}
       </div>
     {{ macros.m_tab_content_end() }}
   
@@ -566,6 +594,78 @@ function escapeHtml(text) {
   div.appendChild(document.createTextNode(text));
   return div.innerHTML;
 }
+
+// ======================================
+// 시스템 체크 및 브라우저 설치
+// ======================================
+function runSystemCheck() {
+  $.ajax({
+    url: '/' + package_name + '/ajax/' + sub + '/system_check',
+    type: 'POST',
+    success: function(ret) {
+      if (ret.browser_found) {
+        $('#browser_status_badge').removeClass('badge-secondary badge-danger').addClass('badge-success').text('발견됨');
+        $('#browser_path_display').text('경로: ' + ret.browser_path);
+        $('#install_guide_section').hide();
+      } else {
+        $('#browser_status_badge').removeClass('badge-secondary badge-success').addClass('badge-danger').text('미설치');
+        $('#browser_path_display').text('');
+        $('#install_guide_section').show();
+        $('#manual_install_cmd').val(ret.install_cmd);
+        if (ret.can_install) {
+          $('#auto_install_div').show();
+        } else {
+          $('#auto_install_div').hide();
+        }
+      }
+    }
+  });
+}
+
+// 자동 설치 버튼
+$('#auto_install_btn').on('click', function() {
+  if (!confirm('시스템 브라우저 설치를 시작하시겠습니까?\n(Ubuntu/Debian 기반 도커 환경에서만 작동합니다)')) return;
+  
+  var btn = $(this);
+  btn.prop('disabled', true).html('<i class="bi bi-arrow-repeat spin mr-1"></i>설치 중 (최대 10분 소요)...');
+  
+  $.ajax({
+    url: '/' + package_name + '/ajax/' + sub + '/install_browser',
+    type: 'POST',
+    success: function(ret) {
+      if (ret.ret === 'success') {
+        $.notify(ret.msg, {type: 'success'});
+        if (ret.path) {
+          $('#ohli24_zendriver_browser_path').val(ret.path);
+        }
+        runSystemCheck();
+      } else {
+        $.notify(ret.msg, {type: 'danger'});
+      }
+    },
+    error: function() {
+      $.notify('설치 요청 중 오류가 발생했습니다.', {type: 'danger'});
+    },
+    complete: function() {
+      btn.prop('disabled', false).html('<i class="bi bi-download mr-1"></i>자동 설치 (Ubuntu/Docker)');
+    }
+  });
+});
+
+// 명령어 복사 버튼
+$('#copy_cmd_btn').on('click', function() {
+  var copyText = document.getElementById("manual_install_cmd");
+  copyText.select();
+  copyText.setSelectionRange(0, 99999);
+  document.execCommand("copy");
+  $.notify('명령어가 복사되었습니다.', {type: 'info'});
+});
+
+// 초기 실행
+$(document).ready(function() {
+  // Action 탭이 활성화될 때 체크 (또는 그냥 로딩 시 한 번)
+  runSystemCheck();
+});
 
 </script>
 

@@ -229,6 +229,85 @@ class LogicOhli24(AnimeModuleBase):
         except Exception as e:
             return {"success": False, "error": str(e)}
 
+    @classmethod
+    def system_check(cls) -> Dict[str, Any]:
+        """시스템 의존성 확인 (브라우저 등)"""
+        import shutil
+        import platform
+        
+        res = {
+            "browser_found": False,
+            "browser_path": "",
+            "os": platform.system(),
+            "dist": "",
+            "can_install": False,
+            "install_cmd": "apt-get update && apt-get install -y chromium-browser"
+        }
+        
+        # 브라우저 찾기
+        manual_path = P.ModelSetting.get("ohli24_zendriver_browser_path")
+        if manual_path and os.path.exists(manual_path):
+            res["browser_found"] = True
+            res["browser_path"] = manual_path
+        else:
+            for cmd in ["google-chrome", "google-chrome-stable", "chromium-browser", "chromium"]:
+                found = shutil.which(cmd)
+                if found:
+                    res["browser_found"] = True
+                    res["browser_path"] = found
+                    break
+        
+        # OS 및 설치 가능 여부 확인
+        if res["os"] == "Linux":
+            try:
+                if os.path.exists("/etc/debian_version"):
+                    res["dist"] = "debian/ubuntu"
+                    res["can_install"] = True
+            except:
+                pass
+                
+        return res
+
+    @classmethod
+    def install_system_browser(cls) -> Dict[str, Any]:
+        """시스템 브라우저 자동 설치 (Ubuntu/Debian 전용)"""
+        import subprocess as sp
+        
+        check = cls.system_check()
+        if not check["can_install"]:
+            return {"ret": "error", "msg": "자동 설치가 지원되지 않는 OS 환경입니다. 안내된 명령어를 터미널에서 직접 실행해 주세요."}
+            
+        try:
+            logger.info("[Zendriver] Starting system browser installation...")
+            # apt-get update
+            sp.run(["apt-get", "update"], capture_output=True, text=True, timeout=300)
+            
+            # apt-get install
+            process = sp.run(
+                ["apt-get", "install", "-y", "chromium-browser"],
+                capture_output=True,
+                text=True,
+                timeout=600
+            )
+            
+            if process.returncode == 0:
+                logger.info("[Zendriver] System browser installed successfully")
+                # 설치 후 다시 찾기
+                new_check = cls.system_check()
+                if new_check["browser_found"]:
+                    P.ModelSetting.set("ohli24_zendriver_browser_path", new_check["browser_path"])
+                    return {"ret": "success", "msg": "브라우저 설치 및 경로 설정이 완료되었습니다.", "path": new_check["browser_path"]}
+                return {"ret": "success", "msg": "설치는 완료되었으나 경로를 자동으로 찾지 못했습니다. 직접 입력해 주세요."}
+            else:
+                logger.error(f"[Zendriver] Installation failed: {process.stderr}")
+                return {"ret": "error", "msg": f"설치 중 오류가 발생했습니다: {process.stderr[:200]}"}
+                
+        except sp.TimeoutExpired:
+            return {"ret": "error", "msg": "설치 시간이 초과되었습니다. 네트워크 상태를 확인하거나 터미널에서 직접 실행해 주세요."}
+        except Exception as e:
+            logger.error(f"[Zendriver] Install exception: {e}")
+            return {"ret": "error", "msg": f"설치 중 예외가 발생했습니다: {str(e)}"}
+
     def __init__(self, P: Any) -> None:
         self.name: str = name
 
@@ -431,6 +510,12 @@ class LogicOhli24(AnimeModuleBase):
                     logger.error(f"Exception: {e}")
                     logger.error(traceback.format_exc())
                     return jsonify({"error": str(e)}), 500
+            
+            elif sub == "system_check":
+                return jsonify(self.system_check())
+            
+            elif sub == "install_browser":
+                return jsonify(self.install_system_browser())
             
             elif sub == "stream_video":
                 # 비디오 스트리밍 (MP4 파일 직접 서빙)
