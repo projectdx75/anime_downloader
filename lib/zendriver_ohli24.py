@@ -10,6 +10,32 @@ Zendriver 기반 Ohli24 HTML 페칭 스크립트
 import sys
 import json
 import asyncio
+import os
+import shutil
+
+
+def find_browser_executable():
+    """시스템에서 브라우저 실행 파일 찾기 (Docker/Ubuntu 환경 대응)"""
+    common_paths = [
+        "/usr/bin/google-chrome",
+        "/usr/bin/google-chrome-stable",
+        "/usr/bin/chromium-browser",
+        "/usr/bin/chromium",
+        "/usr/lib/chromium-browser/chromium-browser",
+    ]
+    
+    # 먼저 절대 경로 확인
+    for path in common_paths:
+        if os.path.exists(path):
+            return path
+            
+    # shutil.which로 PATH 확인
+    for cmd in ["google-chrome", "google-chrome-stable", "chromium-browser", "chromium"]:
+        found = shutil.which(cmd)
+        if found:
+            return found
+            
+    return None
 
 
 async def fetch_html(url: str, timeout: int = 60) -> dict:
@@ -24,8 +50,15 @@ async def fetch_html(url: str, timeout: int = 60) -> dict:
     browser = None
     
     try:
+        # 실행 가능한 브라우저 찾기
+        exec_path = find_browser_executable()
+        
         # 브라우저 시작
-        browser = await zd.start(headless=True)
+        if exec_path:
+            browser = await zd.start(headless=True, browser_executable_path=exec_path)
+        else:
+            browser = await zd.start(headless=True)
+            
         page = await browser.get(url)
         
         # 페이지 로드 대기 (DOM 안정화)

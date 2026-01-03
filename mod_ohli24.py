@@ -136,6 +136,14 @@ class LogicOhli24(AnimeModuleBase):
             if result.returncode == 0:
                 cls.zendriver_setup_done = True
                 logger.info("[Zendriver] Successfully installed")
+                
+                # 브라우저 존재 확인 안내
+                import shutil
+                has_browser = any(shutil.which(cmd) for cmd in ["google-chrome", "google-chrome-stable", "chromium-browser", "chromium"])
+                if not has_browser:
+                    logger.warning("[Zendriver] 브라우저(Chrome/Chromium)가 시스템에 설치되어 있지 않습니다. Docker 환경에서는 직접 설치가 필요할 수 있습니다.")
+                    logger.warning("[Zendriver] Ubuntu Tip: apt-get update && apt-get install -y chromium-browser")
+                
                 return True
             else:
                 logger.warning(f"[Zendriver] Installation failed: {result.stderr[:200]}")

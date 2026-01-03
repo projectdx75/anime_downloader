@@ -37,6 +37,34 @@ browser_lock: Lock = Lock()
 loop: Optional[asyncio.AbstractEventLoop] = None
 
 
+def find_browser_executable() -> Optional[str]:
+    """시스템에서 브라우저 실행 파일 찾기 (Docker/Ubuntu 환경 대응)"""
+    common_paths: List[str] = [
+        "/usr/bin/google-chrome",
+        "/usr/bin/google-chrome-stable",
+        "/usr/bin/chromium-browser",
+        "/usr/bin/chromium",
+        "/usr/lib/chromium-browser/chromium-browser",
+        "google-chrome", # PATH에서 찾기
+        "chromium-browser",
+        "chromium",
+    ]
+    
+    # 먼저 절대 경로 확인
+    for path in common_paths:
+        if path.startswith("/") and os.path.exists(path):
+            return path
+            
+    # shutil.which로 PATH 확인
+    import shutil
+    for cmd in ["google-chrome", "google-chrome-stable", "chromium-browser", "chromium"]:
+        found = shutil.which(cmd)
+        if found:
+            return found
+            
+    return None
+
+
 class ZendriverHandler(BaseHTTPRequestHandler):
     """HTTP 요청 핸들러"""
     
@@ -121,8 +149,16 @@ async def ensure_browser() -> Any:
             try:
                 import zendriver as zd
                 log_debug("[ZendriverDaemon] Starting new browser instance...")
-                # zendriver.start()는 브라우저를 시작하고 첫 번째 페이지를 반환할 수 있음
-                browser = await zd.start(headless=True)
+                
+                # 실행 가능한 브라우저 찾기
+                exec_path = find_browser_executable()
+                if exec_path:
+                    log_debug(f"[ZendriverDaemon] Found browser at: {exec_path}")
+                    browser = await zd.start(headless=True, browser_executable_path=exec_path)
+                else:
+                    log_debug("[ZendriverDaemon] No explicit browser path found, trying default")
+                    browser = await zd.start(headless=True)
+                    
                 log_debug("[ZendriverDaemon] Browser started successfully")
             except Exception as e:
                 log_debug(f"[ZendriverDaemon] Failed to start browser: {e}")
