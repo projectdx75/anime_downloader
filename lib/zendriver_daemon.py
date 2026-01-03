@@ -157,12 +157,23 @@ async def ensure_browser() -> Any:
                 
                 # 실행 가능한 브라우저 찾기
                 exec_path = find_browser_executable()
+                log_debug(f"[ZendriverDaemon] Startup params: headless=True, no_sandbox=True, path={exec_path}")
+                
                 if exec_path:
-                    log_debug(f"[ZendriverDaemon] Found browser at: {exec_path}")
-                    browser = await zd.start(headless=True, browser_executable_path=exec_path)
+                    log_debug(f"[ZendriverDaemon] Starting browser at: {exec_path}")
+                    browser = await zd.start(
+                        headless=True, 
+                        browser_executable_path=exec_path, 
+                        no_sandbox=True,
+                        browser_args=["--disable-dev-shm-usage", "--disable-gpu", "--no-first-run"]
+                    )
                 else:
-                    log_debug("[ZendriverDaemon] No explicit browser path found, trying default")
-                    browser = await zd.start(headless=True)
+                    log_debug("[ZendriverDaemon] Starting browser with default path")
+                    browser = await zd.start(
+                        headless=True, 
+                        no_sandbox=True,
+                        browser_args=["--disable-dev-shm-usage", "--disable-gpu", "--no-first-run"]
+                    )
                     
                 log_debug("[ZendriverDaemon] Browser started successfully")
             except Exception as e:
