@@ -245,27 +245,31 @@ class LogicOhli24(AnimeModuleBase):
         }
         
         # 브라우저 찾기
+        def is_bad_snap(path):
+            if not path or not os.path.exists(path): return True
+            if "chromium-browser" in path:
+                try:
+                    # --version 실행 시 Snap 안내가 나오거나 에러가 나면 래퍼임
+                    v_out = sp.check_output([path, "--version"], stderr=sp.STDOUT, timeout=5).decode().lower()
+                    if "snap" in v_out: return True
+                except:
+                    return True # 실행 안 되면 일단 문제 있는 것으로 간주
+            return False
+
         manual_path = P.ModelSetting.get("ohli24_zendriver_browser_path")
         if manual_path and os.path.exists(manual_path):
-            res["browser_found"] = True
-            res["browser_path"] = manual_path
-        else:
+            if not is_bad_snap(manual_path):
+                res["browser_found"] = True
+                res["browser_path"] = manual_path
+            else:
+                res["snap_error"] = True
+        
+        if not res["browser_found"]:
             # Snap 이슈를 피하기 위해 google-chrome을 최우선으로 둠
             for cmd in ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser"]:
                 found = shutil.which(cmd)
                 if found:
-                    # Snap Wrapper인지 확인 (도커 우분투 전용)
-                    is_snap_wrapper = False
-                    if "chromium-browser" in cmd:
-                        try:
-                            # --version 실행 시 Snap 안내가 나오면 래퍼임
-                            v_out = sp.check_output([found, "--version"], stderr=sp.STDOUT, timeout=5).decode().lower()
-                            if "snap" in v_out:
-                                is_snap_wrapper = True
-                        except:
-                            is_snap_wrapper = True # 실행 안 되면 일단 문제 있는 것으로 간주
-                    
-                    if not is_snap_wrapper:
+                    if not is_bad_snap(found):
                         res["browser_found"] = True
                         res["browser_path"] = found
                         break
