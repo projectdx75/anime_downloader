@@ -241,7 +241,7 @@ class LogicOhli24(AnimeModuleBase):
             "os": platform.system(),
             "dist": "",
             "can_install": False,
-            "install_cmd": "apt-get update && apt-get install -y chromium-browser"
+            "install_cmd": "wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - && echo 'deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main' >> /etc/apt/sources.list.d/google.list && apt-get update && apt-get install -y google-chrome-stable"
         }
         
         # 브라우저 찾기
@@ -250,7 +250,8 @@ class LogicOhli24(AnimeModuleBase):
             res["browser_found"] = True
             res["browser_path"] = manual_path
         else:
-            for cmd in ["google-chrome", "google-chrome-stable", "chromium-browser", "chromium"]:
+            # Snap 이슈를 피하기 위해 google-chrome을 우선순위로 둠
+            for cmd in ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser"]:
                 found = shutil.which(cmd)
                 if found:
                     res["browser_found"] = True
@@ -279,12 +280,19 @@ class LogicOhli24(AnimeModuleBase):
             
         try:
             logger.info("[Zendriver] Starting system browser installation...")
-            # apt-get update
+            # Google Chrome Repo 등록 및 설치 (Snap 회피용)
+            sp.run(["apt-get", "update"], capture_output=True, text=True, timeout=300)
+            sp.run(["apt-get", "install", "-y", "wget", "gnupg"], capture_output=True, text=True, timeout=300)
+            
+            # Google Key & Repo
+            sp.run("wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add -", shell=True, capture_output=True, text=True, timeout=60)
+            sp.run("echo 'deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main' > /etc/apt/sources.list.d/google.list", shell=True, capture_output=True, text=True, timeout=60)
+            
             sp.run(["apt-get", "update"], capture_output=True, text=True, timeout=300)
             
-            # apt-get install
+            # Install Chrome
             process = sp.run(
-                ["apt-get", "install", "-y", "chromium-browser"],
+                ["apt-get", "install", "-y", "google-chrome-stable"],
                 capture_output=True,
                 text=True,
                 timeout=600

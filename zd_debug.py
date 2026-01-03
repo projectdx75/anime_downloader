@@ -3,48 +3,59 @@ import asyncio
 import zendriver as zd
 import sys
 import os
-import inspect
+import subprocess
 
 async def test():
-    print("=== Zendriver API Inspection ===")
+    print("=== Zendriver Final Stand Debug ===")
     
-    # Inspect zd.start
-    print("\n--- zd.start Signature ---")
+    browser_bin = "/bin/chromium-browser"
+    if not os.path.exists(browser_bin):
+        browser_bin = "/usr/bin/chromium-browser"
+    
+    print(f"Testing browser binary: {browser_bin}")
+    
+    # 1. Try to run browser version check
     try:
-        sig = inspect.signature(zd.start)
-        print(sig)
-        for param in sig.parameters.values():
-            print(f"  {param.name}: {param.default}")
+        print("\n--- Checking Browser Version ---")
+        out = subprocess.check_output([browser_bin, "--version"], stderr=subprocess.STDOUT).decode()
+        print(f"Version output: {out}")
     except Exception as e:
-        print(f"Failed to inspect zd.start: {e}")
+        print(f"Version check failed: {e}")
+        if hasattr(e, 'output'):
+            print(f"Error output: {e.output.decode()}")
 
-    # Inspect zd.Config
-    print("\n--- zd.Config Attributes ---")
+    # 2. Try to run browser with minimum flags to see if it crashes
+    print("\n--- Direct Subprocess Start Test (Headless + No Sandbox) ---")
     try:
-        config = zd.Config()
-        # Filter out dunder methods
-        attrs = [a for a in dir(config) if not a.startswith("__")]
-        print(attrs)
-        
-        # Check current values
-        for a in attrs:
-            try:
-                val = getattr(config, a)
-                if not callable(val):
-                    print(f"  {a} = {val}")
-            except:
-                pass
+        # Just try to get help or something that starts the engine
+        cmd = [browser_bin, "--headless", "--no-sandbox", "--disable-gpu", "--remote-debugging-port=9222", "--about:blank"]
+        print(f"Running: {' '.join(cmd)}")
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        await asyncio.sleep(3)
+        if proc.poll() is None:
+            print(">>> SUCCESS: Browser process is ALIVE after 3 seconds!")
+            proc.terminate()
+        else:
+            stdout, stderr = proc.communicate()
+            print(f"FAIL: Browser process DIED instantly (code {proc.returncode})")
+            print(f"STDOUT: {stdout.decode()}")
+            print(f"STDERR: {stderr.decode()}")
     except Exception as e:
-        print(f"Failed to inspect zd.Config: {e}")
+        print(f"Process start test failed: {e}")
 
-    print("\n--- Testing Config 3: 'arguments' instead of 'browser_args' ---")
+    # 3. Last try with Zendriver and absolute bare settings
+    print("\n--- Zendriver Barebones Test ---")
     try:
-        # Based on typical Zendriver usage, it might be 'arguments'
-        browser = await zd.start(headless=True, no_sandbox=True, arguments=["--no-sandbox", "--disable-dev-shm-usage"])
-        print("Success with Config 3 (arguments)!")
+        browser = await zd.start(
+            browser_executable_path=browser_bin,
+            headless=True,
+            sandbox=False,
+            browser_args=["--no-sandbox", "--disable-dev-shm-usage"]
+        )
+        print(">>> SUCCESS: Zendriver connected!")
         await browser.stop()
     except Exception as e:
-        print(f"Config 3 (arguments) Failed: {e}")
+        print(f"Zendriver test failed: {e}")
 
 if __name__ == "__main__":
     asyncio.run(test())
