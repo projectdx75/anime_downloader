@@ -24,6 +24,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    min-height: 0; /* Crucial for flex nested items */
 }
 
 /* Close Button - Prominent */
@@ -56,9 +57,17 @@
     background: #000;
     flex: 1;
     display: flex;
-    align-items: center; /* Vertical center */
-    justify-content: center; /* Horizontal center */
-    min-height: 400px; /* Ensure enough height for centering */
+    flex-direction: column; /* Center child vertically */
+    align-items: center;
+    justify-content: center;
+    min-height: 300px;
+}
+
+/* Ensure Video.js container itself is centered */
+.video-container .video-js {
+    margin: auto !important;
+    max-width: 100%;
+    max-height: 100%;
 }
 
 /* Zoom Button */
@@ -199,10 +208,13 @@
 }
 .external-players-grid {
     display: flex;
-    flex-wrap: wrap; /* Allow wrapping */
+    flex-direction: row;
+    flex-wrap: wrap !important; /* Force wrap */
     justify-content: center;
-    gap: 10px;
-    width: 100%; /* Ensure it takes full width to trigger wrap */
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 10px 0;
 }
 .ext-player-btn {
     display: flex;
