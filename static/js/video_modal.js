@@ -271,7 +271,7 @@ var VideoModal = (function() {
         var players = [
             { name: 'IINA', img: imgBase + 'iina.webp', url: 'iina://weblink?url=' + encodedUrl },
             { name: 'PotPlayer', img: imgBase + 'potplayer.webp', url: 'potplayer://' + streamUrl },
-            { name: 'VLC', img: imgBase + 'vlc.webp', url: 'vlc://' + streamUrl },
+            { name: 'VLC', img: imgBase + 'vlc.webp', url: 'vlc:' + streamUrl },
             { name: 'nPlayer', img: imgBase + 'nplayer.webp', url: 'nplayer-' + streamUrl },
             { name: 'Infuse', img: imgBase + 'infuse.webp', url: 'infuse://x-callback-url/play?url=' + streamUrl },
             { name: 'OmniPlayer', img: imgBase + 'omniplayer.webp', url: 'omniplayer://weblink?url=' + streamUrl },
