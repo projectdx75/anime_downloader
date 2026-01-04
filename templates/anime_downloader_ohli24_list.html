@@ -5,7 +5,7 @@
 
 
 <div id="ohli24_list_wrapper" class="ohli24-common-wrapper container-fluid mt-4 content-cloak ohli24-list-page">
-    <div class="glass-card p-4">
+    <div class="glass-card p-3">
         <div class="ohli24-header">
             <div class="ohli24-header-left">
                 <div class="ohli24-icon-box">
@@ -200,16 +200,6 @@
             var search_word = $(this).data('title');
             document.getElementById("search_word").value = search_word;
             global_sub_request_search('1')
-        });
-
-        // Video Modal 초기화
-        VideoModal.init({ package_name: package_name, sub: sub });
-        
-        // 비디오 보기 버튼 클릭 핸들러
-        $("body").on('click', '.btn-watch', function (e) {
-            e.preventDefault();
-            var filePath = $(this).data('path');
-            VideoModal.openWithPath(filePath);
         });
 
 
