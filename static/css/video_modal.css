@@ -13,6 +13,7 @@
     border-radius: 12px !important;
     display: flex;
     flex-direction: column;
+    height: 100%; /* Fill the 85vh height */
     max-height: calc(100vh - 60px);
 }
 #videoModal .modal-header {
@@ -55,12 +56,11 @@
     position: relative;
     overflow: hidden;
     background: #000;
-    flex: 1;
+    flex: 1; /* Stretch to fill space */
     display: flex;
-    flex-direction: column; /* Center child vertically */
-    align-items: center;
-    justify-content: center;
-    min-height: 300px;
+    align-items: center !important; /* Force center */
+    justify-content: center !important;
+    min-height: 450px; /* Increased for better visual impact */
 }
 
 /* Ensure Video.js container itself is centered */
