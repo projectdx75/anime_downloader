@@ -3,11 +3,61 @@
  * Reusable video player modal for Anime Downloader
  */
 
+/* Modal - Desktop: Centered, Mobile: Fullscreen */
+#videoModal .modal-dialog {
+    max-width: 900px;
+    margin: 30px auto;
+    height: auto;
+}
+#videoModal .modal-content {
+    border-radius: 12px !important;
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 60px);
+}
+#videoModal .modal-header {
+    flex-shrink: 0;
+    padding: 10px 16px;
+}
+#videoModal .modal-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Close Button - Prominent */
+#videoModal .close {
+    font-size: 32px;
+    font-weight: 300;
+    color: #fff;
+    text-shadow: 0 0 10px rgba(0,0,0,0.5);
+    opacity: 1;
+    padding: 0;
+    margin: -5px -5px -5px auto;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(239, 68, 68, 0.8);
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+#videoModal .close:hover {
+    background: rgba(239, 68, 68, 1);
+    transform: scale(1.1);
+}
+
 /* Video Container */
 .video-container {
     position: relative;
     overflow: hidden;
     background: #000;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 /* Zoom Button */
@@ -145,10 +195,11 @@
     padding: 8px 16px;
     background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.95) 100%);
     border-top: 1px solid rgba(255, 255, 255, 0.1);
+    overflow-x: hidden; /* Prevent horizontal scroll */
 }
 .external-players-grid {
     display: flex;
-    flex-wrap: nowrap;
+    flex-wrap: wrap; /* Allow wrapping to multiple lines */
     justify-content: center;
     gap: 10px;
 }
@@ -200,7 +251,9 @@
 @media (max-width: 768px) {
     #videoModal .modal-dialog {
         width: 100% !important;
+        max-width: 100% !important;
         margin: 0 !important;
+        height: 100%;
     }
     #videoModal .modal-content {
         border-radius: 0 !important;
