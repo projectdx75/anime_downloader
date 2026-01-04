@@ -7,7 +7,7 @@
 #videoModal .modal-dialog {
     max-width: 1100px;
     margin: 30px auto;
-    height: 85vh; /* Larger modal height » half-sizeish */
+    height: 80vh; /* Reduced from 85vh */
 }
 #videoModal .modal-content {
     border-radius: 12px !important;
@@ -60,14 +60,21 @@
     display: flex;
     align-items: center !important; /* Force center */
     justify-content: center !important;
-    min-height: 450px; /* Increased for better visual impact */
+    min-height: 350px; /* Reduced from 450px */
 }
-
-/* Ensure Video.js container itself is centered */
 .video-container .video-js {
     margin: auto !important;
     max-width: 100%;
     max-height: 100%;
+}
+
+/* Zoomed state via CSS class */
+.video-container .video-js.vjs-zoomed {
+    object-fit: cover !important;
+    max-height: 100% !important;
+}
+.video-container .video-js.vjs-zoomed video {
+    object-fit: cover !important;
 }
 
 /* Zoom Button */
@@ -270,19 +277,21 @@
     }
     #videoModal .modal-content {
         border-radius: 0 !important;
-        height: 100vh;
+        max-height: 92vh; /* Use max-height instead of fixed 100vh to avoid taking too much space */
+        height: auto;
         display: flex;
         flex-direction: column;
     }
     #video-player {
         width: 100% !important;
-        height: auto !important; /* Remove height: 100% to allow centering */
+        height: auto !important;
         max-width: 100%;
     }
     .video-container {
         flex: 1;
         display: flex;
         align-items: center;
+        min-height: 250px; /* Fixed height for video area on mobile */
     }
     .playlist-controls {
         padding-bottom: 25px; /* Mobile safe area */

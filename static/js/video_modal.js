@@ -50,16 +50,10 @@ var VideoModal = (function() {
         $('#btn-video-zoom').off('click').on('click', function() {
             isVideoZoomed = !isVideoZoomed;
             if (isVideoZoomed) {
-                $('#video-player').css({
-                    'object-fit': 'cover',
-                    'max-height': '100vh'
-                });
+                $('#video-player').addClass('vjs-zoomed');
                 $(this).addClass('active').find('i').removeClass('fa-expand').addClass('fa-compress');
             } else {
-                $('#video-player').css({
-                    'object-fit': 'contain',
-                    'max-height': '80vh'
-                });
+                $('#video-player').removeClass('vjs-zoomed');
                 $(this).removeClass('active').find('i').removeClass('fa-compress').addClass('fa-expand');
             }
         });
@@ -79,10 +73,7 @@ var VideoModal = (function() {
             $('body').removeClass('modal-video-open');
             if (isVideoZoomed) {
                 isVideoZoomed = false;
-                $('#video-player').css({
-                    'object-fit': 'contain',
-                    'max-height': '80vh'
-                });
+                $('#video-player').removeClass('vjs-zoomed');
                 $('#btn-video-zoom').removeClass('active').find('i').removeClass('fa-compress').addClass('fa-expand');
             }
         });
