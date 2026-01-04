@@ -111,6 +111,43 @@ class LogicOhli24(AnimeModuleBase):
     zendriver_setup_done = False  # Zendriver 자동 설치 완료 플래그
     zendriver_daemon_process = None  # Zendriver 데몬 프로세스
     zendriver_daemon_port = 19876
+    
+    # Streaming tokens for external players (no auth required)
+    _stream_tokens: Dict[str, Dict[str, Any]] = {}
+    _TOKEN_TTL_SECONDS = 300  # 5 minutes
+
+    @classmethod
+    def _cleanup_expired_tokens(cls) -> None:
+        """Remove expired streaming tokens"""
+        import time
+        now = time.time()
+        expired = [k for k, v in cls._stream_tokens.items() if v.get("expires", 0) < now]
+        for k in expired:
+            del cls._stream_tokens[k]
+
+    @classmethod
+    def _generate_stream_token(cls, file_path: str) -> str:
+        """Generate a temporary streaming token for external players"""
+        import time
+        import secrets
+        cls._cleanup_expired_tokens()
+        token = secrets.token_urlsafe(32)
+        cls._stream_tokens[token] = {
+            "path": file_path,
+            "expires": time.time() + cls._TOKEN_TTL_SECONDS
+        }
+        return token
+
+    @classmethod
+    def _validate_stream_token(cls, token: str) -> Optional[str]:
+        """Validate token and return file path if valid (consumes token)"""
+        import time
+        cls._cleanup_expired_tokens()
+        token_data = cls._stream_tokens.get(token)
+        if token_data and token_data.get("expires", 0) > time.time():
+            # Don't consume token immediately - allow multiple uses within TTL
+            return token_data.get("path")
+        return None
 
     @classmethod
     def ensure_zendriver_installed(cls) -> bool:
@@ -636,6 +673,133 @@ class LogicOhli24(AnimeModuleBase):
                     logger.error(traceback.format_exc())
                     return jsonify({"error": str(e)}), 500
             
+            elif sub == "generate_stream_token":
+                # Generate a temporary streaming token for external players
+                try:
+                    file_path = request.args.get("path", "") or request.form.get("path", "")
+                    if not file_path:
+                        return jsonify({"error": "No path provided"}), 400
+                    
+                    # Normalize path
+                    file_path = unicodedata.normalize('NFC', file_path)
+                    
+                    if not os.path.exists(file_path):
+                        return jsonify({"error": "File not found"}), 404
+                    
+                    # Security check: must be in download folder
+                    download_path = P.ModelSetting.get("ohli24_download_path")
+                    norm_file_path = unicodedata.normalize('NFC', os.path.abspath(file_path))
+                    norm_dl_path = unicodedata.normalize('NFC', os.path.abspath(download_path))
+                    
+                    if not norm_file_path.startswith(norm_dl_path):
+                        return jsonify({"error": "Access denied"}), 403
+                    
+                    token = self._generate_stream_token(file_path)
+                    logger.info(f"Generated stream token for: {file_path[:50]}...")
+                    
+                    return jsonify({
+                        "ret": "success",
+                        "token": token,
+                        "ttl": self._TOKEN_TTL_SECONDS
+                    })
+                    
+                except Exception as e:
+                    logger.error(f"Generate stream token error: {e}")
+                    logger.error(traceback.format_exc())
+                    return jsonify({"error": str(e)}), 500
+            
+            elif sub == "stream_with_token":
+                # Stream video using temporary token (NO AUTH REQUIRED)
+                try:
+                    from flask import send_file, Response
+                    import mimetypes
+                    
+                    token = request.args.get("token", "")
+                    if not token:
+                        return jsonify({"error": "No token provided"}), 400
+                    
+                    file_path = self._validate_stream_token(token)
+                    if not file_path:
+                        return jsonify({"error": "Invalid or expired token"}), 403
+                    
+                    logger.info(f"Token stream request: {file_path[:50]}...")
+                    
+                    if not os.path.exists(file_path):
+                        return jsonify({"error": "File not found"}), 404
+                    
+                    file_size = os.path.getsize(file_path)
+                    filename = os.path.basename(file_path)
+                    mimetype = mimetypes.guess_type(file_path)[0] or 'video/mp4'
+                    range_header = request.headers.get('Range', None)
+                    
+                    # Common headers for external player compatibility
+                    encoded_filename = urllib.parse.quote(filename)
+                    common_headers = {
+                        'Accept-Ranges': 'bytes',
+                        'Access-Control-Allow-Origin': '*',
+                        'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+                        'Access-Control-Allow-Headers': 'Range, Content-Type',
+                        'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges',
+                        'Content-Disposition': f"inline; filename*=UTF-8''{encoded_filename}",
+                    }
+                    
+                    if request.method == 'OPTIONS':
+                        resp = Response('', status=200)
+                        for k, v in common_headers.items():
+                            resp.headers[k] = v
+                        return resp
+                    
+                    if range_header:
+                        byte_start, byte_end = 0, None
+                        match = re.search(r'bytes=(\d+)-(\d*)', range_header)
+                        if match:
+                            byte_start = int(match.group(1))
+                            byte_end = int(match.group(2)) if match.group(2) else file_size - 1
+                        
+                        if byte_end is None or byte_end >= file_size:
+                            byte_end = file_size - 1
+                        
+                        length = byte_end - byte_start + 1
+                        
+                        def generate():
+                            with open(file_path, 'rb') as f:
+                                f.seek(byte_start)
+                                remaining = length
+                                while remaining > 0:
+                                    chunk_size = min(65536, remaining)
+                                    data = f.read(chunk_size)
+                                    if not data:
+                                        break
+                                    remaining -= len(data)
+                                    yield data
+                        
+                        resp = Response(
+                            generate(),
+                            status=206,
+                            mimetype=mimetype,
+                            direct_passthrough=True
+                        )
+                        resp.headers['Content-Range'] = f'bytes {byte_start}-{byte_end}/{file_size}'
+                        resp.headers['Content-Length'] = length
+                        for k, v in common_headers.items():
+                            resp.headers[k] = v
+                        return resp
+                    else:
+                        resp = send_file(
+                            file_path,
+                            mimetype=mimetype,
+                            as_attachment=False,
+                            download_name=filename
+                        )
+                        for k, v in common_headers.items():
+                            resp.headers[k] = v
+                        return resp
+                        
+                except Exception as e:
+                    logger.error(f"Stream with token error: {e}")
+                    logger.error(traceback.format_exc())
+                    return jsonify({"error": str(e)}), 500
+            
             elif sub == "get_playlist":
                 # 현재 파일과 같은 폴더에서 다음 에피소드들 찾기
                 try:
@@ -768,6 +932,102 @@ class LogicOhli24(AnimeModuleBase):
         for ep in self.current_data["episode"]:
             if ep["title"] == clip_id:
                 return ep
+        return None
+
+    def process_normal(self, sub: str, req: Any) -> Any:
+        """인증 없이 접근 가능한 엔드포인트 (외부 플레이어용)"""
+        try:
+            if sub == "stream_with_token":
+                # Stream video using temporary token (NO AUTH REQUIRED)
+                from flask import send_file, Response
+                import mimetypes
+                
+                token = request.args.get("token", "")
+                if not token:
+                    return jsonify({"error": "No token provided"}), 400
+                
+                file_path = self._validate_stream_token(token)
+                if not file_path:
+                    return jsonify({"error": "Invalid or expired token"}), 403
+                
+                logger.info(f"Token stream request: {file_path[:50]}...")
+                
+                if not os.path.exists(file_path):
+                    return jsonify({"error": "File not found"}), 404
+                
+                file_size = os.path.getsize(file_path)
+                filename = os.path.basename(file_path)
+                mimetype = mimetypes.guess_type(file_path)[0] or 'video/mp4'
+                range_header = request.headers.get('Range', None)
+                
+                # Common headers for external player compatibility
+                encoded_filename = urllib.parse.quote(filename)
+                common_headers = {
+                    'Accept-Ranges': 'bytes',
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+                    'Access-Control-Allow-Headers': 'Range, Content-Type',
+                    'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges',
+                    'Content-Disposition': f"inline; filename*=UTF-8''{encoded_filename}",
+                }
+                
+                if request.method == 'OPTIONS':
+                    resp = Response('', status=200)
+                    for k, v in common_headers.items():
+                        resp.headers[k] = v
+                    return resp
+                
+                if range_header:
+                    byte_start, byte_end = 0, None
+                    match = re.search(r'bytes=(\d+)-(\d*)', range_header)
+                    if match:
+                        byte_start = int(match.group(1))
+                        byte_end = int(match.group(2)) if match.group(2) else file_size - 1
+                    
+                    if byte_end is None or byte_end >= file_size:
+                        byte_end = file_size - 1
+                    
+                    length = byte_end - byte_start + 1
+                    
+                    def generate():
+                        with open(file_path, 'rb') as f:
+                            f.seek(byte_start)
+                            remaining = length
+                            while remaining > 0:
+                                chunk_size = min(65536, remaining)
+                                data = f.read(chunk_size)
+                                if not data:
+                                    break
+                                remaining -= len(data)
+                                yield data
+                    
+                    resp = Response(
+                        generate(),
+                        status=206,
+                        mimetype=mimetype,
+                        direct_passthrough=True
+                    )
+                    resp.headers['Content-Range'] = f'bytes {byte_start}-{byte_end}/{file_size}'
+                    resp.headers['Content-Length'] = length
+                    for k, v in common_headers.items():
+                        resp.headers[k] = v
+                    return resp
+                else:
+                    resp = send_file(
+                        file_path,
+                        mimetype=mimetype,
+                        as_attachment=False,
+                        download_name=filename
+                    )
+                    for k, v in common_headers.items():
+                        resp.headers[k] = v
+                    return resp
+                    
+        except Exception as e:
+            logger.error(f"process_normal error: {e}")
+            logger.error(traceback.format_exc())
+            return jsonify({"error": str(e)}), 500
+        
         return None
 
     def process_command(

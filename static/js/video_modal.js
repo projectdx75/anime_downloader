@@ -227,12 +227,46 @@ var VideoModal = (function() {
         var currentFile = playlist[currentPlaylistIndex];
         if (!currentFile || !currentFile.path) return;
         
-        var streamUrl = window.location.origin + '/' + config.package_name + '/ajax/' + config.sub + '/stream_video?path=' + encodeURIComponent(currentFile.path);
+        // For internal Video.js player: use stream_video (session auth)
+        // For external players: fetch token and use /normal/ route (no auth)
+        var filePath = currentFile.path;
         var filename = currentFile.name || 'video.mp4';
+        var imgBase = '/' + config.package_name + '/static/img/players/';
+        
+        // First, show loading state
+        $('#external-player-buttons').html('<span class="text-muted">Loading...</span>');
+        
+        // Fetch a streaming token for external players
+        $.ajax({
+            url: '/' + config.package_name + '/ajax/' + config.sub + '/generate_stream_token?path=' + encodeURIComponent(filePath),
+            type: 'GET',
+            dataType: 'json',
+            success: function(data) {
+                if (data.ret === 'success' && data.token) {
+                    var tokenUrl = window.location.origin + '/' + config.package_name + '/normal/' + config.sub + '/stream_with_token?token=' + data.token;
+                    renderExternalPlayerButtons(tokenUrl, filename, imgBase);
+                } else {
+                    // Fallback: use stream_video with path (may require auth)
+                    console.warn('[VideoModal] Token generation failed, using fallback');
+                    var fallbackUrl = window.location.origin + '/' + config.package_name + '/ajax/' + config.sub + '/stream_video?path=' + encodeURIComponent(filePath);
+                    renderExternalPlayerButtons(fallbackUrl, filename, imgBase);
+                }
+            },
+            error: function() {
+                // Fallback: use stream_video with path
+                console.warn('[VideoModal] Token generation error, using fallback');
+                var fallbackUrl = window.location.origin + '/' + config.package_name + '/ajax/' + config.sub + '/stream_video?path=' + encodeURIComponent(filePath);
+                renderExternalPlayerButtons(fallbackUrl, filename, imgBase);
+            }
+        });
+    }
+    
+    /**
+     * Render external player buttons with the given stream URL
+     */
+    function renderExternalPlayerButtons(streamUrl, filename, imgBase) {
         var encodedUrl = encodeURIComponent(streamUrl);
         var doubleEncodedUrl = encodeURIComponent(encodedUrl);
-        
-        var imgBase = '/' + config.package_name + '/static/img/players/';
         
         var players = [
             { name: 'IINA', img: imgBase + 'iina.webp', url: 'iina://weblink?url=' + encodedUrl },
