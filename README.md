@@ -41,8 +41,16 @@
 ## 🛠 설치 및 문제 해결 (Troubleshooting)
 
 ### 필수 요구 사항
-*   **Python 패키지**: `curl_cffi`, `lxml`, `requests`, `yt-dlp`
-*   **시스템 도구**: `ffmpeg` (시스템 경로에 설치되어 있어야 함)
+
+*   **Python 패키지 (Dependencies)**:
+    *   `curl_cffi`: TLS Fingerprint 변조를 통한 Cloudflare 및 보안 사이트 우회용.
+    *   `Zendriver`: 가벼운 브라우저 데몬 모드를 통한 고속 크롤링 지원.
+    *   `Camoufox`: 강력한 안티봇 탐지 우회를 위한 고보안 브라우저 에뮬레이터.
+    *   `yt-dlp`: 스트리밍 영상(HLS/DASH) 다운로드 핵심 엔진.
+    *   기타: `requests`, `lxml`, `beautifulsoup4`, `flask-login` 등.
+*   **시스템 도구 (System Tools)**:
+    *   **ffmpeg**: 영상/음성 병합 및 **자막 합침** 기능을 위한 필수 도구 (시스템 PATH 등록 필요).
+    *   **Browser (Chrome/Chromium)**: Zendriver 및 Camoufox 구동을 위한 브라우저 환경 필요.
 
 ### 자주 묻는 질문 (FAQ)
 
