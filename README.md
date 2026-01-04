@@ -71,6 +71,21 @@
 
 ## 📝 변경 이력 (Changelog)
 
+### v0.5.2 (2026-01-04)
+- **재사용 가능한 비디오 모달 컴포넌트 도입**:
+    - `templates/anime_downloader/components/video_modal.html` - 공통 모달 HTML
+    - `static/js/video_modal.js` - VideoModal JavaScript 모듈 (API 제공)
+    - `static/css/video_modal.css` - 비디오 모달 전용 스타일시트
+- **Alist 스타일 UI 개선**:
+    - **에피소드 드롭다운**: 파란색 하이라이트 배경의 에피소드 선택기
+    - **자동 다음 토글 스위치**: iOS 스타일 슬라이더 토글
+    - **외부 플레이어 버튼**: IINA, PotPlayer, VLC, nPlayer, Infuse, OmniPlayer, MX Player, MPV 지원
+    - 플레이어 아이콘 이미지 추가 (`static/img/players/`)
+- **코드 재사용성 향상**:
+    - Ohli24 list 페이지에서 인라인 코드 ~145줄 → ~9줄로 축소
+    - `VideoModal.init({ package_name, sub })` API로 간편 초기화
+    - `VideoModal.openWithPath(path)` / `.openWithUrl(url)` / `.openWithPlaylist(list)` 메서드 제공
+
 ### v0.5.1 (2026-01-04)
 - **Ohli24 레이아웃 표준화**:
     - 모든 Ohli24 페이지(Setting, Search, Queue, List, Request)에 일관된 1400px max-width 및 중앙 정렬 적용

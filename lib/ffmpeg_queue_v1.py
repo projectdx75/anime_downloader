@@ -223,11 +223,28 @@ class FfmpegQueue(object):
                 # 다운로드 방법 확인
                 download_method = P.ModelSetting.get(f"{self.name}_download_method")
                 
-                # .ytdl 파일이 있거나, ytdlp/aria2c 모드인 경우 '파일 있음'으로 건너뛰지 않음 (이어받기 허용)
+                # 미완성 다운로드 감지 (Frag 파일, .ytdl 파일, .part 파일)
+                # 이런 파일이 있으면 이어받기 허용
                 is_ytdlp = download_method in ['ytdlp', 'aria2c']
                 has_ytdl_file = os.path.exists(filepath + ".ytdl")
+                has_part_file = os.path.exists(filepath + ".part")
                 
-                if os.path.exists(filepath) and not (is_ytdlp or has_ytdl_file):
+                # Frag 파일 존재 여부 확인 (같은 폴더에 Frag* 파일이 있으면 미완성)
+                has_frag_files = False
+                try:
+                    import glob
+                    dirname = os.path.dirname(filepath)
+                    if dirname and os.path.exists(dirname):
+                        frag_pattern = os.path.join(dirname, "*Frag*")
+                        has_frag_files = len(glob.glob(frag_pattern)) > 0
+                        if has_frag_files:
+                            logger.info(f"[Resume] Found Frag files in {dirname}, allowing re-download")
+                except Exception as e:
+                    logger.debug(f"Frag check error: {e}")
+                
+                is_incomplete = has_ytdl_file or has_part_file or has_frag_files
+                
+                if os.path.exists(filepath) and not (is_ytdlp or is_incomplete):
                     logger.info(f"File already exists: {filepath}")
                     entity.ffmpeg_status = 8 # COMPLETED_EXIST
                     entity.ffmpeg_status_kor = "파일 있음"
@@ -589,8 +606,22 @@ class FfmpegQueue(object):
                         ret["ret"] = "refresh"
             elif cmd == "reset":
                 if self.download_queue is not None:
-                    with self.download_queue.mutex:
-                        self.download_queue.queue.clear()
+                    # 큐 비우기 (표준 Queue와 gevent Queue 모두 호환)
+                    try:
+                        # 표준 Queue의 경우
+                        if hasattr(self.download_queue, 'mutex'):
+                            with self.download_queue.mutex:
+                                self.download_queue.queue.clear()
+                        else:
+                            # gevent Queue의 경우 - 하나씩 꺼내서 비우기
+                            while not self.download_queue.empty():
+                                try:
+                                    self.download_queue.get_nowait()
+                                except:
+                                    break
+                    except Exception as e:
+                        logger.debug(f"Queue clear error (non-critical): {e}")
+                    
                     for _ in self.entity_list:
                         # 다운로드중 상태인 경우에만 중지 시도
                         if _.ffmpeg_status == 5:

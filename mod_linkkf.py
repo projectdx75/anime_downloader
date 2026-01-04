@@ -1531,13 +1531,36 @@ class LogicLinkkf(AnimeModuleBase):
         # 2. Check DB for completion status FIRST (before expensive operations)
         db_entity = ModelLinkkfItem.get_by_linkkf_id(episode_info["_id"])
         
-        if db_entity is not None and db_entity.status == "completed":
+        # 3. Early file existence check - filepath is already in episode_info from get_series_info
+        filepath = episode_info.get("filepath")
+        
+        # 미완성 다운로드 감지 (Frag 파일, .ytdl 파일, .part 파일이 있으면 재다운로드 허용)
+        has_incomplete_files = False
+        if filepath:
+            import glob
+            dirname = os.path.dirname(filepath)
+            has_ytdl = os.path.exists(filepath + ".ytdl")
+            has_part = os.path.exists(filepath + ".part")
+            has_frag = False
+            if dirname and os.path.exists(dirname):
+                frag_pattern = os.path.join(dirname, "*Frag*")
+                has_frag = len(glob.glob(frag_pattern)) > 0
+            has_incomplete_files = has_ytdl or has_part or has_frag
+            
+            if has_incomplete_files:
+                logger.info(f"[Resume] Incomplete download detected, allowing re-download: {filepath}")
+                # DB 상태가 completed이면 wait로 변경
+                if db_entity is not None and db_entity.status == "completed":
+                    db_entity.status = "wait"
+                    db_entity.save()
+        
+        # DB 완료 체크 (미완성 파일이 없는 경우에만)
+        if db_entity is not None and db_entity.status == "completed" and not has_incomplete_files:
             logger.info(f"[Skip] Already completed in DB: {episode_info.get('program_title')} {episode_info.get('title')}")
             return "db_completed"
         
-        # 3. Early file existence check - filepath is already in episode_info from get_series_info
-        filepath = episode_info.get("filepath")
-        if filepath and os.path.exists(filepath):
+        # 파일 존재 체크 (미완성 파일이 없는 경우에만)
+        if filepath and os.path.exists(filepath) and not has_incomplete_files:
             logger.info(f"[Skip] File already exists: {filepath}")
             # Update DB status to completed if not already
             if db_entity is not None and db_entity.status != "completed":
