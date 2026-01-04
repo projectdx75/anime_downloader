@@ -544,7 +544,7 @@ class LogicOhli24(AnimeModuleBase):
                 return jsonify(self.install_system_browser())
             
             elif sub == "stream_video":
-                # 비디오 스트리밍 (MP4 파일 직접 서빙)
+                # 비디오 스트리밍 (MP4 파일 직접 서빙) - 외부 플레이어(MXPlayer, VLC 등) 호환
                 try:
                     from flask import send_file, Response
                     import mimetypes
@@ -560,9 +560,29 @@ class LogicOhli24(AnimeModuleBase):
                     if not file_path.startswith(download_path):
                         return jsonify({"error": "Access denied"}), 403
                     
-                    # Range 요청 지원 (비디오 시킹)
                     file_size = os.path.getsize(file_path)
+                    filename = os.path.basename(file_path)
+                    mimetype = mimetypes.guess_type(file_path)[0] or 'video/mp4'
                     range_header = request.headers.get('Range', None)
+                    
+                    # 공통 헤더 (외부 플레이어 호환성)
+                    # RFC 5987: 비ASCII 문자는 UTF-8 인코딩 필요
+                    encoded_filename = urllib.parse.quote(filename)
+                    common_headers = {
+                        'Accept-Ranges': 'bytes',
+                        'Access-Control-Allow-Origin': '*',
+                        'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+                        'Access-Control-Allow-Headers': 'Range, Content-Type',
+                        'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges',
+                        'Content-Disposition': f"inline; filename*=UTF-8''{encoded_filename}",
+                    }
+                    
+                    # OPTIONS 요청 처리 (CORS preflight)
+                    if request.method == 'OPTIONS':
+                        resp = Response('', status=200)
+                        for k, v in common_headers.items():
+                            resp.headers[k] = v
+                        return resp
                     
                     if range_header:
                         byte_start, byte_end = 0, None
@@ -581,7 +601,7 @@ class LogicOhli24(AnimeModuleBase):
                                 f.seek(byte_start)
                                 remaining = length
                                 while remaining > 0:
-                                    chunk_size = min(8192, remaining)
+                                    chunk_size = min(65536, remaining)  # 64KB chunks for better streaming
                                     data = f.read(chunk_size)
                                     if not data:
                                         break
@@ -591,15 +611,25 @@ class LogicOhli24(AnimeModuleBase):
                         resp = Response(
                             generate(),
                             status=206,
-                            mimetype=mimetypes.guess_type(file_path)[0] or 'video/mp4',
+                            mimetype=mimetype,
                             direct_passthrough=True
                         )
-                        resp.headers.add('Content-Range', f'bytes {byte_start}-{byte_end}/{file_size}')
-                        resp.headers.add('Accept-Ranges', 'bytes')
-                        resp.headers.add('Content-Length', length)
+                        resp.headers['Content-Range'] = f'bytes {byte_start}-{byte_end}/{file_size}'
+                        resp.headers['Content-Length'] = length
+                        for k, v in common_headers.items():
+                            resp.headers[k] = v
                         return resp
                     else:
-                        return send_file(file_path, mimetype=mimetypes.guess_type(file_path)[0] or 'video/mp4')
+                        # Non-range request - 전체 파일 전송
+                        resp = send_file(
+                            file_path, 
+                            mimetype=mimetype,
+                            as_attachment=False,
+                            download_name=filename
+                        )
+                        for k, v in common_headers.items():
+                            resp.headers[k] = v
+                        return resp
                         
                 except Exception as e:
                     logger.error(f"Stream video error: {e}")

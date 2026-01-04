@@ -241,7 +241,7 @@ var VideoModal = (function() {
             { name: 'nPlayer', img: imgBase + 'nplayer.webp', url: 'nplayer-' + streamUrl },
             { name: 'Infuse', img: imgBase + 'infuse.webp', url: 'infuse://x-callback-url/play?url=' + streamUrl },
             { name: 'OmniPlayer', img: imgBase + 'omniplayer.webp', url: 'omniplayer://weblink?url=' + streamUrl },
-            { name: 'MX Player', img: imgBase + 'mxplayer.webp', url: 'intent:' + streamUrl + '#Intent;package=com.mxtech.videoplayer.ad;S.title=' + encodeURIComponent(filename) + ';end' },
+            { name: 'MX Player', img: imgBase + 'mxplayer.webp', url: 'intent:' + streamUrl + '#Intent;package=com.mxtech.videoplayer.ad;type=video/mp4;S.title=' + encodeURIComponent(filename) + ';end' },
             { name: 'MPV', img: imgBase + 'mpv.webp', url: 'mpv://' + doubleEncodedUrl },
         ];
         
@@ -289,3 +289,21 @@ var VideoModal = (function() {
         getCurrentIndex: getCurrentIndex
     };
 })();
+
+// Auto-initialize when DOM is ready (uses global package_name and sub variables)
+$(document).ready(function() {
+    // Use global variables if available (set by each page)
+    var pkgName = (typeof package_name !== 'undefined') ? package_name : 'anime_downloader';
+    var subName = (typeof sub !== 'undefined') ? sub : 'ohli24';
+    
+    VideoModal.init({ package_name: pkgName, sub: subName });
+    
+    // Auto-bind btn-watch click handler
+    $('body').on('click', '.btn-watch', function(e) {
+        e.preventDefault();
+        var filePath = $(this).data('path');
+        if (filePath) {
+            VideoModal.openWithPath(filePath);
+        }
+    });
+});
