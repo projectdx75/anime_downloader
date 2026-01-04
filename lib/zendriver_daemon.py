@@ -166,15 +166,15 @@ async def ensure_browser() -> Any:
                     browser = await zd.start(
                         headless=True, 
                         browser_executable_path=exec_path, 
-                        sandbox=False,
-                        browser_args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--no-first-run"]
+                        no_sandbox=True,
+                        browser_args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--no-first-run"]
                     )
                 else:
                     log_debug("[ZendriverDaemon] Starting browser with default path")
                     browser = await zd.start(
                         headless=True, 
-                        sandbox=False,
-                        browser_args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--no-first-run"]
+                        no_sandbox=True,
+                        browser_args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--no-first-run"]
                     )
                     
                 log_debug("[ZendriverDaemon] Browser started successfully")
