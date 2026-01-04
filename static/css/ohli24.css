@@ -98,7 +98,7 @@ body {
     color: #94a3b8;
 }
 
-/* Nav Pills Customization */
+/* Nav Pills Customization (Shared styling, overrides in mobile_custom.css) */
 ul.nav.nav-pills.bg-light {
     background-color: rgba(30, 41, 59, 0.6) !important;
     backdrop-filter: blur(10px);
@@ -110,7 +110,7 @@ ul.nav.nav-pills.bg-light {
     flex-wrap: wrap;
     justify-content: center;
     width: auto !important;
-    margin-bottom: 20px;
+    margin-bottom: 5px; /* Default for modular stacking */
 }
 
 ul.nav.nav-pills .nav-link {
@@ -153,6 +153,29 @@ ul.nav.nav-pills .nav-link.active {
     height: 38px !important;
     font-weight: 600 !important;
     border: none !important;
+}
+
+/* Responsive Input Group for Search */
+.input-group-responsive {
+    height: 50px;
+}
+
+.input-group-responsive .form-control {
+    height: 100% !important;
+    font-size: 1.1rem;
+}
+
+.input-group-responsive .btn {
+    height: 100% !important;
+}
+
+@media (max-width: 768px) {
+    .input-group-responsive {
+        height: 42px;
+    }
+    .input-group-responsive .form-control {
+        font-size: 0.95rem;
+    }
 }
 
 .btn-search { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white !important; }

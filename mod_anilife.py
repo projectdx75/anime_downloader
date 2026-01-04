@@ -690,7 +690,7 @@ class LogicAniLife(AnimeModuleBase):
                         "msg": "%s 개의 에피소드를 큐에 추가 하였습니다." % count,
                     }
                     socketio.emit(
-                        "notify", notify, namespace="/framework", broadcast=True
+                        "notify", notify, namespace="/framework"
                     )
                 thread = threading.Thread(target=func, args=())
                 thread.daemon = True

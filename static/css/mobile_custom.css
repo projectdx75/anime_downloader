@@ -73,8 +73,18 @@
         flex-wrap: wrap; /* allow wrap on small screens */
         justify-content: center;
         width: auto !important; /* Prevent full width */
-        margin-bottom: 20px;
-        margin-top: 50px !important; /* Mobile spacing */
+        margin-bottom: 5px; /* Reduced for modularity */
+        margin-top: 50px !important; /* Mobile spacing - fallback for first menu */
+    }
+
+    /* Tighten spacing between 2nd and 3rd level menus */
+    #menu_module_div ul.nav.nav-pills.bg-light {
+        margin-bottom: 5px !important;
+    }
+    
+    #menu_page_div ul.nav.nav-pills.bg-light {
+        margin-top: 0 !important;
+        margin-bottom: 20px !important;
     }
 
     ul.nav.nav-pills .nav-item {

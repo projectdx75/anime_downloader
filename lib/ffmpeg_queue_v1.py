@@ -9,10 +9,10 @@ from datetime import datetime
 import requests
 
 # from flaskfarm.lib.plugin import get_model_setting
-from flaskfarm.lib.support.expand.ffmpeg import SupportFfmpeg
+from support.expand.ffmpeg import SupportFfmpeg
 
 # from flaskfarm.lib.system.setup import SystemModelSetting
-from flaskfarm.lib.tool import ToolUtil
+from tool import ToolUtil
 
 # from flaskfarm.lib.system.setup import P as SM
 # from flaskfarm.lib.system.mod_setting import ModuleSetting as SM

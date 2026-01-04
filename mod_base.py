@@ -1,5 +1,5 @@
 from flask import render_template, request, jsonify
-from flaskfarm.lib.plugin import PluginModuleBase
+from plugin import PluginModuleBase
 import framework
 import os, traceback, time, json
 from datetime import datetime
@@ -177,7 +177,7 @@ class AnimeModuleBase(PluginModuleBase):
             namespace = f"/{self.P.package_name}/{self.name}/queue"
             
             # 큐 페이지 소켓에 직접 emit
-            socketio.emit(refresh_type, data, namespace=namespace, broadcast=True)
+            socketio.emit(refresh_type, data, namespace=namespace)
             
         except Exception as e:
             self.P.logger.error(f"socketio_callback error: {e}")

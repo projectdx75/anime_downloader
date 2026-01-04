@@ -22,7 +22,7 @@ from bs4 import BeautifulSoup
 
 # third-party
 from flask import jsonify, render_template, request
-from flaskfarm.lib.support.expand.ffmpeg import SupportFfmpeg
+from support.expand.ffmpeg import SupportFfmpeg
 
 # sjva 공용
 from framework import db, path_data, scheduler
@@ -479,7 +479,7 @@ class LogicLinkkf(AnimeModuleBase):
         """
         logger.info(f">>> socketio_callback called: {refresh_type}, {data.get('percent', 'N/A')}%")
         try:
-            from flaskfarm.lib.framework.init_main import socketio
+            from framework import socketio
             
             # FlaskFarm의 기존 패턴: /framework namespace로 emit
             # queue 페이지의 소켓이 이 메시지를 받아서 처리
