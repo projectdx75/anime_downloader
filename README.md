@@ -12,19 +12,21 @@
     *   **TLS Fingerprint 변조**: `curl_cffi`를 사용하여 실제 Chrome 브라우저처럼 위장, Cloudflare 및 각종 봇 차단을 무력화합니다.
     *   **CDN 자동 감지**: 스트리밍 서버(CDN)의 도메인이 수시로 변경되더라도 자동으로 감지하여 대응합니다. (예: 14B 가짜 파일 문제 해결)
 *   **스마트 다운로드 큐**: `ffmpeg` 및 `yt-dlp` 기반의 큐 시스템으로 안정적인 이어받기 및 재시도를 지원합니다.
-*   **사용자 편의성**:
+*   **사용자 편의성 및 보안**:
+    *   **보안 스트리밍 (Secure Streaming)**: 외부 플레이어(MXPlayer, VLC 등) 연동 시 API 키를 노출하지 않고 **임시 스트리밍 토큰(5분 만료)**을 발급하여 안전한 시청 환경을 제공합니다.
+    *   **범용 플레이어 연동**: IINA, PotPlayer, VLC, nPlayer, Infuse, MX Player 등 8종 이상의 외부 플레이어와 정교한 URL Scheme/Intent 연동을 지원합니다.
     *   **Proxy 설정**: IP 차단 시 손쉽게 우회할 수 있도록 웹 설정 UI에서 프록시 서버를 지정할 수 있습니다.
-    *   **모듈형 테마 시스템**: CSS 변수와 동적 로딩을 활용하여 데스크탑/모바일 모두에 최적화된 사이트별 테마(Anilife, Linkkf, Ohli24)를 제공합니다.
-    *   **실시간 피드백**: 다운로드 상태, 중복 파일 감지 등을 사용자에게 실시간 알림으로 제공합니다.
+    *   **모듈형 테마 시스템**: CSS 변수와 동적 로딩을 활용하여 데스크탑/모바일 모두에 최적화된 사이트별 테마를 제공합니다.
+    *   **실시간 피드백**: 다운로드 상태, 중복 파일 감지 등을 실시간 알림으로 제공합니다.
 
 ---
 
 ## 📺 지원 사이트 (Supported Sites)
 
 ### 1. Ohli24 (애니24)
-*   **특징**: 가장 강력한 보안(Cloudflare)이 적용된 사이트.
-*   **기술**: `curl_cffi`를 이용한 Full Browser Impersonation 적용.
-*   **기능**: 검색, 목록 조회, 자동 다운로드.
+*   **특징**: 강력한 인프라와 다양한 라이브러리.
+*   **기술**: `Zendriver`(Daemon모드) 및 `Camoufox`를 이용한 브라우저 에뮬레이션 우회.
+*   **기능**: 검색, 목록 조회, 자동 다운로드, **임시 토큰 기반 보안 스트리밍**.
 
 ### 2. Linkkf (링크애니)
 *   **특징**: 빠른 업데이트 속도.
@@ -71,20 +73,32 @@
 
 ## 📝 변경 이력 (Changelog)
 
+### v0.5.3 (2026-01-04)
+- **보안 스트리밍 토큰 시스템 도입**:
+    - 외부 플레이어 연동 시 API 키 노출 방지를 위한 **임시 토큰(TTL 5분)** 발급 로직 구현
+    - 인증 없이 접근 가능한 `/normal/` 라우트를 통한 보안 스트리밍 엔드포인트 추가
+- **외부 플레이어 연동 고도화**:
+    - **VLC Android 지원**: `vlc://` 대신 Android Intent 형식을 적용하여 재생 오류 해결
+    - **MXPlayer 최적화**: MIME 타입 명시 및 한글 파일명 URL 인코딩 안정화 (RFC 5987 대응)
+- **모바일 UI/UX 미세 조정**:
+    - 외부 플레이어 아이콘 오버플로우 수정 (모바일에서 두 줄로 자동 줄바꿈)
+    - 비디오 플레이어 모달 내 영상 세로 중앙 정렬 보강
+    - 다운로드 목록 페이지(`list`)의 카드 여백 최적화 (`p-4` → `p-3`)
+- **버그 수정**:
+    - `Content-Disposition` 헤더의 한글 파일명 유니코드 오류 해결
+
 ### v0.5.2 (2026-01-04)
 - **재사용 가능한 비디오 모달 컴포넌트 도입**:
     - `templates/anime_downloader/components/video_modal.html` - 공통 모달 HTML
-    - `static/js/video_modal.js` - VideoModal JavaScript 모듈 (API 제공)
+    - `static/js/video_modal.js` - VideoModal JavaScript 모듈
     - `static/css/video_modal.css` - 비디오 모달 전용 스타일시트
 - **Alist 스타일 UI 개선**:
     - **에피소드 드롭다운**: 파란색 하이라이트 배경의 에피소드 선택기
     - **자동 다음 토글 스위치**: iOS 스타일 슬라이더 토글
     - **외부 플레이어 버튼**: IINA, PotPlayer, VLC, nPlayer, Infuse, OmniPlayer, MX Player, MPV 지원
-    - 플레이어 아이콘 이미지 추가 (`static/img/players/`)
 - **코드 재사용성 향상**:
     - Ohli24 list 페이지에서 인라인 코드 ~145줄 → ~9줄로 축소
-    - `VideoModal.init({ package_name, sub })` API로 간편 초기화
-    - `VideoModal.openWithPath(path)` / `.openWithUrl(url)` / `.openWithPlaylist(list)` 메서드 제공
+    - `VideoModal.init()` API로 간편 초기화 및 `openWithPlaylist()` 메서드 지원
 
 ### v0.5.1 (2026-01-04)
 - **Ohli24 레이아웃 표준화**:
