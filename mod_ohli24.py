@@ -1221,9 +1221,11 @@ class LogicOhli24(AnimeModuleBase):
         return ret
 
     def setting_save_after(self, change_list: List[str]) -> None:
-        """설정 저장 후 처리."""
-        if self.queue.get_max_ffmpeg_count() != P.ModelSetting.get_int("ohli24_max_ffmpeg_process_count"):
-            self.queue.set_max_ffmpeg_count(P.ModelSetting.get_int("ohli24_max_ffmpeg_process_count"))
+        \"\"\"설정 저장 후 처리.\"\"\"
+        if self.queue is None:
+            return
+        if self.queue.get_max_ffmpeg_count() != P.ModelSetting.get_int(\"ohli24_max_ffmpeg_process_count\"):
+            self.queue.set_max_ffmpeg_count(P.ModelSetting.get_int(\"ohli24_max_ffmpeg_process_count\"))
 
     def scheduler_function(self) -> None:
         """스케줄러 함수 - 자동 다운로드 처리."""
