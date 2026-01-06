@@ -81,6 +81,19 @@
 
 ## 📝 변경 이력 (Changelog)
 
+### v0.6.0 (2026-01-07)
+- **Anilife GDM 연동**:
+    - `ModuleQueue` 연동으로 Anilife 다운로드가 GDM (Gommi Downloader Manager)으로 통합
+    - Ohli24와 동일한 패턴으로 `source_type: "anilife"` 메타데이터 포함
+    - Go FFMPEG 버튼 → **Go GDM** 버튼으로 변경 및 GDM 큐 페이지로 링크
+- **HTTP 캐싱 준비**:
+    - `CachedSession` import 추가 (향후 requests 캐싱 확장 가능)
+- **파일명 정리 개선**:
+    - `Util.change_text_for_use_filename()` 함수에서 연속 점(`..`) → 단일 점(`.`) 변환
+    - 끝에 오는 점/공백 자동 제거로 Synology NAS에서 Windows 8.3 단축 파일명 생성 방지
+- **Git 워크플로우 개선**:
+    - GitHub + Gitea 양방향 동시 푸시 설정 (GitHub 우선)
+
 ### v0.5.3 (2026-01-04)
 - **보안 스트리밍 토큰 시스템 도입**:
     - 외부 플레이어 연동 시 API 키 노출 방지를 위한 **임시 토큰(TTL 5분)** 발급 로직 구현
