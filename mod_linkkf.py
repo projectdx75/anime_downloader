@@ -30,6 +30,12 @@ from lxml import html
 from .mod_base import AnimeModuleBase
 from requests_cache import CachedSession
 
+# GDM Integration
+try:
+    from gommi_downloader_manager.mod_queue import ModuleQueue
+except ImportError:
+    ModuleQueue = None
+
 # cloudscraper는 lazy import로 처리
 import cloudscraper
 
@@ -1569,7 +1575,40 @@ class LogicLinkkf(AnimeModuleBase):
                 db_entity.save()
             return "file_exists"
         
-        # 4. Proceed with queue addition
+        # 4. Try GDM if available (like Ohli24/Anilife)
+        if ModuleQueue is not None:
+            entity = LinkkfQueueEntity(P, self, episode_info)
+            logger.debug("entity:::> %s", entity.as_dict())
+            
+            # Save to DB first
+            if db_entity is None:
+                ModelLinkkfItem.append(entity.as_dict())
+            
+            # Prepare GDM options
+            gdm_options = {
+                "url": entity.url,
+                "save_path": entity.savepath,
+                "filename": entity.filename,
+                "source_type": "linkkf",
+                "caller_plugin": f"{P.package_name}_{self.name}",
+                "callback_id": episode_info["_id"],
+                "title": entity.filename or episode_info.get('title'),
+                "thumbnail": episode_info.get('image'),
+                "meta": {
+                    "series": entity.content_title,
+                    "season": entity.season,
+                    "episode": entity.epi_queue,
+                    "source": "linkkf"
+                },
+            }
+            
+            task = ModuleQueue.add_download(**gdm_options)
+            if task:
+                logger.info(f"Delegated Linkkf download to GDM: {entity.filename}")
+                return "enqueue_gdm_success"
+        
+        # 5. Fallback to FfmpegQueue if GDM not available
+        logger.warning("GDM Module not found, falling back to FfmpegQueue")
         queue_len = len(self.queue.entity_list) if self.queue else 0
         logger.info(f"add() - Queue length: {queue_len}, episode _id: {episode_info.get('_id')}")
         
