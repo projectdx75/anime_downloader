@@ -82,6 +82,7 @@ class LogicAniLife(AnimeModuleBase):
         "anilife_db_version": "1",
         "anilife_url": "https://anilife.live",
         "anilife_proxy_url": "",
+        "anilife_cache_ttl": "300",  # HTTP cache TTL in seconds (5 minutes)
         "anilife_download_path": os.path.join(path_data, P.package_name, "ohli24"),
         "anilife_auto_make_folder": "True",
         "anilife_auto_make_season_folder": "True",
@@ -101,6 +102,10 @@ class LogicAniLife(AnimeModuleBase):
         "anilife_camoufox_installed": "False",
     }
 
+    # Class variables for caching
+    cache_path = os.path.dirname(__file__)
+    session = None
+
     @classmethod
     def get_proxy(cls) -> str:
         return P.ModelSetting.get("anilife_proxy_url")
@@ -111,6 +116,20 @@ class LogicAniLife(AnimeModuleBase):
         if proxy:
             return {"http": proxy, "https": proxy}
         return None
+
+    @classmethod
+    def get_session(cls):
+        """Get or create a cached session for HTTP requests."""
+        if cls.session is None:
+            cache_ttl = P.ModelSetting.get_int("anilife_cache_ttl")
+            cls.session = CachedSession(
+                os.path.join(cls.cache_path, "anilife_cache"),
+                backend="sqlite",
+                expire_after=cache_ttl,
+                cache_control=True,
+            )
+            logger.info(f"[Anilife] CachedSession initialized with TTL: {cache_ttl}s")
+        return cls.session
 
     current_headers = None
     current_data = None

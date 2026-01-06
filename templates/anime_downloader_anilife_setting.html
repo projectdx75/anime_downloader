@@ -25,7 +25,7 @@
     <form id="setting" class="mt-4">
     <div class="tab-content" id="nav-tabContent">
     {{ macros.m_tab_content_start('normal', true) }}
-      {{ macros.setting_input_text_and_buttons('anilife_url', '애니라이프 URL', [['go_btn', 'GO']], value=arg['anilife_url']) }}\n      {{ macros.setting_input_text('anilife_proxy_url', '프록시 URL', col='4', value=arg.get('anilife_proxy_url', ''), desc='차단 시 프록시 서버를 입력하세요. 예: http://IP:PORT') }}
+      {{ macros.setting_input_text_and_buttons('anilife_url', '애니라이프 URL', [['go_btn', 'GO']], value=arg['anilife_url']) }}\n      {{ macros.setting_input_text('anilife_proxy_url', '프록시 URL', col='4', value=arg.get('anilife_proxy_url', ''), desc='차단 시 프록시 서버를 입력하세요. 예: http://IP:PORT') }}\n      {{ macros.setting_input_int('anilife_cache_ttl', 'HTTP 캐시 TTL (초)', value=arg.get('anilife_cache_ttl', 300), desc='HTTP 응답 캐시 유지 시간 (초 단위, 기본: 300초 = 5분)') }}
       
       <!-- 저장 폴더 (탐색 버튼 포함) -->
       <div class="row" style="padding-top: 10px; padding-bottom:10px; align-items: center;">
