@@ -59,7 +59,7 @@ from .mod_base import AnimeModuleBase
 from .model_base import AnimeQueueEntity
 
 try:
-    from gommi_download_manager.mod_queue import ModuleQueue
+    from gommi_downloader_manager.mod_queue import ModuleQueue
 except ImportError:
     ModuleQueue = None
 
