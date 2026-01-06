@@ -58,6 +58,11 @@ from .setup import *
 from .mod_base import AnimeModuleBase
 from .model_base import AnimeQueueEntity
 
+try:
+    from gommi_download_manager.mod_queue import ModuleQueue
+except ImportError:
+    ModuleQueue = None
+
 logger = P.logger
 
 print("*=" * 50)
@@ -111,6 +116,7 @@ class LogicOhli24(AnimeModuleBase):
     zendriver_setup_done = False  # Zendriver 자동 설치 완료 플래그
     zendriver_daemon_process = None  # Zendriver 데몬 프로세스
     zendriver_daemon_port = 19876
+    daemon_fail_count = 0  # 데몬 연속 실패 카운트
     
     # Streaming tokens for external players (no auth required)
     _stream_tokens: Dict[str, Dict[str, Any]] = {}
@@ -398,6 +404,7 @@ class LogicOhli24(AnimeModuleBase):
             "ohli24_image_url_prefix_episode": "https://www.jetcloud-list.cc/thumbnail/",
             "ohli24_discord_notify": "True",
             "ohli24_zendriver_browser_path": "",
+            "ohli24_cache_minutes": "5",  # 0=캐시 없음, 5, 10, 15, 30분 등
         }
         super(LogicOhli24, self).__init__(P, name=name, first_menu='setting', scheduler_desc="ohli24 자동 다운로드", setup_default=self.db_default)
         self.queue = None
@@ -488,9 +495,19 @@ class LogicOhli24(AnimeModuleBase):
                 )
             elif sub == "add_queue":
                 ret = {}
-                info = json.loads(request.form["data"])
-                logger.info(f"info:: {info}")
-                ret["ret"] = self.add(info)
+                data_str = request.form.get("data")
+                if not data_str:
+                    logger.error("Missing 'data' in add_queue request")
+                    return jsonify({"ret": "error", "msg": "Missing data"})
+                
+                try:
+                    info = json.loads(data_str)
+                    logger.info(f"info:: {info}")
+                    ret["ret"] = self.add(info)
+                except Exception as e:
+                    logger.error(f"Failed to process add_queue: {e}")
+                    ret["ret"] = "error"
+                    ret["msg"] = str(e)
                 return jsonify(ret)
 
                 # todo: new version
@@ -509,13 +526,109 @@ class LogicOhli24(AnimeModuleBase):
                 #         db_item = ModelOhli24Program(info['_id'], self.get_episode(info['_id']))
                 #         db_item.save()
             elif sub == "entity_list":
-                return jsonify(self.queue.get_entity_list())
+                if ModuleQueue:
+                    # GDM에서 이 플러그인의 이 모듈이 요청한 항목들만 필터링하여 반환
+                    caller_id = f"{P.package_name}_{self.name}"
+                    all_items = [d.get_status() for d in ModuleQueue._downloads.values()]
+                    plugin_items = [i for i in all_items if i.get('caller_plugin') == caller_id]
+                    
+                    # Ohli24 UI(ffmpeg_queue_v1 호환)를 위한 데이터 매핑
+                    mapped_items = []
+                    status_map = {
+                        'pending': '대기중',
+                        'extracting': '추출중',
+                        'downloading': '다운로드중',
+                        'paused': '일시정지',
+                        'completed': '완료',
+                        'error': '실패',
+                        'cancelled': '취소됨'
+                    }
+                    
+                    active_ids = set()
+                    for item in plugin_items:
+                        active_ids.add(item.get('callback_id'))
+                        mapped = {
+                            'entity_id': item['id'], # GDM id -> entity_id
+                            'filename': item['filename'],
+                            'ffmpeg_percent': item['progress'], # progress -> ffmpeg_percent
+                            'ffmpeg_status_kor': status_map.get(item['status'], item['status']),
+                            'current_speed': item['speed'],
+                            'created_time': item.get('created_time', ''), # GDM에 없으면 공백
+                            'content_title': item.get('title', ''),
+                        }
+                        # 기타 Ohli24 UI에서 필요한 필드 추가
+                        mapped_items.append(mapped)
+                    
+                    # DB에서 최근 50개 가져와서 완료된 항목 추가
+                    try:
+                        from framework import F
+                        with F.app.app_context():
+                            db_items = F.db.session.query(ModelOhli24Item).order_by(ModelOhli24Item.id.desc()).limit(50).all()
+                            for db_item in db_items:
+                                # 이미 active에 있으면 스킵
+                                if db_item.ohli24_id in active_ids:
+                                    continue
+                                # 완료된 항목만 추가
+                                if db_item.status == 'completed':
+                                    mapped = {
+                                        'entity_id': f"db_{db_item.id}",
+                                        'filename': db_item.filename or '파일명 없음',
+                                        'ffmpeg_percent': 100,
+                                        'ffmpeg_status_kor': '완료',
+                                        'current_speed': '',
+                                        'created_time': str(db_item.created_time) if db_item.created_time else '',
+                                        'content_title': db_item.title or '',
+                                    }
+                                    mapped_items.append(mapped)
+                    except Exception as e:
+                        logger.warning(f"Failed to add DB items to entity_list: {e}")
+                    
+                    return jsonify(mapped_items)
+                return jsonify(self.queue.get_entity_list() if self.queue else [])
             elif sub == "queue_list":
-                print(sub)
-                return {"test"}
+                return jsonify([])
             elif sub == "queue_command":
-                ret = self.queue.command(req.form["command"], int(req.form["entity_id"]))
-                return jsonify(ret)
+                command = req.form["command"]
+                entity_id = req.form["entity_id"]
+                
+                if ModuleQueue:
+                    if command == "stop" or command == "cancel":
+                         ModuleQueue.process_ajax('cancel', req)
+                         return jsonify({'ret':'success'})
+                    elif command == "reset":
+                        # Ohli24 모듈의 다운로드만 취소 (다른 플러그인 항목은 그대로)
+                        caller_id = f"{P.package_name}_{self.name}"
+                        cancelled_count = 0
+                        for task_id, task in list(ModuleQueue._downloads.items()):
+                            if task.caller_plugin == caller_id:
+                                task.cancel()
+                                del ModuleQueue._downloads[task_id]
+                                cancelled_count += 1
+                        
+                        # Ohli24 DB도 정리
+                        try:
+                            from framework import F
+                            with F.app.app_context():
+                                F.db.session.query(ModelOhli24Item).delete()
+                                F.db.session.commit()
+                        except Exception as e:
+                            logger.error(f"Failed to clear Ohli24 DB: {e}")
+                        return jsonify({'ret':'notify', 'log':f'{cancelled_count}개 Ohli24 항목이 초기화되었습니다.'})
+                    elif command == "delete_completed":
+                        # 완료 항목만 삭제
+                        try:
+                            from framework import F
+                            with F.app.app_context():
+                                F.db.session.query(ModelOhli24Item).filter(ModelOhli24Item.status == 'completed').delete()
+                                F.db.session.commit()
+                        except Exception as e:
+                            logger.error(f"Failed to delete completed: {e}")
+                        return jsonify({'ret':'success', 'log':'완료 항목이 삭제되었습니다.'})
+                
+                if self.queue:
+                    ret = self.queue.command(command, int(entity_id))
+                    return jsonify(ret)
+                return jsonify({'ret':'error', 'msg':'Queue not initialized'})
             elif sub == "add_queue_checked_list":
                 data = json.loads(request.form["data"])
 
@@ -1217,7 +1330,7 @@ class LogicOhli24(AnimeModuleBase):
 
             logger.debug("url:::> %s", url)
 
-            response_data = LogicOhli24.get_html(url, timeout=10)
+            response_data = LogicOhli24.get_html_cached(url, timeout=10)
             logger.debug(f"HTML length: {len(response_data)}")
             # 디버깅: HTML 일부 출력
             if len(response_data) < 1000:
@@ -1504,7 +1617,7 @@ class LogicOhli24(AnimeModuleBase):
                 url += "&sca=" + sca
             logger.info("url:::> %s", url)
             data = {}
-            response_data = LogicOhli24.get_html(url, timeout=10)
+            response_data = LogicOhli24.get_html_cached(url, timeout=10)
             tree = html.fromstring(response_data)
             tmp_items = tree.xpath('//div[@class="list-row"]')
             data["anime_count"] = len(tmp_items)
@@ -1542,7 +1655,7 @@ class LogicOhli24(AnimeModuleBase):
 
             logger.info("url:::> %s", url)
             data = {}
-            response_data = LogicOhli24.get_html(url, timeout=10)
+            response_data = LogicOhli24.get_html_cached(url, timeout=10)
             tree = html.fromstring(response_data)
             tmp_items = tree.xpath('//div[@class="list-row"]')
             data["anime_count"] = len(tmp_items)
@@ -1580,7 +1693,7 @@ class LogicOhli24(AnimeModuleBase):
 
             logger.info("get_search_result()::url> %s", url)
             data = {}
-            response_data = LogicOhli24.get_html(url, timeout=10)
+            response_data = LogicOhli24.get_html_cached(url, timeout=10)
             tree = html.fromstring(response_data)
             tmp_items = tree.xpath('//div[@class="list-row"]')
             data["anime_count"] = len(tmp_items)
@@ -1669,15 +1782,19 @@ class LogicOhli24(AnimeModuleBase):
                 P.ModelSetting.get(f"{name}_max_ffmpeg_process_count"),
             )
 
-            logger.debug("%s plugin_load", P.package_name)
-            self.queue = FfmpegQueue(
-                P,
-                P.ModelSetting.get_int(f"{name}_max_ffmpeg_process_count"),
-                name,
-                self,
-            )
-            self.current_data = None
-            self.queue.queue_start()
+            # FfmpegQueue 초기화 (GDM 없을 경우 대비한 Fallback)
+            self.queue = None
+            if ModuleQueue is None:
+                logger.info("GDM not found. Initializing legacy FfmpegQueue fallback.")
+                self.queue = FfmpegQueue(
+                    P,
+                    P.ModelSetting.get_int(f"{name}_max_ffmpeg_process_count"),
+                    name,
+                    self,
+                )
+                self.queue.queue_start()
+            else:
+                logger.info("GDM found. FfmpegQueue fallback disabled.")
             
             # 잔여 Temp 폴더 정리
             self.cleanup_stale_temps()
@@ -1847,13 +1964,29 @@ class LogicOhli24(AnimeModuleBase):
         # --- Layer 3A: Zendriver Daemon (빠름 - 브라우저 상시 대기) ---
         if not response_data or len(response_data) < 10:
             if LogicOhli24.is_zendriver_daemon_running():
-                logger.info(f"[Layer3A] Trying Zendriver Daemon: {url}")
-                daemon_result = LogicOhli24.fetch_via_daemon(url, timeout)
+                # 30초 타임아웃 적용
+                logger.debug(f"[Layer3A] Trying Zendriver Daemon: {url} (Timeout: 30s)")
+                daemon_result = LogicOhli24.fetch_via_daemon(url, 30)
+                
                 if daemon_result.get("success") and daemon_result.get("html"):
                     logger.info(f"[Layer3A] Daemon success in {daemon_result.get('elapsed', '?')}s, HTML len: {len(daemon_result['html'])}")
+                    # 성공 시 연속 실패 카운트 초기화
+                    LogicOhli24.daemon_fail_count = 0
                     return daemon_result["html"]
                 else:
-                    logger.warning(f"[Layer3A] Daemon failed: {daemon_result.get('error', 'Unknown')}")
+                    error_msg = daemon_result.get('error', 'Unknown')
+                    logger.warning(f"[Layer3A] Daemon failed: {error_msg}")
+                    
+                    # 실패 카운트 증가 및 10회 누적 시 재시작
+                    LogicOhli24.daemon_fail_count += 1
+                    if LogicOhli24.daemon_fail_count >= 10:
+                        logger.error(f"[Layer3A] Daemon failed {LogicOhli24.daemon_fail_count} times consecutively. Restarting daemon...")
+                        try:
+                            import subprocess
+                            subprocess.run(['pkill', '-f', 'zendriver_daemon'], check=False)
+                            LogicOhli24.daemon_fail_count = 0
+                        except Exception as e:
+                            logger.error(f"Failed to kill daemon: {e}")
         
         # --- Layer 3B: Zendriver Subprocess Fallback (데몬 실패 시) ---
         if not response_data or len(response_data) < 10:
@@ -1945,6 +2078,57 @@ class LogicOhli24(AnimeModuleBase):
         return response_data
 
 
+    @staticmethod
+    def get_html_cached(url: str, **kwargs) -> str:
+        """캐시된 버전의 get_html - 브라우징 페이지용 (request, search 등)
+        
+        캐시 시간은 ohli24_cache_minutes 설정에 따름 (0=캐시 없음)
+        다운로드 루틴은 이 함수를 사용하지 않음 (세션/헤더 필요)
+        """
+        import hashlib
+        
+        cache_minutes = int(P.ModelSetting.get("ohli24_cache_minutes") or 0)
+        
+        # 캐시 비활성화 시 바로 fetch
+        if cache_minutes <= 0:
+            return LogicOhli24.get_html(url, **kwargs)
+        
+        # 캐시 디렉토리 생성
+        cache_dir = os.path.join(path_data, P.package_name, "cache")
+        os.makedirs(cache_dir, exist_ok=True)
+        
+        # URL 해시로 캐시 파일명 생성
+        url_hash = hashlib.md5(url.encode('utf-8')).hexdigest()
+        cache_file = os.path.join(cache_dir, f"{url_hash}.html")
+        
+        # 캐시 유효성 확인
+        if os.path.exists(cache_file):
+            cache_age = time.time() - os.path.getmtime(cache_file)
+            if cache_age < cache_minutes * 60:
+                try:
+                    with open(cache_file, 'r', encoding='utf-8') as f:
+                        cached_html = f.read()
+                    if cached_html and len(cached_html) > 100:
+                        logger.debug(f"[Cache HIT] {url[:60]}... (age: {cache_age:.0f}s)")
+                        return cached_html
+                except Exception as e:
+                    logger.warning(f"[Cache READ ERROR] {e}")
+        
+        # 신규 fetch
+        html = LogicOhli24.get_html(url, **kwargs)
+        
+        # 캐시에 저장 (유효한 HTML만)
+        if html and len(html) > 100:
+            try:
+                with open(cache_file, 'w', encoding='utf-8') as f:
+                    f.write(html)
+                logger.debug(f"[Cache SAVE] {url[:60]}...")
+            except Exception as e:
+                logger.warning(f"[Cache WRITE ERROR] {e}")
+        
+        return html
+
+
     #########################################################
     def add(self, episode_info: Dict[str, Any]) -> str:
         """Add episode to download queue with early skip checks."""
@@ -1971,23 +2155,118 @@ class LogicOhli24(AnimeModuleBase):
                 db_entity.save()
             return "file_exists"
         
-        # 4. Proceed with queue addition
+        # 4. Proceed with queue addition via GDM
         logger.debug(f"episode_info:: {episode_info}")
         
+        # GDM 모듈 사용 시나리오
+        if ModuleQueue:
+             logger.info(f"Preparing GDM delegation for: {episode_info.get('title')}")
+             # Entity 인스턴스를 생성하여 메타데이터 파싱 및 URL 추출 수행
+             entity = Ohli24QueueEntity(P, self, episode_info)
+             
+             # URL/자막/쿠키 추출 수행 (동기식 - 상위에서 비동기로 호출 권장되나 현재 ajax_process는 동기)
+             # 만약 이게 너무 느려지면 별도 쓰레드로 빼야 하지만, 일단 작동 확인을 위해 동기 처리
+             try:
+                 entity.prepare_extra()
+             except Exception as e:
+                 logger.error(f"Failed to extract video info: {e}")
+                 # 추출 실패 시 기존 방식(전체 큐)으로 넘기거나 에러 반환
+                 return "extract_failed"
+
+             # 추출된 정보를 바탕으로 GDM 옵션 준비 (표준화된 필드명 사용)
+             gdm_options = {
+                 "url": entity.url, # 추출된 m3u8 URL
+                 "save_path": entity.savepath,
+                 "filename": entity.filename,
+                 "source_type": "ani24",
+                 "caller_plugin": f"{P.package_name}_{self.name}",
+                 "callback_id": episode_info["_id"],
+                 "title": entity.filename or episode_info.get('title'),
+                 "thumbnail": episode_info.get('image'),
+                 "meta": {
+                     "series": entity.content_title,
+                     "season": entity.season,
+                     "episode": entity.epi_queue,
+                     "source": "ohli24"
+                 },
+                 # options 내부가 아닌 상위 레벨로 headers/cookies 전달 (GDM 평탄화 대응)
+                 "headers": entity.headers,
+                 "subtitles": entity.srt_url or entity.vtt,
+                 "cookies_file": entity.cookies_file
+             }
+
+             task = ModuleQueue.add_download(**gdm_options)
+             if task:
+                 logger.info(f"Delegated Ohli24 download to GDM: {entity.filename}")
+                 # DB 상태 업데이트 (prepare_extra에서도 이미 수행하지만 명시적 상태 변경)
+                 if db_entity is None:
+                     # append는 이미 prepare_extra 상단에서 db_entity를 조회하므로 
+                     # 이미 DB에 entry가 생겼을 가능성 높음 (만약 없다면 여기서 추가)
+                     db_entity = ModelOhli24Item.get_by_ohli24_id(episode_info["_id"])
+                     if not db_entity:
+                          ModelOhli24Item.append(entity.as_dict())
+                 return "enqueue_gdm_success"
+        
+        # GDM 미설치 시 기존 방식 fallback (또는 에러 처리)
+        logger.warning("GDM Module not found, falling back to FfmpegQueue")
         if db_entity is None:
             entity = Ohli24QueueEntity(P, self, episode_info)
             entity.proxy = LogicOhli24.get_proxy()
-            logger.debug("entity:::> %s", entity.as_dict())
             ModelOhli24Item.append(entity.as_dict())
             self.queue.add_queue(entity)
             return "enqueue_db_append"
         else:
-            # db_entity exists but status is not completed
             entity = Ohli24QueueEntity(P, self, episode_info)
             entity.proxy = LogicOhli24.get_proxy()
-            logger.debug("entity:::> %s", entity.as_dict())
             self.queue.add_queue(entity)
             return "enqueue_db_exist"
+
+    def _get_savepath(self, episode_info: Dict[str, Any]) -> str:
+        """다운로드 경로 계산 (내부 로직 재사용)"""
+        savepath = P.ModelSetting.get("ohli24_download_path")
+        title = episode_info.get("title", "")
+        match = re.search(r"(?P<title>.*?)\s*((?P<season>\d+)기)?\s*((?P<epi_no>\d+)화)", title)
+        
+        if P.ModelSetting.get_bool("ohli24_auto_make_folder"):
+            day = episode_info.get("day", "")
+            content_title_clean = match.group("title").strip() if match else title
+            if "완결" in day:
+                folder_name = "%s %s" % (P.ModelSetting.get("ohli24_finished_insert"), content_title_clean)
+            else:
+                folder_name = content_title_clean
+            folder_name = Util.change_text_for_use_filename(folder_name.strip())
+            savepath = os.path.join(savepath, folder_name)
+            
+            if P.ModelSetting.get_bool("ohli24_auto_make_season_folder"):
+                season_val = int(match.group("season")) if match and match.group("season") else 1
+                savepath = os.path.join(savepath, "Season %s" % season_val)
+        return savepath
+
+    def plugin_callback(self, data: Dict[str, Any]):
+        """GDM 등 외부에서 작업 완료 알림을 받을 때 실행"""
+        try:
+            callback_id = data.get('callback_id')
+            status = data.get('status')
+            filepath = data.get('filepath')
+            
+            logger.info(f"Plugin callback received: id={callback_id}, status={status}")
+            
+            if status == "completed" and callback_id:
+                # DB 업데이트하여 '보기' 버튼 활성화
+                db_entity = ModelOhli24Item.get_by_ohli24_id(callback_id)
+                if db_entity:
+                    db_entity.status = "completed"
+                    db_entity.filepath = filepath
+                    db_entity.filename = os.path.basename(filepath)
+                    db_entity.completed_time = datetime.now()
+                    db_entity.save()
+                    logger.info(f"Ohli24 DB updated for completed task: {db_entity.title}")
+                    
+                    # UI 갱신을 위한 소켓 이벤트를 보내고 싶다면 여기서 처리 가능
+                    # self.socketio_callback('list_refresh', "")
+        except Exception as e:
+            logger.error(f"Error in plugin_callback: {e}")
+            logger.error(traceback.format_exc())
     
     def _predict_filepath(self, episode_info: Dict[str, Any]) -> Optional[str]:
         """Predict the output filepath from episode info WITHOUT expensive site access.
@@ -2054,6 +2333,12 @@ class LogicOhli24(AnimeModuleBase):
                     # Case-insensitive fnmatch
                     if fnmatch.fnmatch(fname.lower(), pattern_basename.lower()):
                         matched_path = os.path.join(savepath, fname)
+                        # 0바이트 파일은 존재하지 않는 것으로 간주하고 삭제 시도
+                        if os.path.exists(matched_path) and os.path.getsize(matched_path) == 0:
+                            logger.info(f"Found 0-byte file, deleting and ignoring: {matched_path}")
+                            try: os.remove(matched_path)
+                            except: pass
+                            continue
                         logger.debug(f"Found existing file (case-insensitive): {matched_path}")
                         return matched_path
             return None
@@ -2063,15 +2348,27 @@ class LogicOhli24(AnimeModuleBase):
 
 
     def is_exist(self, info: Dict[str, Any]) -> bool:
-        # print(self.queue)
-        # print(self.queue.entity_list)
-        for en in self.queue.entity_list:
-            if en.info["_id"] == info["_id"]:
-                return True
+        # GDM 체크
+        if ModuleQueue:
+            for d in ModuleQueue._downloads.values():
+                status = d.get_status()
+                if status.get('callback_id') == info["_id"]:
+                    return True
+        
+        # Legacy Queue 체크
+        if self.queue:
+            for en in self.queue.entity_list:
+                if en.info["_id"] == info["_id"]:
+                    return True
         return False
 
 
     def callback_function(self, **args: Any) -> None:
+        if not self.queue and ModuleQueue:
+            # GDM 사용 중이면 SupportFfmpeg 직접 콜백은 무시하거나 로그만 남김
+            # (GDM은 자체적으로 완료 처리를 수행하고 plugin_callback을 호출함)
+            return
+            
         logger.debug(f"callback_function invoked with args: {args}")
         if 'status' in args:
             logger.debug(f"Status: {args['status']}")
@@ -2714,14 +3011,26 @@ class Ohli24QueueEntity(AnimeQueueEntity):
                             with os.fdopen(fd, 'w') as f:
                                 f.write("# Netscape HTTP Cookie File\n")
                                 f.write("# https://curl.haxx.se/docs/http-cookies.html\n\n")
+                                
+                                # RequestsCookieJar는 반복 시 Cookie 객체를 반환하거나 이름(str)을 반환할 수 있음
                                 for cookie in scraper.cookies:
-                                    # 형식: domain, flag, path, secure, expiry, name, value
-                                    domain = cookie.domain
-                                    flag = "TRUE" if domain.startswith('.') else "FALSE"
-                                    path = cookie.path or "/"
-                                    secure = "TRUE" if cookie.secure else "FALSE"
-                                    expiry = str(int(cookie.expires)) if cookie.expires else "0"
-                                    f.write(f"{domain}\t{flag}\t{path}\t{secure}\t{expiry}\t{cookie.name}\t{cookie.value}\n")
+                                    if hasattr(cookie, 'domain'):
+                                        # Cookie 객체인 경우
+                                        domain = cookie.domain
+                                        flag = "TRUE" if domain.startswith('.') else "FALSE"
+                                        path = cookie.path or "/"
+                                        secure = "TRUE" if cookie.secure else "FALSE"
+                                        expiry = str(int(cookie.expires)) if cookie.expires else "0"
+                                        name = cookie.name
+                                        value = cookie.value
+                                        f.write(f"{domain}\t{flag}\t{path}\t{secure}\t{expiry}\t{name}\t{value}\n")
+                                    elif isinstance(cookie, str):
+                                        # 이름(str)인 경우 (dictionary-like iteration)
+                                        name = cookie
+                                        value = scraper.cookies.get(name)
+                                        # 도메인 정보가 없으므로 iframe_domain 활용
+                                        domain = parse.urlparse(iframe_src).netloc
+                                        f.write(f"{domain}\tTRUE\t/\tFALSE\t0\t{name}\t{value}\n")
                             logger.info(f"Saved {len(scraper.cookies)} cookies to: {cookies_file}")
                         except Exception as cookie_err:
                             logger.warning(f"Failed to save cookies: {cookie_err}")

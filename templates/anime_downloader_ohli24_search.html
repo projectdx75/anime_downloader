@@ -17,7 +17,7 @@
     <div id="ajax_loader" class="ajax-loader-container" style="display: none;">
         <div class="ajax-spinner"></div>
     </div>
-    <div id="ohli24_search_wrapper" class="ohli24-common-wrapper container-fluid mt-4 content-cloak ohli24-search-page">
+    <div id="ohli24_search_wrapper" class="ohli24-common-wrapper container-fluid content-cloak ohli24-search-page">
         <!-- Search Section -->
         <div class="glass-card p-4 mb-4">
             <div class="ohli24-header">
@@ -546,14 +546,14 @@
                 data: {data: JSON.stringify(data)},
                 dataType: "json",
                 success: function (data) {
-                    if (data.ret == 'enqueue_db_append' || data.ret == 'enqueue_db_exist') {
+                    if (data.ret == 'enqueue_db_append' || data.ret == 'enqueue_db_exist' || data.ret == 'enqueue_gdm_success') {
                         $.notify('<strong>다운로드 작업을 추가 하였습니다.</strong>', {type: 'success'});
                     } else if (data.ret == 'queue_exist') {
                         $.notify('<strong>이미 큐에 있습니다. 삭제 후 추가하세요.</strong>', {type: 'warning'});
                     } else if (data.ret == 'db_completed') {
                         $.notify('<strong>DB에 완료 기록이 있습니다.</strong>', {type: 'warning'});
                     } else {
-                        $.notify('<strong>추가 실패</strong><br>' + ret.log, {type: 'warning'});
+                        $.notify('<strong>추가 실패</strong><br>' + data.log, {type: 'warning'});
                     }
                 }
             });

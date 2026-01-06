@@ -60,6 +60,12 @@
         padding-top: 5px !important; 
         overflow-x: hidden !important;
     }
+
+    /* Compact Navbar */
+    .navbar {
+        padding-top: 0.25rem !important;
+        padding-bottom: 0.25rem !important;
+    }
     
     /* Global Navigation Pills Fix & Premium Styling */
     ul.nav.nav-pills.bg-light {
@@ -73,18 +79,22 @@
         flex-wrap: wrap; /* allow wrap on small screens */
         justify-content: center;
         width: auto !important; /* Prevent full width */
-        margin-bottom: 5px; /* Reduced for modularity */
-        margin-top: 50px !important; /* Mobile spacing - fallback for first menu */
+        margin-top: 2px !important; /* Reduced for modularity */
+    }
+
+    /* Override for the fallback above to be tighter */
+    ul.nav.nav-pills.bg-light {
+        margin-top: 4px !important;
     }
 
     /* Tighten spacing between 2nd and 3rd level menus */
     #menu_module_div ul.nav.nav-pills.bg-light {
-        margin-bottom: 5px !important;
+        margin-bottom: 2px !important;
     }
     
     #menu_page_div ul.nav.nav-pills.bg-light {
-        margin-top: 0 !important;
-        margin-bottom: 20px !important;
+        margin-top: -4px !important;
+        margin-bottom: 12px !important;
     }
 
     ul.nav.nav-pills .nav-item {
@@ -93,7 +103,7 @@
 
     ul.nav.nav-pills .nav-link {
         border-radius: 50rem !important;
-        padding: 8px 20px !important;
+        padding: 6px 16px !important;
         color: #94a3b8 !important; /* Muted text */
         font-weight: 600;
         transition: all 0.3s ease;
@@ -128,5 +138,25 @@
         margin-left: 0 !important;
         margin-right: 0 !important;
         border-radius: 12px !important;
+    }
+}
+
+/* Global Navigation Spacing Adjustments (Plugin Specific) */
+#menu_module_div {
+    padding-top: 52px !important; /* Adjusted for compact navbar (~52px) */
+    margin-bottom: 0 !important;
+}
+
+#menu_module_div .nav-pills,
+#menu_page_div .nav-pills {
+    margin-top: 0 !important;
+    margin-bottom: 2px !important;
+}
+
+/* Tighten main container for desktop */
+@media (min-width: 769px) {
+    #main_container {
+        margin-top: 0 !important;
+        padding-top: 0 !important;
     }
 }

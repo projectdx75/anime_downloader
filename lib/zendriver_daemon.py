@@ -209,11 +209,22 @@ async def fetch_with_browser(url: str, timeout: int = 30) -> Dict[str, Any]:
             # browser.get(url)은 새 탭을 열거나 기존 탭을 사용함
             page: Any = await browser.get(url)
             
-            # 페이지 로드 대기 (충분히 대기)
-            await asyncio.sleep(2.0)
+            # 페이지 로드 대기 - cdndania iframe 로딩될 때까지 폴링 (최대 15초)
+            max_wait = 15
+            poll_interval = 1
+            waited = 0
+            html_content = ""
             
-            # HTML 추출
-            html_content: str = await page.get_content()
+            while waited < max_wait:
+                await asyncio.sleep(poll_interval)
+                waited += poll_interval
+                html_content = await page.get_content()
+                
+                # cdndania iframe이 로드되었는지 확인
+                if "cdndania" in html_content or "fireplayer" in html_content:
+                    log_debug(f"[ZendriverDaemon] cdndania/fireplayer found after {waited}s")
+                    break
+            
             elapsed: float = time.time() - start_time
             
             if html_content and len(html_content) > 100:

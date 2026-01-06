@@ -110,7 +110,7 @@ ul.nav.nav-pills.bg-light {
     flex-wrap: wrap;
     justify-content: center;
     width: auto !important;
-    margin-bottom: 5px; /* Default for modular stacking */
+    margin-bottom: 2px; /* Pull secondary pills or content closer */
 }
 
 ul.nav.nav-pills .nav-link {
@@ -513,7 +513,7 @@ ul.nav.nav-pills .nav-link.active {
         font-weight: 800;
     }
     .ohli24-queue-page .queue-item { flex-direction: column; align-items: stretch; }
-    .ohli24-queue-page ul.nav.nav-pills.bg-light { margin-top: 40px !important; }
+    .ohli24-queue-page ul.nav.nav-pills.bg-light { margin-top: 4px !important; }
 
     /* Search Container Mobile Refinements */
     .ohli24-list-page .search-container {

@@ -21,18 +21,37 @@ body {
     color: #ecfdf5; 
 }
 
-/* Linkkf Specific Nav-Pills Overrides */
+/* Shared Nav-Pills Styles */
 ul.nav.nav-pills.bg-light {
     background-color: rgba(6, 78, 59, 0.4) !important;
-    border: 1px solid rgba(16, 185, 129, 0.1) !important;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(16, 185, 129, 0.1);
+    border-radius: 50rem !important;
+    padding: 6px !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2) !important;
+    display: inline-flex !important;
+    gap: 4px;
+    margin-bottom: 20px;
 }
 
 ul.nav.nav-pills .nav-link {
     color: #d1fae5 !important;
+    font-weight: 600 !important;
+    padding: 8px 20px !important;
+    border-radius: 50rem !important;
+    transition: all 0.3s ease !important;
+    border: 1px solid transparent !important;
+}
+
+ul.nav.nav-pills .nav-link:hover {
+    background-color: rgba(16, 185, 129, 0.1) !important;
+    color: #fff !important;
+    transform: translateY(-1px);
 }
 
 ul.nav.nav-pills .nav-link.active {
     background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+    color: #fff !important;
     box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3) !important;
 }
 
@@ -50,4 +69,13 @@ ul.nav.nav-pills .nav-link.active {
 
 .linkkf-common-wrapper.visible {
     opacity: 1;
+}
+
+/* Mobile Adjustments */
+@media (max-width: 768px) {
+    ul.nav.nav-pills.bg-light {
+        width: 100% !important;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
 }

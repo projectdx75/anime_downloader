@@ -276,14 +276,33 @@
             data: {},
             dataType: "json",
             success: function (data) {
+                // 목록 길이 변경 시 전체 다시 그리기
                 if (data.length !== current_list_length) {
                     current_list_length = data.length;
                     make_download_list(data);
+                } else {
+                    // 진행률만 업데이트 (전체 다시 그리기 없이)
+                    for (var i = 0; i < data.length; i++) {
+                        var item = data[i];
+                        var progressBar = document.getElementById("progress_" + item.entity_id);
+                        if (progressBar) {
+                            progressBar.style.width = item.ffmpeg_percent + '%';
+                            var label = item.ffmpeg_status_kor;
+                            if (item.ffmpeg_percent != 0) label += " (" + item.ffmpeg_percent + "%)";
+                            if (item.current_speed) label += " " + item.current_speed;
+                            var labelEl = document.getElementById("progress_" + item.entity_id + "_label");
+                            if (labelEl) labelEl.innerHTML = label;
+                            
+                            // 상태 클래스 업데이트
+                            var statusClass = getStatusClass(item.ffmpeg_status_kor);
+                            $(progressBar).removeClass('status-waiting status-downloading status-completed status-failed').addClass(statusClass);
+                        }
+                    }
                 }
                 
                 var hasActive = false;
                 for (var i = 0; i < data.length; i++) {
-                    if (data[i].ffmpeg_status_kor === '다운로드중' || data[i].ffmpeg_status_kor === '대기중') {
+                    if (data[i].ffmpeg_status_kor === '다운로드중' || data[i].ffmpeg_status_kor === '대기중' || data[i].ffmpeg_status_kor === '추출중') {
                         hasActive = true;
                         break;
                     }
@@ -294,7 +313,7 @@
                     refreshIntervalId = null;
                 }
                 if (hasActive && !refreshIntervalId) {
-                    refreshIntervalId = setInterval(silentRefresh, 3000);
+                    refreshIntervalId = setInterval(silentRefresh, 2000);
                 }
             }
         });
