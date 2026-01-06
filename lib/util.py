@@ -58,11 +58,21 @@ class Util(object):
 
     @staticmethod
     def change_text_for_use_filename(text):
-        # text = text.replace('/', '')
-        # 2021-07-31 X:X
-        # text = text.replace(':', ' ')
-        text = re.sub('[\\/:*?\"<>|]', ' ', text).strip()
-        text = re.sub("\s{2,}", ' ', text)
+        # 1. Remove/replace Windows-forbidden characters
+        text = re.sub('[\\/:*?"<>|]', ' ', text)
+        
+        # 2. Remove consecutive dots (.. → .)
+        text = re.sub(r'\.{2,}', '.', text)
+        
+        # 3. Remove leading/trailing dots and spaces
+        text = text.strip('. ')
+        
+        # 4. Collapse multiple spaces to single space
+        text = re.sub(r'\s{2,}', ' ', text)
+        
+        # 5. Remove any remaining trailing dots (after space collapse)
+        text = text.rstrip('.')
+        
         return text
 
     @staticmethod
