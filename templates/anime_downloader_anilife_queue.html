@@ -9,7 +9,7 @@
         <div class="d-flex justify-content-start align-items-center gap-2 mb-4">
             <button id="reset_btn" class="btn custom-btn btn-reset-queue"><i class="fa fa-refresh mr-2"></i> 초기화</button>
             <button id="delete_completed_btn" class="btn custom-btn btn-delete-completed"><i class="fa fa-trash-o mr-2"></i> 완료 목록 삭제</button>
-            <button id="go_ffmpeg_btn" class="btn custom-btn btn-ffmpeg"><i class="fa fa-film mr-2"></i> Go FFMPEG</button>
+            <button id="go_gdm_btn" class="btn custom-btn btn-gdm"><i class="fa fa-download mr-2"></i> Go GDM</button>
         </div>
     </div>
     <div id='page1'></div>
@@ -329,9 +329,9 @@
             queue_command(send_data)
         });
 
-        $("body").on('click', '#go_ffmpeg_btn', function (e) {
+        $("body").on('click', '#go_gdm_btn', function (e) {
             e.preventDefault();
-            window.location.href = '/ffmpeg/list';
+            window.location.href = '/gommi_downloader_manager/queue/list';
         });
 
         function queue_command(data) {
@@ -412,8 +412,8 @@
     .btn-delete-completed { background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.3); }
     .btn-delete-completed:hover { background: rgba(239, 68, 68, 0.4); transform: translateY(-2px); box-shadow: 0 6px 20px rgba(239, 68, 68, 0.3); }
     
-    .btn-ffmpeg { background: rgba(139, 92, 246, 0.2); border-color: rgba(139, 92, 246, 0.3); }
-    .btn-ffmpeg:hover { background: rgba(139, 92, 246, 0.4); transform: translateY(-2px); box-shadow: 0 6px 20px rgba(139, 92, 246, 0.3); }
+    .btn-gdm { background: rgba(56, 189, 248, 0.2); border-color: rgba(56, 189, 248, 0.3); }
+    .btn-gdm:hover { background: rgba(56, 189, 248, 0.4); transform: translateY(-2px); box-shadow: 0 6px 20px rgba(56, 189, 248, 0.3); }
 
     /* Action buttons inside table */
     .action-btn {

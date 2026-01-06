@@ -65,6 +65,13 @@ from typing import Awaitable, TypeVar
 T = TypeVar("T")
 
 from .setup import *
+from requests_cache import CachedSession
+
+# GDM Integration
+try:
+    from gommi_downloader_manager.mod_queue import ModuleQueue
+except ImportError:
+    ModuleQueue = None
 
 logger = P.logger
 name = "anilife"
@@ -150,6 +157,7 @@ class LogicAniLife(AnimeModuleBase):
             return lib_exists
 
     session = requests.Session()
+    cached_session = None  # Will be initialized on first use
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/104.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
@@ -1318,7 +1326,40 @@ class LogicAniLife(AnimeModuleBase):
                 db_entity.save()
             return "file_exists"
         
-        # 4. Proceed with queue addition
+        # 4. Try GDM if available (like Ohli24)
+        if ModuleQueue is not None:
+            entity = AniLifeQueueEntity(P, self, episode_info)
+            logger.debug("entity:::> %s", entity.as_dict())
+            
+            # Save to DB first
+            if db_entity is None:
+                ModelAniLifeItem.append(entity.as_dict())
+            
+            # Prepare GDM options (same pattern as Ohli24)
+            gdm_options = {
+                "url": entity.url,
+                "save_path": entity.savepath,
+                "filename": entity.filename,
+                "source_type": "anilife",
+                "caller_plugin": f"{P.package_name}_{self.name}",
+                "callback_id": episode_info["_id"],
+                "title": entity.filename or episode_info.get('title'),
+                "thumbnail": episode_info.get('image'),
+                "meta": {
+                    "series": entity.content_title,
+                    "season": entity.season,
+                    "episode": entity.epi_queue,
+                    "source": "anilife"
+                },
+            }
+            
+            task = ModuleQueue.add_download(**gdm_options)
+            if task:
+                logger.info(f"Delegated Anilife download to GDM: {entity.filename}")
+                return "enqueue_gdm_success"
+        
+        # 5. Fallback to FfmpegQueue if GDM not available
+        logger.warning("GDM Module not found, falling back to FfmpegQueue")
         if db_entity is None:
             logger.debug(f"episode_info:: {episode_info}")
             entity = AniLifeQueueEntity(P, self, episode_info)
