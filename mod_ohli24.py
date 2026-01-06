@@ -2671,6 +2671,14 @@ class Ohli24QueueEntity(AnimeQueueEntity):
     def download_completed(self) -> None:
         super().download_completed()
         logger.debug("download completed.......!!")
+        
+        # Verify file actually exists before marking as completed
+        if not self.filepath or not os.path.exists(self.filepath):
+            logger.warning(f"[DB_COMPLETE] File does not exist after download_completed: {self.filepath}")
+            # Call download_failed instead
+            self.download_failed("File not found after download")
+            return
+        
         logger.debug(f"[DB_COMPLETE] Looking up entity by ohli24_id: {self.info.get('_id')}")
         db_entity = ModelOhli24Item.get_by_ohli24_id(self.info["_id"])
         logger.debug(f"[DB_COMPLETE] Found db_entity: {db_entity}")
