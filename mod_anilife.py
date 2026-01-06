@@ -81,6 +81,7 @@ class LogicAniLife(AnimeModuleBase):
     db_default = {
         "anilife_db_version": "1",
         "anilife_url": "https://anilife.live",
+        "anilife_proxy_url": "",
         "anilife_download_path": os.path.join(path_data, P.package_name, "ohli24"),
         "anilife_auto_make_folder": "True",
         "anilife_auto_make_season_folder": "True",
@@ -99,6 +100,17 @@ class LogicAniLife(AnimeModuleBase):
         "anilife_image_url_prefix_episode": "https://www.jetcloud-list.cc/thumbnail/",
         "anilife_camoufox_installed": "False",
     }
+
+    @classmethod
+    def get_proxy(cls) -> str:
+        return P.ModelSetting.get("anilife_proxy_url")
+
+    @classmethod
+    def get_proxies(cls) -> Optional[Dict[str, str]]:
+        proxy = cls.get_proxy()
+        if proxy:
+            return {"http": proxy, "https": proxy}
+        return None
 
     current_headers = None
     current_data = None
