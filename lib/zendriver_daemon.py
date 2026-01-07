@@ -359,12 +359,12 @@ async def fetch_with_browser(url: str, timeout: int = 30) -> Dict[str, Any]:
                 result["elapsed"] = round(total_elapsed, 2)
                 log_debug(f"[ZendriverDaemon] Fetch failure: Short response ({len(html_content) if html_content else 0} bytes)")
             
-            # 탭 정리 (중요! 탭 누적 방지)
+            # 탭 정리: 닫지 말고 about:blank로 리셋 (최소 1개 탭 유지 필요)
             if page:
                 try:
-                    await page.close()
+                    await page.get("about:blank")
                 except Exception as e:
-                    log_debug(f"[ZendriverDaemon] Tab close failed: {e}")
+                    log_debug(f"[ZendriverDaemon] Tab reset failed: {e}")
             
         except StopIteration:
             log_debug("[ZendriverDaemon] StopIteration caught during browser.get, resetting browser")
