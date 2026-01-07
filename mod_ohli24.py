@@ -156,10 +156,43 @@ class LogicOhli24(AnimeModuleBase):
         return None
 
     @classmethod
+    def ensure_essential_dependencies(cls) -> bool:
+        """필수 패키지(jsbeautifier, loguru, botasaurus) 확인 및 자동 설치"""
+        target_packages = ["jsbeautifier", "loguru", "botasaurus"]
+        need_install = []
+        
+        import importlib.util
+        for pkg in target_packages:
+            if importlib.util.find_spec(pkg) is None:
+                need_install.append(pkg)
+        
+        if not need_install:
+            return True
+            
+        import subprocess as sp
+        try:
+            logger.info(f"[Dependencies] Missing: {need_install}, installing via pip...")
+            cmd = [sys.executable, "-m", "pip", "install"] + need_install + ["-q"]
+            result = sp.run(cmd, capture_output=True, text=True, timeout=180)
+            
+            if result.returncode == 0:
+                logger.info(f"[Dependencies] Successfully installed: {need_install}")
+                return True
+            else:
+                logger.warning(f"[Dependencies] Installation failed: {result.stderr[:200]}")
+                return False
+        except Exception as e:
+            logger.error(f"[Dependencies] Installation error: {e}")
+            return False
+
+    @classmethod
     def ensure_zendriver_installed(cls) -> bool:
         """Zendriver 패키지 확인 및 자동 설치"""
         if cls.zendriver_setup_done:
             return True
+        
+        # 필수 패키지 먼저 확인
+        cls.ensure_essential_dependencies()
         
         import importlib.util
         import subprocess as sp
@@ -1770,6 +1803,8 @@ class LogicOhli24(AnimeModuleBase):
     # @staticmethod
     def plugin_load(self) -> None:
         try:
+            # 필수 패키지 확인 및 설치
+            LogicOhli24.ensure_essential_dependencies()
             # SupportFfmpeg.initialize(ffmpeg_modelsetting.get('ffmpeg_path'), os.path.join(F.config['path_data'], 'tmp'),
             #                          self.callback_function, ffmpeg_modelsetting.get_int('max_pf_count'))
 
@@ -1912,7 +1947,27 @@ class LogicOhli24(AnimeModuleBase):
             headers["Referer"] = "https://ani.ohli24.com"
 
         
-        # === [TEST MODE] Layer 1, 2 일시 비활성화 - Layer 3, 4만 테스트 ===
+        # === [Layer 1: Botasaurus @request (빠름 - HTTP Request)] ===
+        if not response_data or len(response_data) < 10:
+            if cls.ensure_essential_dependencies():
+                try:
+                    logger.debug(f"[Layer1] Trying Botasaurus @request: {url}")
+                    from botasaurus.request import request as b_request
+                    
+                    @b_request(headers=headers, use_stealth=True, proxy=LogicOhli24.get_proxy())
+                    def fetch_url(request, data):
+                        return request.get(data)
+
+                    b_resp = fetch_url(url)
+                    if b_resp and len(b_resp) > 10:
+                        logger.info(f"[Layer1] Botasaurus success, HTML len: {len(b_resp)}")
+                        return b_resp
+                    else:
+                        logger.warning(f"[Layer1] Botasaurus short response: {len(b_resp) if b_resp else 0}")
+                except Exception as e:
+                    logger.warning(f"[Layer1] Botasaurus failed: {e}")
+
+        # === [TEST MODE] Layer 1 (기존 것들) 일시 비활성화 - Layer 3, 4만 테스트 ===
         response_data = ""  # 바로 Layer 3로 이동
         
         # max_retries = 3
