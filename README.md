@@ -81,6 +81,13 @@
 
 ## 📝 변경 이력 (Changelog)
 
+### v0.6.23 (2026-01-08)
+- **Linkkf 다운로드 완전 복구**:
+    - **Zendriver Daemon CDP 헤더 버그 수정**: `zd.cdp.network.Headers()` 타입 래핑 누락으로 Referer 헤더가 적용되지 않던 문제 해결.
+    - **HTML 엔티티 디코딩 개선**: iframe URL의 `&amp;` 등 HTML 엔티티를 `html.unescape()`로 올바르게 디코딩.
+    - **GDM yt-dlp 헤더 전달**: `--add-header` 옵션으로 Referer/User-Agent를 yt-dlp에 전달하여 CDN 리다이렉트 방지.
+- **부수 효과**: Ohli24 등 모든 브라우저 기반 추출에서 동일한 헤더 적용 개선.
+
 ### v0.6.22 (2026-01-08)
 - **Linkkf 추출 로직 강화**: Cloudflare 보호가 강화된 Linkkf 도메인(flexora.xyz 등)에 대응하기 위해 브라우저 기반(Zendriver/Camoufox) 추출 엔진을 도입했습니다.
 - **오추출 방지**: 광고나 서비스 차단 페이지(Google Cloud 등)의 iframe을 비디오 URL로 오인하는 문제를 수정했습니다.

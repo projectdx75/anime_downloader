@@ -543,7 +543,7 @@ class LogicLinkkf(AnimeModuleBase):
         try:
             if LogicOhli24.is_zendriver_daemon_running():
                 logger.info(f"[Linkkf] Trying Zendriver Daemon: {url}")
-                daemon_res = LogicOhli24.fetch_via_daemon(url, timeout=30)
+                daemon_res = LogicOhli24.fetch_via_daemon(url, timeout=30, headers=LogicLinkkf.headers)
                 if daemon_res.get("success") and daemon_res.get("html"):
                     elapsed = time.time() - start_time
                     logger.info(f"[Linkkf] Daemon success in {elapsed:.2f}s")
@@ -712,9 +712,9 @@ class LogicLinkkf(AnimeModuleBase):
             
             if iframe and iframe.get("src"):
                 iframe_src = iframe.get("src")
-                # HTML entity decoding (&#038; -> &)
-                if "&#038;" in iframe_src:
-                    iframe_src = iframe_src.replace("&#038;", "&")
+                # HTML entity decoding (&#038; -> &, &amp; -> &, etc.)
+                import html as html_lib
+                iframe_src = html_lib.unescape(iframe_src)
                 
                 logger.info(f"Found player iframe: {iframe_src}")
                 
@@ -725,46 +725,67 @@ class LogicLinkkf(AnimeModuleBase):
                     return None, iframe_src, None
                 
                 # m3u8 URL 패턴 찾기 (더 정밀하게)
-                # 패턴 1: url: 'https://...m3u8'
+                # 패턴 1: url: 'https://...m3u8' 또는 url: "https://...m3u8"
                 m3u8_pattern = re.compile(r"url:\s*['\"]([^'\"]*\.m3u8[^'\"]*)['\"]")
                 m3u8_match = m3u8_pattern.search(iframe_content)
                 
                 # 패턴 2: <source src="https://...m3u8">
                 if not m3u8_match:
-                    source_pattern = re.compile(r"<source[^>]+src=['\"]([^'\"]*\.m3u8[^'\"]*)['\"]")
+                    source_pattern = re.compile(r"<source[^>]+src=['\"]([^'\"]*\.m3u8[^'\"]*)['\"]", re.IGNORECASE)
                     m3u8_match = source_pattern.search(iframe_content)
                 
                 # 패턴 3: var src = '...m3u8'
                 if not m3u8_match:
-                    src_pattern = re.compile(r"src\s*=\s*['\"]([^'\"]*\.m3u8[^'\"]*)['\"]")
+                    src_pattern = re.compile(r"src\s*=\s*['\"]([^'\"]*\.m3u8[^'\"]*)['\"]", re.IGNORECASE)
                     m3u8_match = src_pattern.search(iframe_content)
 
-                if m3u8_match:
+                # 패턴 4: Artplayer 전용 더 넓은 범위
+                if not m3u8_match:
+                    art_pattern = re.compile(r"url\s*:\s*['\"]([^'\"]+)['\"]")
+                    matches = art_pattern.findall(iframe_content)
+                    for m in matches:
+                        if ".m3u8" in m:
+                            video_url = m
+                            break
+                    if video_url:
+                        logger.info(f"Extracted m3u8 via Artplayer pattern: {video_url}")
+
+                if m3u8_match and not video_url:
                     video_url = m3u8_match.group(1)
+                
+                if video_url:
                     # 상대 경로 처리 (예: cache/...)
                     if video_url.startswith('cache/') or video_url.startswith('/cache/'):
                         from urllib.parse import urljoin
                         video_url = urljoin(iframe_src, video_url)
                     logger.info(f"Extracted m3u8 URL: {video_url}")
                 else:
-                    logger.warning(f"m3u8 URL not found in iframe. Content snippet: {iframe_content[:200]}...")
+                    logger.warning(f"m3u8 URL not found in iframe for: {playid_url}")
+                    # HTML 내용이 너무 길면 앞부분만 로깅
+                    snippet = iframe_content.replace('\n', ' ')
+                    logger.debug(f"Iframe Content snippet (500 chars): {snippet[:500]}...")
+                    # 'cache/' 가 들어있는지 확인
+                    if 'cache/' in iframe_content:
+                        logger.debug("Found 'cache/' keyword in iframe content but regex failed. Inspection required.")
                 
                 # VTT 자막 URL 추출
-                vtt_pattern = re.compile(r"['\"]src['\"]?:\s*['\"]([^'\"]*\.vtt)['\"]")
+                # VTT 자막 URL 추출 (패턴 1: generic src)
+                vtt_pattern = re.compile(r"['\"]src['\"]?:\s*['\"]([^'\"]*\.vtt)['\"]", re.IGNORECASE)
                 vtt_match = vtt_pattern.search(iframe_content)
-                if not vtt_match:
-                    vtt_pattern2 = re.compile(r"url:\s*['\"]([^'\"]*\.vtt)['\"]")
-                    vtt_match = vtt_pattern2.search(iframe_content)
-                if not vtt_match:
-                    vtt_pattern3 = re.compile(r"<track[^>]+src=['\"]([^'\"]*\.vtt)['\"]")
-                    vtt_match = vtt_pattern3.search(iframe_content)
                 
+                # 패턴 2: url: '...vtt' (Artplayer 등)
+                if not vtt_match:
+                    vtt_pattern = re.compile(r"url:\s*['\"]([^'\"]*\.vtt[^'\"]*)['\"]", re.IGNORECASE)
+                    vtt_match = vtt_pattern.search(iframe_content)
+
                 if vtt_match:
                     vtt_url = vtt_match.group(1)
-                    if vtt_url.startswith('/'):
+                    if vtt_url.startswith('s/') or vtt_url.startswith('/s/'):
                         from urllib.parse import urljoin
                         vtt_url = urljoin(iframe_src, vtt_url)
                     logger.info(f"Extracted VTT URL: {vtt_url}")
+                else:
+                    logger.debug("VTT URL not found in iframe content.")
                 
                 referer_url = iframe_src
             else:
@@ -1664,9 +1685,8 @@ class LogicLinkkf(AnimeModuleBase):
             download_method = P.ModelSetting.get("linkkf_download_method") or "ytdlp"
             download_threads = P.ModelSetting.get_int("linkkf_download_threads") or 16
             
+            # Linkkf는 항상 'linkkf' source_type 사용 (GDM에서 YtdlpAria2Downloader로 매핑됨)
             gdm_source_type = "linkkf"
-            if download_method in ['ytdlp', 'aria2c']:
-                gdm_source_type = "general"
 
             # Prepare GDM options
             gdm_options = {

@@ -290,13 +290,17 @@ class LogicOhli24(AnimeModuleBase):
             return False
 
     @classmethod
-    def fetch_via_daemon(cls, url: str, timeout: int = 30) -> dict:
-        """데몬을 통한 HTML 페칭 (빠름)"""
+    def fetch_via_daemon(cls, url: str, timeout: int = 30, headers: dict = None) -> dict:
+        """데몬을 통한 HTML 페칭 (빠름, 헤더 지원)"""
         try:
             import requests
+            payload = {"url": url, "timeout": timeout}
+            if headers:
+                payload["headers"] = headers
+                
             resp = requests.post(
                 f"http://127.0.0.1:{cls.zendriver_daemon_port}/fetch",
-                json={"url": url, "timeout": timeout},
+                json=payload,
                 timeout=timeout + 5
             )
             if resp.status_code == 200:

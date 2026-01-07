@@ -109,6 +109,7 @@ class ZendriverHandler(BaseHTTPRequestHandler):
                 data: Dict[str, Any] = json.loads(body)
                 
                 url: Optional[str] = data.get("url")
+                headers: Optional[Dict[str, str]] = data.get("headers")
                 timeout: int = cast(int, data.get("timeout", 30))
                 
                 if not url:
@@ -118,7 +119,7 @@ class ZendriverHandler(BaseHTTPRequestHandler):
                 # 비동기 fetch 실행
                 if loop:
                     future = asyncio.run_coroutine_threadsafe(
-                        fetch_with_browser(url, timeout), loop
+                        fetch_with_browser(url, timeout, headers), loop
                     )
                     result: Dict[str, Any] = future.result(timeout=timeout + 15)
                     self._send_json(200, result)
@@ -254,8 +255,8 @@ async def ensure_browser() -> Any:
     return browser
 
 
-async def fetch_with_browser(url: str, timeout: int = 30) -> Dict[str, Any]:
-    """상시 대기 브라우저로 HTML 페칭 (탭 유지 방식)"""
+async def fetch_with_browser(url: str, timeout: int = 30, headers: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    """상시 대기 브라우저로 HTML 페칭 (탭 유지 방식, 헤더 지원)"""
     global browser
     
     result: Dict[str, Any] = {"success": False, "html": "", "elapsed": 0.0}
@@ -283,7 +284,22 @@ async def fetch_with_browser(url: str, timeout: int = 30) -> Dict[str, Any]:
             
             # 페이지 로드 시도
             try:
-                page = await asyncio.wait_for(browser.get(url), timeout=20)
+                # 탭(페이지) 열기 (브라우저가 없으면 생성)
+                page = await browser.get("about:blank") # 새 탭 열기 대신 기존 탭 재활용 혹은 about:blank 이동
+
+                # 헤더 설정 (CDP 사용)
+                if headers:
+                    try:
+                        log_debug(f"[ZendriverDaemon] Setting headers: {list(headers.keys())}")
+                        await page.send(zd.cdp.network.enable())
+                        # Wrap dict with Headers type for CDP compatibility
+                        cdp_headers = zd.cdp.network.Headers(headers)
+                        await page.send(zd.cdp.network.set_extra_http_headers(cdp_headers))
+                    except Exception as e:
+                        log_debug(f"[ZendriverDaemon] Failed to set headers: {e}")
+
+                # 실제 페이지 로드
+                await asyncio.wait_for(page.get(url), timeout=20)
                 nav_elapsed = time.time() - nav_start
             except asyncio.TimeoutError:
                 log_debug(f"[ZendriverDaemon] Navigation timeout after 20s")
