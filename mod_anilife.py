@@ -100,6 +100,8 @@ class LogicAniLife(AnimeModuleBase):
         "anilife_image_url_prefix_series": "https://www.jetcloud.cc/series/",
         "anilife_image_url_prefix_episode": "https://www.jetcloud-list.cc/thumbnail/",
         "anilife_camoufox_installed": "False",
+        "anilife_cache_minutes": "5",  # HTML 캐시 시간 (분)
+        "anilife_zendriver_browser_path": "",  # Zendriver 브라우저 경로
     }
 
     # Class variables for caching
@@ -160,29 +162,30 @@ class LogicAniLife(AnimeModuleBase):
 
         # 3. 실제 설치/패치 과정 진행
         try:
-            # 시스템 패키지 xvfb 설치 확인 (Linux/Docker 전용)
-            if platform.system() == 'Linux' and shutil.which('Xvfb') is None:
-                logger.info("Xvfb not found. Attempting to background install system package...")
-                try:
-                    sp.run(['apt-get', 'update', '-qq'], capture_output=True)
-                    sp.run(['apt-get', 'install', '-y', 'xvfb', '-qq'], capture_output=True)
-                except Exception as e:
-                    logger.error(f"Failed to install xvfb system package: {e}")
+            with F.app.app_context():
+                # 시스템 패키지 xvfb 설치 확인 (Linux/Docker 전용)
+                if platform.system() == 'Linux' and shutil.which('Xvfb') is None:
+                    logger.info("Xvfb not found. Attempting to background install system package...")
+                    try:
+                        sp.run(['apt-get', 'update', '-qq'], capture_output=True)
+                        sp.run(['apt-get', 'install', '-y', 'xvfb', '-qq'], capture_output=True)
+                    except Exception as e:
+                        logger.error(f"Failed to install xvfb system package: {e}")
 
-            # Camoufox 패키지 확인 및 설치
-            if not lib_exists:
-                logger.info("Camoufox NOT found in DB or system. Installing in background...")
-                cmd = [sys.executable, "-m", "pip", "install", "camoufox[geoip]", "-q"]
-                sp.run(cmd, capture_output=True, text=True, timeout=120)
-            
-            logger.info("Ensuring Camoufox browser binary is fetched (pre-warming)...")
-            sp.run([sys.executable, "-m", "camoufox", "fetch"], capture_output=True, text=True, timeout=300)
-            
-            # 성공 시 DB에 기록하여 다음 재시작 시에는 아예 이 과정을 건너뜀
-            LogicAniLife.camoufox_setup_done = True
-            P.ModelSetting.set("anilife_camoufox_installed", "True")
-            logger.info("Camoufox setup finished and persisted to DB")
-            return True
+                # Camoufox 패키지 확인 및 설치
+                if not lib_exists:
+                    logger.info("Camoufox NOT found in DB or system. Installing in background...")
+                    cmd = [sys.executable, "-m", "pip", "install", "camoufox[geoip]", "-q"]
+                    sp.run(cmd, capture_output=True, text=True, timeout=120)
+                
+                logger.info("Ensuring Camoufox browser binary is fetched (pre-warming)...")
+                sp.run([sys.executable, "-m", "camoufox", "fetch"], capture_output=True, text=True, timeout=300)
+                
+                # 성공 시 DB에 기록하여 다음 재시작 시에는 아예 이 과정을 건너뜀
+                LogicAniLife.camoufox_setup_done = True
+                P.ModelSetting.set("anilife_camoufox_installed", "True")
+                logger.info("Camoufox setup finished and persisted to DB")
+                return True
         except Exception as install_err:
             logger.error(f"Failed during Camoufox setup: {install_err}")
             return lib_exists
@@ -232,7 +235,10 @@ class LogicAniLife(AnimeModuleBase):
                 db_item = ModelAniLifeItem.get_by_id(db_id)
                 if db_item and db_item.status == 'completed':
                     import threading
-                    threading.Thread(target=AniUtil.merge_subtitle, args=(self.P, db_item)).start()
+                    def merge_with_ctx(P, db_item):
+                        with F.app.app_context():
+                            AniUtil.merge_subtitle(P, db_item)
+                    threading.Thread(target=merge_with_ctx, args=(self.P, db_item)).start()
                     return jsonify({"ret": "success", "log": "자막 합칩을 시작합니다."})
                 return jsonify({"ret": "fail", "log": "파일을 찾을 수 없거나 완료된 상태가 아닙니다."})
             
@@ -718,19 +724,20 @@ class LogicAniLife(AnimeModuleBase):
                 data = json.loads(request.form["data"])
 
                 def func():
-                    count = 0
-                    for tmp in data:
-                        add_ret = self.add(tmp)
-                        if add_ret.startswith("enqueue"):
-                            self.socketio_callback("list_refresh", "")
-                            count += 1
-                    notify = {
-                        "type": "success",
-                        "msg": "%s 개의 에피소드를 큐에 추가 하였습니다." % count,
-                    }
-                    socketio.emit(
-                        "notify", notify, namespace="/framework"
-                    )
+                    with F.app.app_context():
+                        count = 0
+                        for tmp in data:
+                            add_ret = self.add(tmp)
+                            if add_ret.startswith("enqueue"):
+                                self.socketio_callback("list_refresh", "")
+                                count += 1
+                        notify = {
+                            "type": "success",
+                            "msg": "%s 개의 에피소드를 큐에 추가 하였습니다." % count,
+                        }
+                        socketio.emit(
+                            "notify", notify, namespace="/framework"
+                        )
                 thread = threading.Thread(target=func, args=())
                 thread.daemon = True
                 thread.start()
@@ -739,10 +746,124 @@ class LogicAniLife(AnimeModuleBase):
                 image_url = request.args.get("url") or request.args.get("image_url")
                 return self.proxy_image(image_url)
             elif sub == "entity_list":
+                # GDM 연동: ModuleQueue에서 anilife 플러그인 항목만 필터링
+                if ModuleQueue:
+                    caller_id = f"{P.package_name}_{self.name}"
+                    all_items: List[Dict[str, Any]] = [d.get_status() for d in ModuleQueue._downloads.values()]
+                    plugin_items = [i for i in all_items if i.get('caller_plugin') == caller_id]
+                    
+                    # 상태 한글 매핑
+                    status_map: Dict[str, str] = {
+                        'pending': '대기중',
+                        'extracting': '추출중',
+                        'downloading': '다운로드중',
+                        'paused': '일시정지',
+                        'completed': '완료',
+                        'error': '실패',
+                        'cancelled': '취소됨'
+                    }
+                    
+                    mapped_items: List[Dict[str, Any]] = []
+                    active_ids: set = set()
+                    
+                    for item in plugin_items:
+                        active_ids.add(item.get('callback_id'))
+                        mapped: Dict[str, Any] = {
+                            'idx': item['id'],
+                            'filename': item.get('filename') or item.get('title') or '파일명 없음',
+                            'percent': item.get('progress', 0),
+                            'status_str': str(item.get('status', 'pending')).upper(),
+                            'status_kor': status_map.get(str(item.get('status', 'pending')), '알 수 없음'),
+                            'current_speed': item.get('speed', ''),
+                            'start_time': item.get('start_time', item.get('created_time', '')),
+                            'download_time': item.get('eta', ''),
+                            'callback_id': item.get('caller_plugin', '').split('_')[-1] if item.get('caller_plugin') else 'anilife',
+                        }
+                        mapped_items.append(mapped)
+                    
+                    # DB에서 최근 완료 항목 추가 (영속성)
+                    try:
+                        from framework import F
+                        with F.app.app_context():
+                            db_items = F.db.session.query(ModelAniLifeItem).order_by(ModelAniLifeItem.id.desc()).limit(50).all()
+                            for db_item in db_items:
+                                if db_item.anilife_id in active_ids:
+                                    continue
+                                if db_item.status == 'completed':
+                                    mapped: Dict[str, Any] = {
+                                        'idx': f"db_{db_item.id}",
+                                        'filename': db_item.filename or '파일명 없음',
+                                        'percent': 100,
+                                        'status_str': 'COMPLETED',
+                                        'status_kor': '완료',
+                                        'current_speed': '',
+                                        'start_time': str(db_item.created_time) if db_item.created_time else '',
+                                        'download_time': '',
+                                        'callback_id': 'anilife',
+                                    }
+                                    mapped_items.append(mapped)
+                    except Exception as db_err:
+                        logger.warning(f"Failed to add DB items: {db_err}")
+                    
+                    return jsonify(mapped_items)
+                
+                # Fallback: 기존 큐 시스템
                 if self.queue is not None:
                     return jsonify(self.queue.get_entity_list())
-                else:
-                    return jsonify([])
+                return jsonify([])
+            
+            elif sub == "queue_command":
+                command = req.form.get("command", "")
+                entity_id = req.form.get("entity_id", "")
+                
+                if ModuleQueue:
+                    if command in ["stop", "cancel"]:
+                        # 특정 다운로드 취소
+                        if entity_id and entity_id in ModuleQueue._downloads:
+                            ModuleQueue._downloads[entity_id].cancel()
+                            return jsonify({"ret": "success", "log": "다운로드가 취소되었습니다."})
+                        return jsonify({"ret": "error", "log": "다운로드를 찾을 수 없습니다."})
+                    
+                    elif command == "reset":
+                        # Anilife 모듈의 다운로드만 취소 (다른 플러그인 항목은 그대로)
+                        caller_id = f"{P.package_name}_{self.name}"
+                        cancelled_count = 0
+                        for task_id, task in list(ModuleQueue._downloads.items()):
+                            if task.caller_plugin == caller_id:
+                                task.cancel()
+                                del ModuleQueue._downloads[task_id]
+                                cancelled_count += 1
+                        
+                        # Anilife DB도 정리
+                        try:
+                            from framework import F
+                            with F.app.app_context():
+                                F.db.session.query(ModelAniLifeItem).delete()
+                                F.db.session.commit()
+                        except Exception as e:
+                            logger.error(f"Failed to clear Anilife DB: {e}")
+                        return jsonify({"ret": "notify", "log": f"{cancelled_count}개 Anilife 항목이 초기화되었습니다."})
+                    
+                    elif command == "delete_completed":
+                        # 완료된 항목만 DB에서 삭제
+                        try:
+                            from framework import F
+                            with F.app.app_context():
+                                deleted = F.db.session.query(ModelAniLifeItem).filter(
+                                    ModelAniLifeItem.status == 'completed'
+                                ).delete()
+                                F.db.session.commit()
+                            return jsonify({"ret": "success", "log": f"{deleted}개 완료 항목이 삭제되었습니다."})
+                        except Exception as e:
+                            logger.error(f"Failed to delete completed: {e}")
+                            return jsonify({"ret": "error", "log": str(e)})
+                
+                # Fallback: 기존 큐 시스템
+                if self.queue:
+                    ret = self.queue.command(command, int(entity_id) if entity_id.isdigit() else 0)
+                    return jsonify(ret)
+                return jsonify({"ret": "error", "log": "Queue not initialized"})
+            
             elif sub == "web_list":
                 return jsonify(ModelAniLifeItem.web_list(request))
             elif sub == "db_remove":
@@ -818,6 +939,37 @@ class LogicAniLife(AnimeModuleBase):
                     logger.error(f"browse_dir error: {e}")
                     return jsonify({"ret": "error", "error": str(e)}), 500
             
+            elif sub == "system_check":
+                # 시스템 체크 (Zendriver 브라우저 설치 상태)
+                from .mod_ohli24 import LogicOhli24
+                result: Dict[str, Any] = LogicOhli24.system_check()
+                return jsonify(result)
+            
+            elif sub == "install_browser":
+                # 시스템 브라우저 설치 (Ubuntu/Docker)
+                from .mod_ohli24 import LogicOhli24
+                result: Dict[str, Any] = LogicOhli24.install_system_browser()
+                if result.get("ret") == "success" and result.get("path"):
+                    P.ModelSetting.set("anilife_zendriver_browser_path", result["path"])
+                return jsonify(result)
+            
+            elif sub == "immediately_execute":
+                # 스케줄러 1회 실행
+                try:
+                    self.scheduler_function()
+                    return jsonify({"ret": "success"})
+                except Exception as e:
+                    logger.error(f"immediately_execute error: {e}")
+                    return jsonify({"ret": "error", "msg": str(e)})
+            
+            elif sub == "reset_db":
+                # DB 초기화
+                try:
+                    self.reset_db()
+                    return jsonify({"ret": "success"})
+                except Exception as e:
+                    logger.error(f"reset_db error: {e}")
+                    return jsonify({"ret": "error", "msg": str(e)})
             
             # Fallback to base class for common subs (queue_command, entity_list, browse_dir, command, etc.)
             return super().process_ajax(sub, req)

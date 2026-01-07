@@ -2294,11 +2294,20 @@ class LogicOhli24(AnimeModuleBase):
                 return "extract_failed"
 
             # 추출된 정보를 바탕으로 GDM 옵션 준비 (표준화된 필드명 사용)
+            download_method = P.ModelSetting.get("ohli24_download_method")
+            download_threads = P.ModelSetting.get_int("ohli24_download_threads")
+            
+            # GDM 소스 타입 결정 (멀티쓰레드/aria2c 사용 여부에 따라)
+            # GDM의 'general'은 yt-dlp + aria2c를 사용함
+            gdm_source_type = "ani24"
+            if download_method in ['ytdlp', 'aria2c']:
+                gdm_source_type = "general"
+
             gdm_options = {
                 "url": entity.url, # 추출된 m3u8 URL
                 "save_path": entity.savepath,
                 "filename": entity.filename,
-                "source_type": "ani24",
+                "source_type": gdm_source_type,
                 "caller_plugin": f"{P.package_name}_{self.name}",
                 "callback_id": episode_info["_id"],
                 "title": entity.filename or episode_info.get('title'),
@@ -2309,6 +2318,7 @@ class LogicOhli24(AnimeModuleBase):
                     "episode": entity.epi_queue,
                     "source": "ohli24"
                 },
+                "connections": download_threads, # 멀티쓰레드 개수 전달
                 # options 내부가 아닌 상위 레벨로 headers/cookies 전달 (GDM 평탄화 대응)
                 "headers": entity.headers,
                 "subtitles": entity.srt_url or entity.vtt,

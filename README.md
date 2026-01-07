@@ -81,6 +81,13 @@
 
 ## 📝 변경 이력 (Changelog)
 
+### v0.6.20 (2026-01-07)
+- **GDM 연동 고도화 및 버그 수정**:
+    - **App Context 오류 해결**: 백그라운드 쓰레드(일괄 추가, Camoufox 설치, 자막 합침)에서 발생하던 `RuntimeError: Working outside of application context` 수정.
+    - **다운로드 설정 연동**: Ohli24 설정의 다운로드 방식(aria2c/ytdlp) 및 쓰레드 수를 GDM에 그대로 전달하여 멀티쓰레드 다운로드 지원.
+- **안정성 개선**:
+    - GDM 위임 시 파일명/제목/썸네일 등 메타데이터 가공 로직 보강.
+
 ### v0.6.15 (2026-01-07)
 - **Zendriver Daemon 비동기 네비게이션 최적화**:
     - `browser.get(url)` 대기 시간으로 인한 17초 지연 해결
