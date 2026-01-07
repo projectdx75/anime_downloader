@@ -81,13 +81,15 @@
 
 ## 📝 변경 이력 (Changelog)
 
-### v0.6.0 (2026-01-07)
+### v0.6.10 (2026-01-07)
+- **Ohli24 GDM 연동 버그 수정**:
+    - `LogicOhli24.add` 메서드의 인덴트 오류 및 문법 오류 해결
+    - 다운로드 완료 시 Ohli24 DB 자동 업데이트 로직 안정화
+    - `__init__.py` 안정성 강화 (P.logic 지연 로딩 대응)
 - **Anilife GDM 연동**:
     - `ModuleQueue` 연동으로 Anilife 다운로드가 GDM (Gommi Downloader Manager)으로 통합
     - Ohli24와 동일한 패턴으로 `source_type: "anilife"` 메타데이터 포함
     - Go FFMPEG 버튼 → **Go GDM** 버튼으로 변경 및 GDM 큐 페이지로 링크
-- **HTTP 캐싱 준비**:
-    - `CachedSession` import 추가 (향후 requests 캐싱 확장 가능)
 - **파일명 정리 개선**:
     - `Util.change_text_for_use_filename()` 함수에서 연속 점(`..`) → 단일 점(`.`) 변환
     - 끝에 오는 점/공백 자동 제거로 Synology NAS에서 Windows 8.3 단축 파일명 생성 방지

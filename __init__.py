@@ -4,9 +4,15 @@
 # @Site    : 
 # @File    : __init__
 # @Software: PyCharm
-# from .plugin import P
-# blueprint = P.blueprint
-# menu = P.menu
-# plugin_load = P.logic.plugin_load
-# plugin_unload = P.logic.plugin_unload
-# plugin_info = P.plugin_info
+from .setup import P
+blueprint = P.blueprint
+menu = P.menu
+plugin_info = P.plugin_info
+
+def plugin_load():
+    if P.logic:
+        P.logic.plugin_load()
+
+def plugin_unload():
+    if P.logic:
+        P.logic.plugin_unload()

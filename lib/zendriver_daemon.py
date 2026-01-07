@@ -16,6 +16,7 @@ import traceback
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread, Lock
 from typing import Any, Optional, Dict, List, Type, cast
+import zendriver as zd
 
 # 터미널 및 파일로 로그 출력 설정
 LOG_FILE: str = "/tmp/zendriver_daemon.log"
@@ -38,38 +39,51 @@ loop: Optional[asyncio.AbstractEventLoop] = None
 manual_browser_path: Optional[str] = None
 
 
-def find_browser_executable() -> Optional[str]:
-    """시스템에서 브라우저 실행 파일 찾기 (Docker/Ubuntu 환경 대응)"""
+def find_browser_executable() -> List[str]:
+    """시스템에서 브라우저 실행 파일 찾기 (OS별 대응)"""
+    import platform
+    import shutil
+    
     # 수동 설정된 경로 최우선
     if manual_browser_path and os.path.exists(manual_browser_path):
-        return manual_browser_path
+        return [manual_browser_path]
         
-    common_paths: List[str] = [
-        "/usr/bin/google-chrome",
-        "/usr/bin/google-chrome-stable",
-        "/usr/bin/chromium-browser",
-        "/usr/bin/chromium",
-        "/usr/lib/chromium-browser/chromium-browser",
-        "google-chrome", # PATH에서 찾기
-        "chromium-browser",
-        "chromium",
-    ]
+    system = platform.system()
+    app_dirs = ["/Applications", "/Volumes/WD/Users/Applications"]
+    common_paths = []
     
-    # 먼저 절대 경로 확인
-    for path in common_paths:
-        if path.startswith("/") and os.path.exists(path):
-            log_debug(f"[ZendriverDaemon] Found browser at absolute path: {path}")
-            return path
-            
-    # shutil.which로 PATH 확인
-    import shutil
-    for cmd in ["google-chrome", "google-chrome-stable", "chromium-browser", "chromium"]:
+    if system == "Darwin": # Mac
+        for base in app_dirs:
+            common_paths.extend([
+                f"{base}/Google Chrome.app/Contents/MacOS/Google Chrome",
+                f"{base}/Chromium.app/Contents/MacOS/Chromium",
+                f"{base}/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+            ])
+    elif system == "Windows":
+        common_paths = [
+            os.path.expandvars(r"%ProgramFiles%\Google\Chrome\Application\chrome.exe"),
+            os.path.expandvars(r"%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"),
+            os.path.expandvars(r"%LocalAppData%\Google\Chrome\Application\chrome.exe"),
+        ]
+    else: # Linux/Other
+        common_paths = [
+            "/usr/bin/google-chrome",
+            "/usr/bin/google-chrome-stable",
+            "/usr/bin/chromium-browser",
+            "/usr/bin/chromium",
+            "/usr/lib/chromium-browser/chromium-browser",
+        ]
+    
+    # 존재하는 모든 후보들 반환
+    candidates = [p for p in common_paths if os.path.exists(p)]
+    
+    # PATH에서 찾기 추가
+    for cmd in ["google-chrome", "google-chrome-stable", "chromium-browser", "chromium", "chrome", "microsoft-edge"]:
         found = shutil.which(cmd)
-        if found:
-            log_debug(f"[ZendriverDaemon] Found browser via shutil.which: {found}")
-            return found
+        if found and found not in candidates:
+            candidates.append(found)
             
-    return None
+    return candidates
 
 
 class ZendriverHandler(BaseHTTPRequestHandler):
@@ -154,30 +168,64 @@ async def ensure_browser() -> Any:
     with browser_lock:
         if browser is None:
             try:
-                import zendriver as zd
-                log_debug("[ZendriverDaemon] Starting new browser instance...")
+                # 존재하는 후보군 가져오기
+                candidates = find_browser_executable()
+                if not candidates:
+                    log_debug("[ZendriverDaemon] No browser candidates found!")
+                    return None
                 
-                # 실행 가능한 브라우저 찾기
-                exec_path = find_browser_executable()
-                log_debug(f"[ZendriverDaemon] Startup params: headless=True, no_sandbox=True, path={exec_path}")
+                # 사용자 데이터 디렉토리 설정 (Mac/Root 권한 이슈 대응)
+                import tempfile
+                uid = os.getuid() if hasattr(os, 'getuid') else 'win'
                 
-                if exec_path:
-                    log_debug(f"[ZendriverDaemon] Starting browser at: {exec_path}")
-                    browser = await zd.start(
-                        headless=True, 
-                        browser_executable_path=exec_path, 
-                        no_sandbox=True,
-                        browser_args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--no-first-run"]
-                    )
-                else:
-                    log_debug("[ZendriverDaemon] Starting browser with default path")
-                    browser = await zd.start(
-                        headless=True, 
-                        no_sandbox=True,
-                        browser_args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--no-first-run"]
-                    )
+                browser_args = [
+                    "--no-sandbox", 
+                    "--disable-setuid-sandbox", 
+                    "--disable-dev-shm-usage", 
+                    "--disable-gpu", 
+                    "--no-first-run",
+                    "--no-service-autorun",
+                    "--password-store=basic",
+                    "--mute-audio",
+                    "--disable-notifications",
+                    "--disable-background-networking",
+                    "--disable-background-timer-throttling",
+                    "--disable-backgrounding-occluded-windows",
+                    "--disable-breakpad",
+                    "--disable-client-side-phishing-detection",
+                    "--disable-default-apps",
+                    "--disable-hang-monitor",
+                    "--disable-popup-blocking",
+                    "--disable-prompt-on-repost",
+                    "--disable-sync",
+                    "--disable-translate",
+                    "--metrics-recording-only",
+                    "--no-default-browser-check",
+                    "--safebrowsing-disable-auto-update",
+                    "--remote-allow-origins=*",
+                    "--blink-settings=imagesEnabled=false",
+                ]
+                
+                for exec_path in candidates:
+                    user_data_dir = os.path.join(tempfile.gettempdir(), f"zd_daemon_{uid}_{os.path.basename(exec_path).replace(' ', '_')}")
+                    os.makedirs(user_data_dir, exist_ok=True)
                     
-                log_debug("[ZendriverDaemon] Browser started successfully")
+                    try:
+                        log_debug(f"[ZendriverDaemon] Trying browser at: {exec_path}")
+                        browser = await zd.start(
+                            headless=True, 
+                            browser_executable_path=exec_path, 
+                            no_sandbox=True,
+                            user_data_dir=user_data_dir,
+                            browser_args=browser_args
+                        )
+                        log_debug(f"[ZendriverDaemon] Browser started successfully with: {exec_path}")
+                        return browser
+                    except Exception as e:
+                        log_debug(f"[ZendriverDaemon] Failed to start {exec_path}: {e}")
+                        browser = None
+                
+                raise Exception("All browser candidates failed to start")
             except Exception as e:
                 log_debug(f"[ZendriverDaemon] Failed to start browser: {e}")
                 browser = None
@@ -209,9 +257,10 @@ async def fetch_with_browser(url: str, timeout: int = 30) -> Dict[str, Any]:
             # browser.get(url)은 새 탭을 열거나 기존 탭을 사용함
             page: Any = await browser.get(url)
             
-            # 페이지 로드 대기 - cdndania iframe 로딩될 때까지 폴링 (최대 15초)
-            max_wait = 15
-            poll_interval = 1
+            # 페이지 로드 대기 - 지능형 폴링 (최대 10초)
+            # 1. 리스트 페이지는 바로 반환, 2. 에피소드 페이지는 플레이어 로딩 대기
+            max_wait = 10
+            poll_interval = 0.2  # 1.0s -> 0.2s로 단축하여 반응속도 향상
             waited = 0
             html_content = ""
             
@@ -220,9 +269,14 @@ async def fetch_with_browser(url: str, timeout: int = 30) -> Dict[str, Any]:
                 waited += poll_interval
                 html_content = await page.get_content()
                 
-                # cdndania iframe이 로드되었는지 확인
+                # 리스트 페이지 마커 확인 (발견 즉시 탈출)
+                if "post-list" in html_content or "list-box" in html_content or "post-row" in html_content:
+                    log_debug(f"[ZendriverDaemon] List page detected in {waited:.1f}s")
+                    break
+                
+                # cdndania/fireplayer iframe이 로드되었는지 확인 (에피소드 페이지)
                 if "cdndania" in html_content or "fireplayer" in html_content:
-                    log_debug(f"[ZendriverDaemon] cdndania/fireplayer found after {waited}s")
+                    log_debug(f"[ZendriverDaemon] Player detected in {waited:.1f}s")
                     break
             
             elapsed: float = time.time() - start_time

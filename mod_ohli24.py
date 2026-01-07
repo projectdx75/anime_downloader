@@ -411,8 +411,6 @@ class LogicOhli24(AnimeModuleBase):
             return {"ret": "error", "msg": f"설치 중 예외가 발생했습니다: {str(e)}"}
 
     def __init__(self, P: Any) -> None:
-        self.name: str = name
-
         self.db_default = {
             "ohli24_db_version": "1",
             "ohli24_proxy_url": "",
@@ -420,11 +418,11 @@ class LogicOhli24(AnimeModuleBase):
             "ohli24_url": "https://ani.ohli24.com",
             "ohli24_download_path": os.path.join(path_data, P.package_name, "ohli24"),
             "ohli24_auto_make_folder": "True",
-            f"{self.name}_recent_code": "",
+            f"{name}_recent_code": "",
             "ohli24_auto_make_season_folder": "True",
             "ohli24_finished_insert": "[완결]",
             "ohli24_max_ffmpeg_process_count": "1",
-            f"{self.name}_download_method": "cdndania",  # cdndania (default), ffmpeg, ytdlp, aria2c
+            f"{name}_download_method": "cdndania",  # cdndania (default), ffmpeg, ytdlp, aria2c
             "ohli24_download_threads": "2",  # 기본값 2 (안정성 권장)
             "ohli24_order_desc": "False",
             "ohli24_auto_start": "False",
@@ -1878,6 +1876,8 @@ class LogicOhli24(AnimeModuleBase):
         import time
         from urllib import parse
         
+        total_start = time.time()
+        
         # URL 인코딩 (한글 주소 대응)
         if '://' in url:
             try:
@@ -1948,6 +1948,8 @@ class LogicOhli24(AnimeModuleBase):
 
         
         # === [Layer 1: Botasaurus @request (빠름 - HTTP Request)] ===
+        # Ohli24에서 Connection Reset 이슈로 인해 현재는 주석 처리 (Zendriver 최적화 집중)
+        """
         if not response_data or len(response_data) < 10:
             if LogicOhli24.ensure_essential_dependencies():
                 import platform
@@ -1994,6 +1996,7 @@ class LogicOhli24(AnimeModuleBase):
                             logger.warning(f"[Layer1] Botasaurus short response: {len(b_resp) if b_resp else 0}")
                 except Exception as e:
                     logger.warning(f"[Layer1] Botasaurus failed: {e}")
+        """
 
         # === [TEST MODE] Layer 1 (기존 것들) 일시 비활성화 - Layer 3, 4만 테스트 ===
         response_data = ""  # 바로 Layer 3로 이동
@@ -2054,7 +2057,8 @@ class LogicOhli24(AnimeModuleBase):
                 daemon_result = LogicOhli24.fetch_via_daemon(url, 30)
                 
                 if daemon_result.get("success") and daemon_result.get("html"):
-                    logger.info(f"[Layer3A] Daemon success in {daemon_result.get('elapsed', '?')}s, HTML len: {len(daemon_result['html'])}")
+                    elapsed = time.time() - total_start
+                    logger.info(f"[Ohli24] Fetch success via Layer3A: {url} in {elapsed:.2f}s (HTML: {len(daemon_result['html'])})")
                     # 성공 시 연속 실패 카운트 초기화
                     LogicOhli24.daemon_fail_count = 0
                     return daemon_result["html"]
@@ -2110,7 +2114,8 @@ class LogicOhli24(AnimeModuleBase):
                     if result.returncode == 0 and result.stdout.strip():
                         zd_result = json.loads(result.stdout.strip())
                         if zd_result.get("success") and zd_result.get("html"):
-                            logger.info(f"[Layer3B] Zendriver success in {zd_result.get('elapsed', '?')}s, HTML len: {len(zd_result['html'])}")
+                            elapsed = time.time() - total_start
+                            logger.info(f"[Ohli24] Fetch success via Layer3B: {url} in {elapsed:.2f}s (HTML: {len(zd_result['html'])})")
                             return zd_result["html"]
                         else:
                             logger.warning(f"[Layer3B] Zendriver failed: {zd_result.get('error', 'Unknown error')}")
@@ -2245,52 +2250,63 @@ class LogicOhli24(AnimeModuleBase):
         
         # GDM 모듈 사용 시나리오
         if ModuleQueue:
-             logger.info(f"Preparing GDM delegation for: {episode_info.get('title')}")
-             # Entity 인스턴스를 생성하여 메타데이터 파싱 및 URL 추출 수행
-             entity = Ohli24QueueEntity(P, self, episode_info)
-             
-             # URL/자막/쿠키 추출 수행 (동기식 - 상위에서 비동기로 호출 권장되나 현재 ajax_process는 동기)
-             # 만약 이게 너무 느려지면 별도 쓰레드로 빼야 하지만, 일단 작동 확인을 위해 동기 처리
-             try:
-                 entity.prepare_extra()
-             except Exception as e:
-                 logger.error(f"Failed to extract video info: {e}")
-                 # 추출 실패 시 기존 방식(전체 큐)으로 넘기거나 에러 반환
-                 return "extract_failed"
+            logger.info(f"Preparing GDM delegation for: {episode_info.get('title')}")
+            # Entity 인스턴스를 생성하여 메타데이터 파싱 및 URL 추출 수행
+            entity = Ohli24QueueEntity(P, self, episode_info)
+            
+            # URL/자막/쿠키 추출 수행 (동기식 - 상위에서 비동기로 호출 권장되나 현재 ajax_process는 동기)
+            try:
+                logger.debug(f"Calling entity.prepare_extra() for {episode_info.get('_id')}")
+                entity.prepare_extra()
+                logger.debug(f"entity.prepare_extra() done. URL found: {entity.url is not None}")
+            except Exception as e:
+                logger.error(f"Failed to extract video info: {e}")
+                # 추출 실패 시 기존 방식(전체 큐)으로 넘기거나 에러 반환
+                return "extract_failed"
 
-             # 추출된 정보를 바탕으로 GDM 옵션 준비 (표준화된 필드명 사용)
-             gdm_options = {
-                 "url": entity.url, # 추출된 m3u8 URL
-                 "save_path": entity.savepath,
-                 "filename": entity.filename,
-                 "source_type": "ani24",
-                 "caller_plugin": f"{P.package_name}_{self.name}",
-                 "callback_id": episode_info["_id"],
-                 "title": entity.filename or episode_info.get('title'),
-                 "thumbnail": episode_info.get('image'),
-                 "meta": {
-                     "series": entity.content_title,
-                     "season": entity.season,
-                     "episode": entity.epi_queue,
-                     "source": "ohli24"
-                 },
-                 # options 내부가 아닌 상위 레벨로 headers/cookies 전달 (GDM 평탄화 대응)
-                 "headers": entity.headers,
-                 "subtitles": entity.srt_url or entity.vtt,
-                 "cookies_file": entity.cookies_file
-             }
+            # 추출된 정보를 바탕으로 GDM 옵션 준비 (표준화된 필드명 사용)
+            gdm_options = {
+                "url": entity.url, # 추출된 m3u8 URL
+                "save_path": entity.savepath,
+                "filename": entity.filename,
+                "source_type": "ani24",
+                "caller_plugin": f"{P.package_name}_{self.name}",
+                "callback_id": episode_info["_id"],
+                "title": entity.filename or episode_info.get('title'),
+                "thumbnail": episode_info.get('image'),
+                "meta": {
+                    "series": entity.content_title,
+                    "season": entity.season,
+                    "episode": entity.epi_queue,
+                    "source": "ohli24"
+                },
+                # options 내부가 아닌 상위 레벨로 headers/cookies 전달 (GDM 평탄화 대응)
+                "headers": entity.headers,
+                "subtitles": entity.srt_url or entity.vtt,
+                "cookies_file": entity.cookies_file
+            }
 
-             task = ModuleQueue.add_download(**gdm_options)
-             if task:
-                 logger.info(f"Delegated Ohli24 download to GDM: {entity.filename}")
-                 # DB 상태 업데이트 (prepare_extra에서도 이미 수행하지만 명시적 상태 변경)
-                 if db_entity is None:
-                     # append는 이미 prepare_extra 상단에서 db_entity를 조회하므로 
-                     # 이미 DB에 entry가 생겼을 가능성 높음 (만약 없다면 여기서 추가)
-                     db_entity = ModelOhli24Item.get_by_ohli24_id(episode_info["_id"])
-                     if not db_entity:
-                          ModelOhli24Item.append(entity.as_dict())
-                 return "enqueue_gdm_success"
+            try:
+                logger.debug(f"Calling ModuleQueue.add_download with options: {list(gdm_options.keys())}")
+                task = ModuleQueue.add_download(**gdm_options)
+                if task:
+                    logger.info(f"Delegated Ohli24 download to GDM: {entity.filename} (Task ID: {task.id})")
+                else:
+                    logger.error("ModuleQueue.add_download returned None")
+            except Exception as e:
+                logger.error(f"Error calling ModuleQueue.add_download: {e}")
+                logger.error(traceback.format_exc())
+                task = None
+
+            if task:
+                # DB 상태 업데이트 (prepare_extra에서도 이미 수행하지만 명시적 상태 변경)
+                if db_entity is None:
+                    # append는 이미 prepare_extra 상단에서 db_entity를 조회하므로 
+                    # 이미 DB에 entry가 생겼을 가능성 높음 (만약 없다면 여기서 추가)
+                    db_entity = ModelOhli24Item.get_by_ohli24_id(episode_info["_id"])
+                    if not db_entity:
+                         ModelOhli24Item.append(entity.as_dict())
+                return "enqueue_gdm_success"
         
         # GDM 미설치 시 기존 방식 fallback (또는 에러 처리)
         logger.warning("GDM Module not found, falling back to FfmpegQueue")
