@@ -274,42 +274,75 @@ async def fetch_with_browser(url: str, timeout: int = 30) -> Dict[str, Any]:
         
         try:
             nav_start = time.time()
-            # zendriver는 browser.get(url)로 페이지 로드 (완료까지 기다림)
-            # 병렬 폴링 대신, asyncio.wait_for로 타임아웃 걸고 빠른 탈출 조건 체크
+            # zendriver는 browser.get(url)로 페이지 로드
             
             page: Any = None
             html_content = ""
             nav_elapsed = 0.0
             poll_elapsed = 0.0
             
-            # 먼저 타임아웃 내에 페이지 로드 시도
+            # 페이지 로드 시도
             try:
                 page = await asyncio.wait_for(browser.get(url), timeout=20)
                 nav_elapsed = time.time() - nav_start
             except asyncio.TimeoutError:
                 log_debug(f"[ZendriverDaemon] Navigation timeout after 20s")
-                # 타임아웃 됐어도 현재 탭에서 컨텐츠를 가져와볼 수 있음
                 nav_elapsed = 20.0
             
-            # 컨텐츠 가져오기
+            # 컨텐츠 완전 로드 대기 (폴링)
             poll_start = time.time()
             if page:
-                try:
-                    html_content = await page.get_content()
-                except Exception as e:
-                    log_debug(f"[ZendriverDaemon] get_content failed: {e}")
+                max_wait = 10  # 최대 10초 대기
+                poll_interval = 0.3
+                waited = 0
+                last_length = 0
+                stable_count = 0
+                
+                while waited < max_wait:
+                    try:
+                        html_content = await page.get_content()
+                        current_length = len(html_content) if html_content else 0
+                        
+                        # 충분히 긴 컨텐츠 + 마커 발견시 즉시 탈출
+                        if current_length > 50000:
+                            if "post-list" in html_content or "list-box" in html_content or "post-row" in html_content:
+                                log_debug(f"[ZendriverDaemon] List page ready in {waited:.1f}s (len: {current_length})")
+                                break
+                            if "cdndania" in html_content or "fireplayer" in html_content:
+                                log_debug(f"[ZendriverDaemon] Player ready in {waited:.1f}s (len: {current_length})")
+                                break
+                        
+                        # 컨텐츠 길이가 안정화됐는지 체크
+                        if current_length > 1000 and current_length == last_length:
+                            stable_count += 1
+                            if stable_count >= 3:  # 연속 3회 동일하면 로드 완료
+                                log_debug(f"[ZendriverDaemon] Content stabilized at {current_length} bytes")
+                                break
+                        else:
+                            stable_count = 0
+                        
+                        last_length = current_length
+                        
+                    except Exception as e:
+                        log_debug(f"[ZendriverDaemon] get_content error during poll: {e}")
+                    
+                    await asyncio.sleep(poll_interval)
+                    waited += poll_interval
+                
+                # 최종 컨텐츠 가져오기
+                if not html_content or len(html_content) < 1000:
+                    try:
+                        html_content = await page.get_content()
+                    except Exception as e:
+                        log_debug(f"[ZendriverDaemon] Final get_content failed: {e}")
             
             poll_elapsed = time.time() - poll_start
             total_elapsed = time.time() - start_time
             
-            # 조기 탈출 조건 로깅
-            if html_content:
-                if "post-list" in html_content or "list-box" in html_content or "post-row" in html_content:
-                    log_debug(f"[ZendriverDaemon] List page detected in {total_elapsed:.1f}s")
-                elif "cdndania" in html_content or "fireplayer" in html_content:
-                    log_debug(f"[ZendriverDaemon] Player detected in {total_elapsed:.1f}s")
+            # 최소 길이 임계값 조정 (50000 -> ohli24는 보통 100k 정도)
+            min_acceptable_length = 50000
             
-            if html_content and len(html_content) > 100:
+            if html_content and len(html_content) > min_acceptable_length:
                 result.update({
                     "success": True,
                     "html": html_content,
@@ -326,7 +359,12 @@ async def fetch_with_browser(url: str, timeout: int = 30) -> Dict[str, Any]:
                 result["elapsed"] = round(total_elapsed, 2)
                 log_debug(f"[ZendriverDaemon] Fetch failure: Short response ({len(html_content) if html_content else 0} bytes)")
             
-            # 탭 정리 (탭이 너무 쌓이지 않게)
+            # 탭 정리 (중요! 탭 누적 방지)
+            if page:
+                try:
+                    await page.close()
+                except Exception as e:
+                    log_debug(f"[ZendriverDaemon] Tab close failed: {e}")
             
         except StopIteration:
             log_debug("[ZendriverDaemon] StopIteration caught during browser.get, resetting browser")
