@@ -1578,18 +1578,37 @@ class LogicLinkkf(AnimeModuleBase):
         # 4. Try GDM if available (like Ohli24/Anilife)
         if ModuleQueue is not None:
             entity = LinkkfQueueEntity(P, self, episode_info)
+            
+            # URL 추출 수행 (GDM 위임을 위해 필수)
+            try:
+                entity.prepare_extra()
+                if not entity.url or entity.url == entity.playid_url:
+                     logger.error("Failed to extract Linkkf video URL")
+                     return "extract_failed"
+            except Exception as e:
+                logger.error(f"Linkkf extraction error: {e}")
+                return "extract_failed"
+
             logger.debug("entity:::> %s", entity.as_dict())
             
             # Save to DB first
             if db_entity is None:
                 ModelLinkkfItem.append(entity.as_dict())
             
+            # 설정에서 다운로드 방식 및 쓰레드 수 읽기
+            download_method = P.ModelSetting.get("linkkf_download_method") or "ytdlp"
+            download_threads = P.ModelSetting.get_int("linkkf_download_threads") or 16
+            
+            gdm_source_type = "linkkf"
+            if download_method in ['ytdlp', 'aria2c']:
+                gdm_source_type = "general"
+
             # Prepare GDM options
             gdm_options = {
                 "url": entity.url,
                 "save_path": entity.savepath,
                 "filename": entity.filename,
-                "source_type": "linkkf",
+                "source_type": gdm_source_type,
                 "caller_plugin": f"{P.package_name}_{self.name}",
                 "callback_id": episode_info["_id"],
                 "title": entity.filename or episode_info.get('title'),
@@ -1600,11 +1619,14 @@ class LogicLinkkf(AnimeModuleBase):
                     "episode": entity.epi_queue,
                     "source": "linkkf"
                 },
+                "headers": entity.headers,
+                "subtitles": entity.vtt,
+                "connections": download_threads,
             }
             
             task = ModuleQueue.add_download(**gdm_options)
             if task:
-                logger.info(f"Delegated Linkkf download to GDM: {entity.filename}")
+                logger.info(f"Delegated Linkkf download to GDM: {entity.filename} (Method: {download_method})")
                 return "enqueue_gdm_success"
         
         # 5. Fallback to FfmpegQueue if GDM not available

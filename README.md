@@ -81,6 +81,12 @@
 
 ## 📝 변경 이력 (Changelog)
 
+### v0.6.21 (2026-01-07)
+- **Linkkf GDM 연동 수정**:
+    - GDM 위임 전 실제 스트림 URL(m3u8) 추출 로직을 강제 호출하여 "Invalid data" 오류 해결.
+    - Linkkf 설정의 다운로드 방식 및 쓰레드 수를 GDM에 전달하도록 개선.
+    - 추출된 Referer 헤더 및 자막 정보를 GDM에 누락 없이 전달.
+
 ### v0.6.20 (2026-01-07)
 - **GDM 연동 고도화 및 버그 수정**:
     - **App Context 오류 해결**: 백그라운드 쓰레드(일괄 추가, Camoufox 설치, 자막 합침)에서 발생하던 `RuntimeError: Working outside of application context` 수정.
