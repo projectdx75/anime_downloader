@@ -1160,8 +1160,19 @@ class LogicLinkkf(AnimeModuleBase):
             response_data = LogicLinkkf.get_html(url, timeout=10)
             
             # JSON 응답 처리 (Top View 포함)
+            # Zendriver returns HTML-wrapped JSON: <html>...<pre>JSON</pre>...</html>
+            json_text = response_data
+            if response_data.strip().startswith('<html') or response_data.strip().startswith('<!'):
+                try:
+                    tree_temp = html.fromstring(response_data)
+                    pre_content = tree_temp.xpath('//pre/text()')
+                    if pre_content:
+                        json_text = pre_content[0]
+                except Exception:
+                    pass
+            
             try:
-                json_data = json.loads(response_data)
+                json_data = json.loads(json_text)
                 # P.logger.debug(json_data)
                 
                 # top_view 처리는 별도 로직 (구조가 다름)
@@ -1191,6 +1202,11 @@ class LogicLinkkf(AnimeModuleBase):
                     return data
             except (json.JSONDecodeError, ValueError):
                 pass
+
+            # JSON API인 경우 items_xpath가 None이므로, 이 경우 HTML 파싱 스킵
+            if items_xpath is None:
+                P.logger.error("JSON parsing failed but items_xpath is None - invalid API response")
+                return {"ret": "error", "log": "Invalid API response (expected JSON)"}
 
             tree = html.fromstring(response_data)
             tmp_items = tree.xpath(items_xpath)
