@@ -174,6 +174,16 @@ async def ensure_browser() -> Any:
                     log_debug("[ZendriverDaemon] No browser candidates found!")
                     return None
                 
+                # 리눅스/도커 성능 분석용 로그
+                import platform
+                if platform.system() == "Linux":
+                    try:
+                        shm_size = os.statvfs('/dev/shm')
+                        free_shm = (shm_size.f_bavail * shm_size.f_frsize) / (1024 * 1024)
+                        log_debug(f"[ZendriverDaemon] Linux detected. /dev/shm free: {free_shm:.1f} MB")
+                    except Exception as shm_e:
+                        log_debug(f"[ZendriverDaemon] Failed to check /dev/shm: {shm_e}")
+
                 # 사용자 데이터 디렉토리 설정 (Mac/Root 권한 이슈 대응)
                 import tempfile
                 uid = os.getuid() if hasattr(os, 'getuid') else 'win'
@@ -204,7 +214,16 @@ async def ensure_browser() -> Any:
                     "--safebrowsing-disable-auto-update",
                     "--remote-allow-origins=*",
                     "--blink-settings=imagesEnabled=false",
+                    "--disable-blink-features=AutomationControlled",
+                    # 추가적인 도커 최적화 플래그
+                    "--disable-features=IsolateOrigins,site-per-process",
+                    "--no-zygote",
+                    "--disable-extensions",
+                    "--wasm-tier-up=false",
                 ]
+                
+                # 추가적인 리소스 블로킹 설정
+                # Note: zendriver supports direct CDP commands
                 
                 for exec_path in candidates:
                     user_data_dir = os.path.join(tempfile.gettempdir(), f"zd_daemon_{uid}_{os.path.basename(exec_path).replace(' ', '_')}")
@@ -212,6 +231,7 @@ async def ensure_browser() -> Any:
                     
                     try:
                         log_debug(f"[ZendriverDaemon] Trying browser at: {exec_path}")
+                        start_time_init = time.time()
                         browser = await zd.start(
                             headless=True, 
                             browser_executable_path=exec_path, 
@@ -219,7 +239,7 @@ async def ensure_browser() -> Any:
                             user_data_dir=user_data_dir,
                             browser_args=browser_args
                         )
-                        log_debug(f"[ZendriverDaemon] Browser started successfully with: {exec_path}")
+                        log_debug(f"[ZendriverDaemon] Browser started successfully in {time.time() - start_time_init:.2f}s using: {exec_path}")
                         return browser
                     except Exception as e:
                         log_debug(f"[ZendriverDaemon] Failed to start {exec_path}: {e}")
@@ -242,25 +262,39 @@ async def fetch_with_browser(url: str, timeout: int = 30) -> Dict[str, Any]:
     start_time: float = time.time()
     
     try:
+        init_start = time.time()
         await ensure_browser()
+        init_elapsed = time.time() - init_start
         
         if browser is None:
             result["error"] = "Browser not available"
             return result
         
-        # zendriver의 browser.get(url)은 이미 열린 탭이 있으면 거기서 열려고 시도함.
-        # 하지만 모든 탭이 닫히면 StopIteration이 발생할 수 있음.
-        log_debug(f"[ZendriverDaemon] Fetching URL: {url}")
+        log_debug(f"[ZendriverDaemon] Fetching URL: {url} (Init: {init_elapsed:.2f}s)")
         
-        # StopIteration 방지를 위해 페이지 이동 시도
         try:
+            nav_start = time.time()
             # browser.get(url)은 새 탭을 열거나 기존 탭을 사용함
             page: Any = await browser.get(url)
+            nav_elapsed = time.time() - nav_start
             
+            # 리소스 블로킹 (CDP 활용) - CSS, 폰트, 이미지 등 차단으로 속도 향상
+            block_start = time.time()
+            try:
+                 await page.send(zd.cdp.network.set_blocked_urls(urls=[
+                     "*.jpg", "*.jpeg", "*.png", "*.gif", "*.svg", "*.webp", "*.ico",
+                     "*.css", "*.woff", "*.woff2", "*.ttf", "*.eot",
+                     "*ads*", "*google-analytics*", "*googletagmanager*", "*doubleclick*"
+                 ]))
+                 await page.send(zd.cdp.network.enable())
+            except Exception as e:
+                 log_debug(f"[ZendriverDaemon] Resource blocking enable failed: {e}")
+            block_elapsed = time.time() - block_start
+
             # 페이지 로드 대기 - 지능형 폴링 (최대 10초)
             # 1. 리스트 페이지는 바로 반환, 2. 에피소드 페이지는 플레이어 로딩 대기
             max_wait = 10
-            poll_interval = 0.2  # 1.0s -> 0.2s로 단축하여 반응속도 향상
+            poll_interval = 0.1  # 0.2s -> 0.1s로 더 빠르게 체크
             waited = 0
             html_content = ""
             
@@ -279,18 +313,25 @@ async def fetch_with_browser(url: str, timeout: int = 30) -> Dict[str, Any]:
                     log_debug(f"[ZendriverDaemon] Player detected in {waited:.1f}s")
                     break
             
-            elapsed: float = time.time() - start_time
+            poll_elapsed = time.time() - poll_start
+            total_elapsed = time.time() - start_time
             
             if html_content and len(html_content) > 100:
                 result.update({
                     "success": True,
                     "html": html_content,
-                    "elapsed": round(elapsed, 2)
+                    "elapsed": round(total_elapsed, 2),
+                    "metrics": {
+                        "init": round(init_elapsed, 2),
+                        "nav": round(nav_elapsed, 2),
+                        "block": round(block_elapsed, 2),
+                        "poll": round(poll_elapsed, 2)
+                    }
                 })
-                log_debug(f"[ZendriverDaemon] Fetch success in {elapsed:.2f}s (Length: {len(html_content)})")
+                log_debug(f"[ZendriverDaemon] Success in {total_elapsed:.2f}s (Nav: {nav_elapsed:.2f}s, Poll: {poll_elapsed:.2f}s)")
             else:
                 result["error"] = f"Short response: {len(html_content) if html_content else 0} bytes"
-                result["elapsed"] = round(elapsed, 2)
+                result["elapsed"] = round(total_elapsed, 2)
                 log_debug(f"[ZendriverDaemon] Fetch failure: Short response ({len(html_content) if html_content else 0} bytes)")
             
             # 여기서 page.close()를 하지 않음! (탭을 하나라도 남겨두어야 StopIteration 방지 가능)

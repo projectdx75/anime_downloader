@@ -443,6 +443,10 @@ class LogicOhli24(AnimeModuleBase):
         self.web_list_model = ModelOhli24Item
         default_route_socketio_module(self, attach="/queue")
 
+    @staticmethod
+    def get_base_url():
+        return P.ModelSetting.get("ohli24_url").rstrip('/')
+
     def cleanup_stale_temps(self) -> None:
         """서버 시작 시 잔여 tmp 폴더 정리"""
         try:
@@ -1272,7 +1276,7 @@ class LogicOhli24(AnimeModuleBase):
         # print()
         # print(today.weekday())
 
-        url = f'{P.ModelSetting.get("ohli24_url")}/bbs/board.php?bo_table=ing&sca={week[today.weekday()]}'
+        url = f'{LogicOhli24.get_base_url()}/bbs/board.php?bo_table=ing&sca={week[today.weekday()]}'
 
         # print(url)
 
@@ -1300,7 +1304,7 @@ class LogicOhli24(AnimeModuleBase):
 
         elif len(content_code_list) > 0:
             for item in content_code_list:
-                url = P.ModelSetting.get("ohli24_url") + "/c/" + item
+                url = LogicOhli24.get_base_url() + "/c/" + item
                 logger.debug(f"scheduling url: {url}")
                 # ret_data = LogicOhli24.get_auto_anime_info(self, url=url)
                 content_info = self.get_series_info(item, "", "")
@@ -1418,9 +1422,9 @@ class LogicOhli24(AnimeModuleBase):
             
             if image:
                 if image.startswith(".."):
-                    image = image.replace("..", P.ModelSetting.get("ohli24_url"))
+                    image = image.replace("..", LogicOhli24.get_base_url())
                 elif not image.startswith("http"):
-                    image = P.ModelSetting.get("ohli24_url") + image
+                    image = LogicOhli24.get_base_url() + image
             
             logger.info(f"image:: {image}")
             
@@ -1473,7 +1477,7 @@ class LogicOhli24(AnimeModuleBase):
                     href = a_elem.get("href", "")
                     
                     if not href.startswith("http"):
-                        href = P.ModelSetting.get("ohli24_url").rstrip("/") + href
+                        href = LogicOhli24.get_base_url() + href
                     
                     # 부모에서 날짜 찾기
                     parent = a_elem.getparent()
@@ -1645,7 +1649,9 @@ class LogicOhli24(AnimeModuleBase):
         """카테고리별 애니메이션 목록 조회."""
         logger.debug(f"get_anime_info: cate={cate}, page={page}, sca={sca}")
         try:
-            url = P.ModelSetting.get("ohli24_url") + "/bbs/board.php?bo_table=" + cate + "&page=" + page
+            # URL 끝 슬래시 제거 로직 추가
+            base_url = P.ModelSetting.get("ohli24_url").rstrip('/')
+            url = base_url + "/bbs/board.php?bo_table=" + cate + "&page=" + page
             if sca:
                 url += "&sca=" + sca
             logger.info("url:::> %s", url)
@@ -1669,7 +1675,7 @@ class LogicOhli24(AnimeModuleBase):
 
                 if len(item.xpath(".//div[@class='img-item']/img/@src")) > 0:
                     entity["image_link"] = item.xpath(".//div[@class='img-item']/img/@src")[0].replace(
-                        "..", P.ModelSetting.get("ohli24_url")
+                        "..", LogicOhli24.get_base_url()
                     )
                 else:
                     entity["image_link"] = item.xpath(".//div[@class='img-item']/img/@data-ezsrc")[0]
@@ -1700,7 +1706,7 @@ class LogicOhli24(AnimeModuleBase):
                 entity["code"] = entity["link"].split("/")[-1]
                 entity["title"] = item.xpath(".//div[@class='post-title']/text()")[0].strip()
                 entity["image_link"] = item.xpath(".//div[@class='img-item']/img/@src")[0].replace(
-                    "..", P.ModelSetting.get("ohli24_url")
+                    "..", LogicOhli24.get_base_url()
                 )
                 data["ret"] = "success"
                 data["anime_list"].append(entity)
@@ -1717,7 +1723,7 @@ class LogicOhli24(AnimeModuleBase):
         try:
             _query = urllib.parse.quote(query)
             url = (
-                P.ModelSetting.get("ohli24_url")
+                LogicOhli24.get_base_url()
                 + "/bbs/search.php?srows=24&gr_id=&sfl=wr_subject&stx="
                 + _query
                 + "&page="
@@ -1747,7 +1753,7 @@ class LogicOhli24(AnimeModuleBase):
                 for attr in img_attributes:
                     matches = item.xpath(attr)
                     if matches and matches[0].strip():
-                        original_img = matches[0].replace("..", P.ModelSetting.get("ohli24_url"))
+                        original_img = matches[0].replace("..", LogicOhli24.get_base_url())
                         break
                 
                 if not original_img:
@@ -1781,7 +1787,7 @@ class LogicOhli24(AnimeModuleBase):
                 # Fetch image with referer
                 headers = {
                     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                    "Referer": P.ModelSetting.get("ohli24_url") + "/",
+                    "Referer": LogicOhli24.get_base_url() + "/",
                 }
                 
                 # Use stream=True to handle binary data efficiently
@@ -1947,18 +1953,53 @@ class LogicOhli24(AnimeModuleBase):
             headers["Referer"] = "https://ani.ohli24.com"
 
         
-        # === [Layer 1: Botasaurus @request (빠름 - HTTP Request)] ===
-        # Ohli24에서 Connection Reset 이슈로 인해 현재는 주석 처리 (Zendriver 최적화 집중)
-        """
+        # === [Layer 3A: Zendriver Daemon (Primary - Persistent Browser)] ===
+        # 리눅스/도커 차단 환경 대응: 가장 확실하고 빠른 젠드라이버 데몬을 최우선으로 시도
         if not response_data or len(response_data) < 10:
-            if LogicOhli24.ensure_essential_dependencies():
+            if LogicOhli24.is_zendriver_daemon_running():
+                logger.debug(f"[Layer3A] Trying Zendriver Daemon: {url}")
+                daemon_result = LogicOhli24.fetch_via_daemon(url, 30)
+                
+                if daemon_result.get("success") and daemon_result.get("html"):
+                    elapsed = time.time() - total_start
+                    logger.info(f"[Layer3A] Success in {elapsed:.2f}s (HTML: {len(daemon_result['html'])})")
+                    LogicOhli24.daemon_fail_count = 0
+                    return daemon_result["html"]
+                else:
+                    logger.warning(f"[Layer3A] Daemon failed: {daemon_result.get('error', 'Unknown')}")
+                    LogicOhli24.daemon_fail_count += 1
+
+        # === [Layer 1: curl-cffi (Fallback 1)] ===
+        if not response_data or len(response_data) < 10:
+            try:
+                from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+                logger.debug(f"[Layer1] Trying curl_cffi: {url}")
+                
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(fetch_url_with_cffi, url, headers, 15, data, method)
+                    response_data = future.result(timeout=20)
+                
+                if response_data and len(response_data) > 500:
+                    logger.info(f"[Layer1] curl_cffi success, HTML len: {len(response_data)}")
+                    return response_data
+                else:
+                    response_data = "" 
+            except Exception as e:
+                logger.warning(f"[Layer1] curl_cffi failed: {e}")
+                response_data = ""
+
+        # === [Layer 2: Botasaurus @request (Mac Subprocess / Stealth)] ===
+        if not response_data or len(response_data) < 10:
+            # 리스트/검색 페이지에서 Botasaurus 활용 (Zendriver보다 빠름)
+            is_list_page = any(x in url for x in ["bo_table=", "/anime/", "search"])
+            if is_list_page and LogicOhli24.ensure_essential_dependencies():
                 import platform
                 is_mac = platform.system() == "Darwin"
                 
                 try:
                     if is_mac:
                         # Mac에서는 gevent-Trio 충돌로 인해 서브프로세스로 실행
-                        logger.debug(f"[Layer1] Trying Botasaurus subprocess (Mac workaround): {url}")
+                        logger.debug(f"[Layer2] Trying Botasaurus subprocess (Mac): {url}")
                         import subprocess
                         script_path = os.path.join(os.path.dirname(__file__), "lib", "botasaurus_ohli24.py")
                         
@@ -1967,21 +2008,27 @@ class LogicOhli24(AnimeModuleBase):
                             cmd,
                             capture_output=True,
                             text=True,
-                            timeout=timeout + 30
+                            timeout=timeout + 15
                         )
                         
                         if result.returncode == 0 and result.stdout.strip():
-                            b_result = json.loads(result.stdout.strip())
-                            if b_result.get("success") and b_result.get("html"):
-                                logger.info(f"[Layer1] Botasaurus(sub) success, HTML len: {len(b_result['html'])}")
-                                return b_result["html"]
-                            else:
-                                logger.warning(f"[Layer1] Botasaurus(sub) failed: {b_result.get('error')}")
+                            try:
+                                b_result = json.loads(result.stdout.strip())
+                                if b_result.get("success") and b_result.get("html"):
+                                    logger.info(f"[Layer2] Botasaurus(sub) success, HTML len: {len(b_result['html'])} (Attempt: {b_result.get('attempt', 1)})")
+                                    return b_result["html"]
+                                else:
+                                    logger.warning(f"[Layer2] Botasaurus(sub) logic failed: {b_result.get('error')}")
+                                    if b_result.get("traceback"):
+                                        logger.debug(f"Botasaurus Traceback: {b_result.get('traceback')}")
+                            except json.JSONDecodeError:
+                                logger.error(f"[Layer2] Botasaurus JSON Decode Error. Output: {result.stdout[:200]}")
+                                logger.debug(f"Botasaurus Stderr: {result.stderr}")
                         else:
-                            logger.warning(f"[Layer1] Botasaurus subprocess error: {result.stderr}")
+                            logger.warning(f"[Layer2] Botasaurus subprocess error (RC: {result.returncode}): {result.stderr}")
                     else:
-                        # Linux 등에서는 (monkey-patching 문제가 없다면) 직접 실행 시도
-                        logger.debug(f"[Layer1] Trying Botasaurus @request (Direct): {url}")
+                        # Linux 등에서는 직접 실행 시도
+                        logger.debug(f"[Layer2] Trying Botasaurus @request (Direct): {url}")
                         from botasaurus.request import request as b_request
                         
                         @b_request(headers=headers, use_stealth=True, proxy=LogicOhli24.get_proxy())
@@ -1989,17 +2036,15 @@ class LogicOhli24(AnimeModuleBase):
                             return request.get(data)
 
                         b_resp = fetch_url(url)
-                        if b_resp and len(b_resp) > 10:
-                            logger.info(f"[Layer1] Botasaurus success, HTML len: {len(b_resp)}")
+                        if b_resp and len(b_resp) > 500:
+                            logger.info(f"[Layer2] Botasaurus success, HTML len: {len(b_resp)}")
                             return b_resp
                         else:
-                            logger.warning(f"[Layer1] Botasaurus short response: {len(b_resp) if b_resp else 0}")
+                            logger.warning(f"[Layer2] Botasaurus short response: {len(b_resp) if b_resp else 0}")
                 except Exception as e:
-                    logger.warning(f"[Layer1] Botasaurus failed: {e}")
-        """
+                    logger.warning(f"[Layer2] Botasaurus failed: {e}")
 
-        # === [TEST MODE] Layer 1 (기존 것들) 일시 비활성화 - Layer 3, 4만 테스트 ===
-        response_data = ""  # 바로 Layer 3로 이동
+        response_data = "" 
         
         # max_retries = 3
         # for attempt in range(max_retries):
@@ -2049,33 +2094,7 @@ class LogicOhli24(AnimeModuleBase):
         #         logger.warning(f"[Layer2] Cloudscraper failed: {e}")
         
         
-        # --- Layer 3A: Zendriver Daemon (빠름 - 브라우저 상시 대기) ---
-        if not response_data or len(response_data) < 10:
-            if LogicOhli24.is_zendriver_daemon_running():
-                # 30초 타임아웃 적용
-                logger.debug(f"[Layer3A] Trying Zendriver Daemon: {url} (Timeout: 30s)")
-                daemon_result = LogicOhli24.fetch_via_daemon(url, 30)
-                
-                if daemon_result.get("success") and daemon_result.get("html"):
-                    elapsed = time.time() - total_start
-                    logger.info(f"[Ohli24] Fetch success via Layer3A: {url} in {elapsed:.2f}s (HTML: {len(daemon_result['html'])})")
-                    # 성공 시 연속 실패 카운트 초기화
-                    LogicOhli24.daemon_fail_count = 0
-                    return daemon_result["html"]
-                else:
-                    error_msg = daemon_result.get('error', 'Unknown')
-                    logger.warning(f"[Layer3A] Daemon failed: {error_msg}")
-                    
-                    # 실패 카운트 증가 및 10회 누적 시 재시작
-                    LogicOhli24.daemon_fail_count += 1
-                    if LogicOhli24.daemon_fail_count >= 10:
-                        logger.error(f"[Layer3A] Daemon failed {LogicOhli24.daemon_fail_count} times consecutively. Restarting daemon...")
-                        try:
-                            import subprocess
-                            subprocess.run(['pkill', '-f', 'zendriver_daemon'], check=False)
-                            LogicOhli24.daemon_fail_count = 0
-                        except Exception as e:
-                            logger.error(f"Failed to kill daemon: {e}")
+        # (Layer 3A was moved to the top)
         
         # --- Layer 3B: Zendriver Subprocess Fallback (데몬 실패 시) ---
         if not response_data or len(response_data) < 10:
@@ -2181,6 +2200,7 @@ class LogicOhli24(AnimeModuleBase):
         
         # 캐시 비활성화 시 바로 fetch
         if cache_minutes <= 0:
+            logger.debug(f"[Cache SKIP] Cache disabled (minutes: {cache_minutes})")
             return LogicOhli24.get_html(url, **kwargs)
         
         # 캐시 디렉토리 생성
@@ -2201,8 +2221,14 @@ class LogicOhli24(AnimeModuleBase):
                     if cached_html and len(cached_html) > 100:
                         logger.debug(f"[Cache HIT] {url[:60]}... (age: {cache_age:.0f}s)")
                         return cached_html
+                    else:
+                        logger.debug(f"[Cache MISS] Cached content is empty or too short for {url[:60]}...")
                 except Exception as e:
                     logger.warning(f"[Cache READ ERROR] {e}")
+            else:
+                logger.debug(f"[Cache EXPIRED] {url[:60]}... (age: {cache_age:.0f}s, expiry: {cache_minutes * 60}s)")
+        else:
+            logger.debug(f"[Cache MISS] No cache file found for {url[:60]}")
         
         # 신규 fetch
         html = LogicOhli24.get_html(url, **kwargs)
@@ -2821,12 +2847,16 @@ class Ohli24QueueEntity(AnimeQueueEntity):
     # [Lazy Extraction] prepare_extra() replaces make_episode_info()
     def prepare_extra(self):
         try:
-            base_url = P.ModelSetting.get("ohli24_url")
+            base_url = LogicOhli24.get_base_url()
             
             # 에피소드 페이지 URL (예: https://ani.ohli24.com/e/원펀맨 3기 1화)
             url = self.info["va"]
             if "//e/" in url:
                 url = url.replace("//e/", "/e/")
+            
+            # URL Sanitization for va
+            if base_url in url and f"{base_url}//" in url:
+                 url = url.replace(f"{base_url}//", f"{base_url}/")
             
             ourls = parse.urlparse(url)
             

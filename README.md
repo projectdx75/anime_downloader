@@ -81,6 +81,16 @@
 
 ## 📝 변경 이력 (Changelog)
 
+### v0.6.14 (2026-01-07)
+- **Ohli24 Docker 성능 고속화**:
+    - Zendriver Daemon에 리눅스/도커 전용 최적화 플래그 추가 (`--no-zygote`, `--disable-dev-shm-usage`, `--disable-features=IsolateOrigins,site-per-process` 등)
+    - 정밀 성능 메트릭 도입 (`/tmp/zendriver_daemon.log`에서 Init/Nav/Block/Poll 단계별 시간 측정 가능)
+    - 목록 페이지 페칭 시 Zendriver Daemon(Layer 3A)을 최우선 순위로 격상 (기존 17초 → 1초 내외 단축 기대)
+    - `LogicOhli24.get_base_url()` 및 각 모듈에서 URL 끝 슬래시 제거(`rstrip`) 처리를 강화하여 불필요한 리다이렉트 방지
+- **Zendriver Daemon 안정성**:
+    - 리눅스 환경의 `/dev/shm` 여유 공간 체크 로직 추가
+    - 변수 참조 오류(`NameError`, `elapsed` -> `total_elapsed`) 수정 및 에러 핸들링 보강
+
 ### v0.6.13 (2026-01-07)
 - **초기화 순서 오류 수정**: `P.logger` 접근 전 `P` 인스턴스 생성이 완료되도록 `curl_cffi` 자동 설치 루틴 위치 조정 (`NameError: name 'P' is not defined` 해결)
 
