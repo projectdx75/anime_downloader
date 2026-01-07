@@ -273,48 +273,70 @@ async def fetch_with_browser(url: str, timeout: int = 30) -> Dict[str, Any]:
         log_debug(f"[ZendriverDaemon] Fetching URL: {url} (Init: {init_elapsed:.2f}s)")
         
         try:
-            nav_start = time.time()
-            # browser.get(url)은 새 탭을 열거나 기존 탭을 사용함
-            page: Any = await browser.get(url)
-            nav_elapsed = time.time() - nav_start
-            
-            # 리소스 블로킹 (CDP 활용) - CSS, 폰트, 이미지 등 차단으로 속도 향상
-            block_start = time.time()
+            # 탭 만들기 및 리소스 차단 미리 설정 (네비게이션 전)
+            page: Any = await browser.get("about:blank")
             try:
-                 await page.send(zd.cdp.network.set_blocked_urls(urls=[
-                     "*.jpg", "*.jpeg", "*.png", "*.gif", "*.svg", "*.webp", "*.ico",
-                     "*.css", "*.woff", "*.woff2", "*.ttf", "*.eot",
-                     "*ads*", "*google-analytics*", "*googletagmanager*", "*doubleclick*"
-                 ]))
-                 await page.send(zd.cdp.network.enable())
+                await page.send(zd.cdp.network.set_blocked_urls(urls=[
+                    "*.jpg", "*.jpeg", "*.png", "*.gif", "*.svg", "*.webp", "*.ico",
+                    "*.css", "*.woff", "*.woff2", "*.ttf", "*.eot",
+                    "*ads*", "*google-analytics*", "*googletagmanager*", "*doubleclick*"
+                ]))
+                await page.send(zd.cdp.network.enable())
             except Exception as e:
-                 log_debug(f"[ZendriverDaemon] Resource blocking enable failed: {e}")
-            block_elapsed = time.time() - block_start
+                log_debug(f"[ZendriverDaemon] Pre-nav blocking failed: {e}")
 
-            # 페이지 로드 대기 - 지능형 폴링 (최대 10초)
-            # 1. 리스트 페이지는 바로 반환, 2. 에피소드 페이지는 플레이어 로딩 대기
-            max_wait = 10
-            poll_interval = 0.1  # 0.2s -> 0.1s로 더 빠르게 체크
+            nav_start = time.time()
+            # zendriver의 page.get(url)은 기본적으로 완료를 기다림. 
+            # 17s 지연을 피하기 위해 navigation 도중에라도 polling을 시작해야 함.
+            # asyncio.wait_for와 page.get()을 조합하여 강제 타임아웃 주거나, 
+            # 단순히 page.get()을 태스크로 던지고 감시 시도
+            
+            nav_task = asyncio.create_task(page.goto(url)) # goto is usually slightly more flexible
+            nav_elapsed = 0.0
+            
+            # 페이지 로드 대기 - 지능형 폴링 (navigation과 병렬 실행)
+            max_wait = 15
+            poll_interval = 0.2
             waited = 0
             html_content = ""
+            poll_start = time.time()
             
             while waited < max_wait:
                 await asyncio.sleep(poll_interval)
                 waited += poll_interval
-                html_content = await page.get_content()
                 
-                # 리스트 페이지 마커 확인 (발견 즉시 탈출)
+                try:
+                    html_content = await page.get_content()
+                except:
+                    continue # 아직 로드 중일 수 있음
+                
+                # 리스트 페이지 마커 확인
                 if "post-list" in html_content or "list-box" in html_content or "post-row" in html_content:
-                    log_debug(f"[ZendriverDaemon] List page detected in {waited:.1f}s")
+                    log_debug(f"[ZendriverDaemon] List page detected early in {waited:.1f}s")
                     break
                 
-                # cdndania/fireplayer iframe이 로드되었는지 확인 (에피소드 페이지)
+                # 에피소드 페이지
                 if "cdndania" in html_content or "fireplayer" in html_content:
-                    log_debug(f"[ZendriverDaemon] Player detected in {waited:.1f}s")
+                    log_debug(f"[ZendriverDaemon] Player detected early in {waited:.1f}s")
                     break
+                    
+                # nav_task가 완료되었는지 확인 (이미 load 완료된 경우)
+                if nav_task.done():
+                    try:
+                        await nav_task # 예외 확인
+                        log_debug(f"[ZendriverDaemon] Navigation task completed in {waited:.1f}s")
+                    except Exception as nav_e:
+                        log_debug(f"[ZendriverDaemon] Navigation task error: {nav_e}")
+                    break
+
+            if not nav_task.done():
+                log_debug(f"[ZendriverDaemon] Navigation still in progress, but we have content (len: {len(html_content)})")
+                # nav_task.cancel() # 취소할지 말지는 고민 필요 (보통 냅둬도 됨)
             
             poll_elapsed = time.time() - poll_start
+            nav_elapsed = time.time() - nav_start
             total_elapsed = time.time() - start_time
+            block_elapsed = 0.0  # Pre-nav blocking에 포함됨
             
             if html_content and len(html_content) > 100:
                 result.update({
