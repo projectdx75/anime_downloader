@@ -81,7 +81,11 @@
 
 ## 📝 변경 이력 (Changelog)
 
-### v0.6.21 (2026-01-07)
+### v0.6.22 (2026-01-08)
+- **Linkkf 추출 로직 강화**: Cloudflare 보호가 강화된 Linkkf 도메인(flexora.xyz 등)에 대응하기 위해 브라우저 기반(Zendriver/Camoufox) 추출 엔진을 도입했습니다.
+- **오추출 방지**: 광고나 서비스 차단 페이지(Google Cloud 등)의 iframe을 비디오 URL로 오인하는 문제를 수정했습니다.
+
+## v0.6.21 (2026-01-07)
 - **Linkkf GDM 연동 수정**:
     - GDM 위임 전 실제 스트림 URL(m3u8) 추출 로직을 강제 호출하여 "Invalid data" 오류 해결.
     - Linkkf 설정의 다운로드 방식 및 쓰레드 수를 GDM에 전달하도록 개선.

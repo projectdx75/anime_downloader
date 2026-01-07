@@ -41,6 +41,7 @@ import cloudscraper
 
 from anime_downloader.lib.ffmpeg_queue_v1 import FfmpegQueue, FfmpegQueueEntity
 from anime_downloader.lib.util import Util
+from .mod_ohli24 import LogicOhli24
 
 # 패키지
 # from .plugin import P
@@ -529,28 +530,79 @@ class LogicLinkkf(AnimeModuleBase):
 
     @staticmethod
     def get_html_cloudflare(url, cached=False, timeout=10):
-        """Cloudflare 보호 우회를 위한 HTTP 요청 (싱글톤 패턴)"""
-        user_agents_list = [
-            "Mozilla/5.0 (iPad; CPU OS 12_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.83 Safari/537.36",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36",
-        ]
-
-        LogicLinkkf.headers["User-Agent"] = random.choice(user_agents_list)
+        """Cloudflare 보호 우회를 위한 HTTP 요청 ( Zendriver Daemon -> Subprocess -> Camoufox -> Scraper 순)"""
+        start_time = time.time()
+        
+        # 0. Referer 설정
+        if LogicLinkkf.referer is None:
+            LogicLinkkf.referer = f"{P.ModelSetting.get('linkkf_url')}"
+        
         LogicLinkkf.headers["Referer"] = LogicLinkkf.referer or ""
 
-        # cloudscraper 싱글톤 패턴 - 매 요청마다 생성하지 않음
-        if LogicLinkkf._scraper is None:
-            LogicLinkkf._scraper = cloudscraper.create_scraper(
-                delay=10,
-                browser={"custom": "linkkf"},
-            )
+        # 1. Zendriver Daemon 시도 (최우선)
+        try:
+            if LogicOhli24.is_zendriver_daemon_running():
+                logger.info(f"[Linkkf] Trying Zendriver Daemon: {url}")
+                daemon_res = LogicOhli24.fetch_via_daemon(url, timeout=30)
+                if daemon_res.get("success") and daemon_res.get("html"):
+                    elapsed = time.time() - start_time
+                    logger.info(f"[Linkkf] Daemon success in {elapsed:.2f}s")
+                    return daemon_res["html"]
+        except Exception as e:
+            logger.warning(f"[Linkkf] Daemon error: {e}")
 
-        return LogicLinkkf._scraper.get(
-            url,
-            headers=LogicLinkkf.headers,
-            timeout=timeout,
-        ).content.decode("utf8", errors="replace")
+        # 2. Scraper 시도 (기본)
+        try:
+            if LogicLinkkf._scraper is None:
+                LogicLinkkf._scraper = cloudscraper.create_scraper(
+                    delay=10,
+                    browser={"custom": "linkkf"},
+                )
+            
+            user_agents_list = [
+                "Mozilla/5.0 (iPad; CPU OS 12_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148",
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.83 Safari/537.36",
+            ]
+            LogicLinkkf.headers["User-Agent"] = random.choice(user_agents_list)
+            
+            response = LogicLinkkf._scraper.get(url, headers=LogicLinkkf.headers, timeout=timeout)
+            
+            # 챌린지 페이지가 아닌 실제 콘텐츠가 포함되었는지 확인
+            content = response.text
+            if "Cloudflare" not in content or "video-player" in content or "iframe" in content:
+                return content
+            
+            logger.warning("[Linkkf] Scraper returned challenge page, falling back to browser...")
+        except Exception as e:
+            logger.warning(f"[Linkkf] Scraper error: {e}")
+
+        # 3. Zendriver Subprocess Fallback
+        try:
+            if LogicOhli24.ensure_zendriver_installed():
+                logger.info(f"[Linkkf] Trying Zendriver subprocess: {url}")
+                script_path = os.path.join(os.path.dirname(__file__), "lib", "zendriver_ohli24.py")
+                cmd = [sys.executable, script_path, url, str(30)]
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+                if result.returncode == 0 and result.stdout.strip():
+                    zd_result = json.loads(result.stdout.strip())
+                    if zd_result.get("success") and zd_result.get("html"):
+                        return zd_result["html"]
+        except Exception as e:
+            logger.warning(f"[Linkkf] Zendriver fallback error: {e}")
+
+        # 4. Camoufox Fallback
+        try:
+            logger.info(f"[Linkkf] Trying Camoufox fallback: {url}")
+            script_path = os.path.join(os.path.dirname(__file__), "lib", "camoufox_ohli24.py")
+            result = subprocess.run([sys.executable, script_path, url, str(30)], capture_output=True, text=True, timeout=60)
+            if result.returncode == 0 and result.stdout.strip():
+                cf_result = json.loads(result.stdout.strip())
+                if cf_result.get("success") and cf_result.get("html"):
+                    return cf_result["html"]
+        except Exception as e:
+            logger.warning(f"[Linkkf] Camoufox fallback error: {e}")
+
+        return ""
 
     @staticmethod
     def add_whitelist(*args):
@@ -632,81 +684,94 @@ class LogicLinkkf(AnimeModuleBase):
         try:
             logger.info(f"Extracting video URL from: {playid_url}")
             
-            # Step 1: playid 페이지에서 iframe src 추출
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-                "Referer": "https://linkkf.live/"
-            }
-            
-            response = requests.get(playid_url, headers=headers, timeout=15)
-            html_content = response.text
-            
+            # Step 1: playid 페이지에서 iframe src 추출 (cloudscraper 사용)
+            html_content = LogicLinkkf.get_html(playid_url)
+            if not html_content:
+                logger.error(f"Failed to fetch playid page: {playid_url}")
+                return None, None, None
+                
             soup = BeautifulSoup(html_content, "html.parser")
             
-            # iframe 찾기 (id="video-player-iframe" 또는 play.sub3.top 포함)
+            # iframe 찾기 (광고 iframe 제외를 위해 id나 src 패턴 강조)
             iframe = soup.select_one("iframe#video-player-iframe")
             if not iframe:
                 iframe = soup.select_one("iframe[src*='play.sub']")
             if not iframe:
-                iframe = soup.select_one("iframe")
+                iframe = soup.select_one("iframe[src*='play.php']")
+            
+            # fallback if strictly needed but skip ad domains
+            if not iframe:
+                all_iframes = soup.select("iframe")
+                for f in all_iframes:
+                    src = f.get("src", "")
+                    if any(x in src for x in ["googletag", "googlead", "adsystem", "cloud.google"]): 
+                        continue
+                    if src.startswith("http"):
+                        iframe = f
+                        break
             
             if iframe and iframe.get("src"):
                 iframe_src = iframe.get("src")
-                logger.info(f"Found iframe: {iframe_src}")
+                # HTML entity decoding (&#038; -> &)
+                if "&#038;" in iframe_src:
+                    iframe_src = iframe_src.replace("&#038;", "&")
+                
+                logger.info(f"Found player iframe: {iframe_src}")
                 
                 # Step 2: iframe 페이지에서 m3u8 URL과 vtt URL 추출
-                iframe_headers = {
-                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-                    "Referer": playid_url
-                }
+                iframe_content = LogicLinkkf.get_html(iframe_src)
+                if not iframe_content:
+                    logger.error(f"Failed to fetch iframe content: {iframe_src}")
+                    return None, iframe_src, None
                 
-                iframe_response = requests.get(iframe_src, headers=iframe_headers, timeout=15)
-                iframe_content = iframe_response.text
-                
-                # m3u8 URL 패턴 찾기
-                # 예: url: 'https://n8.hlz3.top/403116s11/index.m3u8'
-                m3u8_pattern = re.compile(r"url:\s*['\"]([^'\"]*\.m3u8)['\"]")
+                # m3u8 URL 패턴 찾기 (더 정밀하게)
+                # 패턴 1: url: 'https://...m3u8'
+                m3u8_pattern = re.compile(r"url:\s*['\"]([^'\"]*\.m3u8[^'\"]*)['\"]")
                 m3u8_match = m3u8_pattern.search(iframe_content)
                 
+                # 패턴 2: <source src="https://...m3u8">
+                if not m3u8_match:
+                    source_pattern = re.compile(r"<source[^>]+src=['\"]([^'\"]*\.m3u8[^'\"]*)['\"]")
+                    m3u8_match = source_pattern.search(iframe_content)
+                
+                # 패턴 3: var src = '...m3u8'
+                if not m3u8_match:
+                    src_pattern = re.compile(r"src\s*=\s*['\"]([^'\"]*\.m3u8[^'\"]*)['\"]")
+                    m3u8_match = src_pattern.search(iframe_content)
+
                 if m3u8_match:
                     video_url = m3u8_match.group(1)
                     # 상대 경로 처리 (예: cache/...)
-                    if video_url.startswith('cache/'):
+                    if video_url.startswith('cache/') or video_url.startswith('/cache/'):
                         from urllib.parse import urljoin
                         video_url = urljoin(iframe_src, video_url)
-                    logger.info(f"Found m3u8 URL: {video_url}")
+                    logger.info(f"Extracted m3u8 URL: {video_url}")
                 else:
-                    # 대안 패턴: source src
-                    source_pattern = re.compile(r"<source[^>]+src=['\"]([^'\"]+)['\"]")
-                    source_match = source_pattern.search(iframe_content)
-                    if source_match:
-                        video_url = source_match.group(1)
-                        if video_url.startswith('cache/'):
-                            from urllib.parse import urljoin
-                            video_url = urljoin(iframe_src, video_url)
-                        logger.info(f"Found source URL: {video_url}")
+                    logger.warning(f"m3u8 URL not found in iframe. Content snippet: {iframe_content[:200]}...")
                 
                 # VTT 자막 URL 추출
-                # 예: <track src="https://...vtt" kind="subtitles">
-                vtt_pattern = re.compile(r"<track[^>]+src=['\"]([^'\"]*\.vtt)['\"]")
+                vtt_pattern = re.compile(r"['\"]src['\"]?:\s*['\"]([^'\"]*\.vtt)['\"]")
                 vtt_match = vtt_pattern.search(iframe_content)
+                if not vtt_match:
+                    vtt_pattern2 = re.compile(r"url:\s*['\"]([^'\"]*\.vtt)['\"]")
+                    vtt_match = vtt_pattern2.search(iframe_content)
+                if not vtt_match:
+                    vtt_pattern3 = re.compile(r"<track[^>]+src=['\"]([^'\"]*\.vtt)['\"]")
+                    vtt_match = vtt_pattern3.search(iframe_content)
+                
                 if vtt_match:
                     vtt_url = vtt_match.group(1)
-                    logger.info(f"Found VTT subtitle URL: {vtt_url}")
-                else:
-                    # 대안 패턴: url: '...vtt'
-                    vtt_pattern2 = re.compile(r"url:\s*['\"]([^'\"]*\.vtt)['\"]")
-                    vtt_match2 = vtt_pattern2.search(iframe_content)
-                    if vtt_match2:
-                        vtt_url = vtt_match2.group(1)
-                        logger.info(f"Found VTT subtitle URL (alt pattern): {vtt_url}")
+                    if vtt_url.startswith('/'):
+                        from urllib.parse import urljoin
+                        vtt_url = urljoin(iframe_src, vtt_url)
+                    logger.info(f"Extracted VTT URL: {vtt_url}")
                 
                 referer_url = iframe_src
             else:
-                logger.warning("No iframe found in playid page")
+                logger.warning(f"No player iframe found in playid page. HTML snippet: {html_content[:200]}...")
                 
         except Exception as e:
-            logger.error(f"Error extracting video URL: {e}")
+            logger.error(f"Error in extract_video_url_from_playid: {e}")
             logger.error(traceback.format_exc())
         
         return video_url, referer_url, vtt_url
