@@ -1146,7 +1146,10 @@ class LogicLinkkf(AnimeModuleBase):
                 items_xpath = None # JSON fetching
                 title_xpath = None
             else:
+                # Default: JSON API (singlefilter)
                 url = "https://linkkf.5imgdarr.top/api/singlefilter.php?categorytagid=1970&page=1&limit=20"
+                items_xpath = None  # JSON fetching
+                title_xpath = None
 
             logger.info("url:::> %s", url)
             
