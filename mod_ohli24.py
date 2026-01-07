@@ -1949,7 +1949,7 @@ class LogicOhli24(AnimeModuleBase):
         
         # === [Layer 1: Botasaurus @request (빠름 - HTTP Request)] ===
         if not response_data or len(response_data) < 10:
-            if cls.ensure_essential_dependencies():
+            if LogicOhli24.ensure_essential_dependencies():
                 try:
                     logger.debug(f"[Layer1] Trying Botasaurus @request: {url}")
                     from botasaurus.request import request as b_request
