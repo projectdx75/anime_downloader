@@ -273,70 +273,41 @@ async def fetch_with_browser(url: str, timeout: int = 30) -> Dict[str, Any]:
         log_debug(f"[ZendriverDaemon] Fetching URL: {url} (Init: {init_elapsed:.2f}s)")
         
         try:
-            # 탭 만들기 및 리소스 차단 미리 설정 (네비게이션 전)
-            page: Any = await browser.get("about:blank")
-            try:
-                await page.send(zd.cdp.network.set_blocked_urls(urls=[
-                    "*.jpg", "*.jpeg", "*.png", "*.gif", "*.svg", "*.webp", "*.ico",
-                    "*.css", "*.woff", "*.woff2", "*.ttf", "*.eot",
-                    "*ads*", "*google-analytics*", "*googletagmanager*", "*doubleclick*"
-                ]))
-                await page.send(zd.cdp.network.enable())
-            except Exception as e:
-                log_debug(f"[ZendriverDaemon] Pre-nav blocking failed: {e}")
-
             nav_start = time.time()
-            # zendriver의 page.get(url)은 기본적으로 완료를 기다림. 
-            # 17s 지연을 피하기 위해 navigation 도중에라도 polling을 시작해야 함.
-            # asyncio.wait_for와 page.get()을 조합하여 강제 타임아웃 주거나, 
-            # 단순히 page.get()을 태스크로 던지고 감시 시도
+            # zendriver는 browser.get(url)로 페이지 로드 (완료까지 기다림)
+            # 병렬 폴링 대신, asyncio.wait_for로 타임아웃 걸고 빠른 탈출 조건 체크
             
-            nav_task = asyncio.create_task(page.goto(url)) # goto is usually slightly more flexible
-            nav_elapsed = 0.0
-            
-            # 페이지 로드 대기 - 지능형 폴링 (navigation과 병렬 실행)
-            max_wait = 15
-            poll_interval = 0.2
-            waited = 0
+            page: Any = None
             html_content = ""
-            poll_start = time.time()
+            nav_elapsed = 0.0
+            poll_elapsed = 0.0
             
-            while waited < max_wait:
-                await asyncio.sleep(poll_interval)
-                waited += poll_interval
-                
+            # 먼저 타임아웃 내에 페이지 로드 시도
+            try:
+                page = await asyncio.wait_for(browser.get(url), timeout=20)
+                nav_elapsed = time.time() - nav_start
+            except asyncio.TimeoutError:
+                log_debug(f"[ZendriverDaemon] Navigation timeout after 20s")
+                # 타임아웃 됐어도 현재 탭에서 컨텐츠를 가져와볼 수 있음
+                nav_elapsed = 20.0
+            
+            # 컨텐츠 가져오기
+            poll_start = time.time()
+            if page:
                 try:
                     html_content = await page.get_content()
-                except:
-                    continue # 아직 로드 중일 수 있음
-                
-                # 리스트 페이지 마커 확인
-                if "post-list" in html_content or "list-box" in html_content or "post-row" in html_content:
-                    log_debug(f"[ZendriverDaemon] List page detected early in {waited:.1f}s")
-                    break
-                
-                # 에피소드 페이지
-                if "cdndania" in html_content or "fireplayer" in html_content:
-                    log_debug(f"[ZendriverDaemon] Player detected early in {waited:.1f}s")
-                    break
-                    
-                # nav_task가 완료되었는지 확인 (이미 load 완료된 경우)
-                if nav_task.done():
-                    try:
-                        await nav_task # 예외 확인
-                        log_debug(f"[ZendriverDaemon] Navigation task completed in {waited:.1f}s")
-                    except Exception as nav_e:
-                        log_debug(f"[ZendriverDaemon] Navigation task error: {nav_e}")
-                    break
-
-            if not nav_task.done():
-                log_debug(f"[ZendriverDaemon] Navigation still in progress, but we have content (len: {len(html_content)})")
-                # nav_task.cancel() # 취소할지 말지는 고민 필요 (보통 냅둬도 됨)
+                except Exception as e:
+                    log_debug(f"[ZendriverDaemon] get_content failed: {e}")
             
             poll_elapsed = time.time() - poll_start
-            nav_elapsed = time.time() - nav_start
             total_elapsed = time.time() - start_time
-            block_elapsed = 0.0  # Pre-nav blocking에 포함됨
+            
+            # 조기 탈출 조건 로깅
+            if html_content:
+                if "post-list" in html_content or "list-box" in html_content or "post-row" in html_content:
+                    log_debug(f"[ZendriverDaemon] List page detected in {total_elapsed:.1f}s")
+                elif "cdndania" in html_content or "fireplayer" in html_content:
+                    log_debug(f"[ZendriverDaemon] Player detected in {total_elapsed:.1f}s")
             
             if html_content and len(html_content) > 100:
                 result.update({
@@ -346,18 +317,16 @@ async def fetch_with_browser(url: str, timeout: int = 30) -> Dict[str, Any]:
                     "metrics": {
                         "init": round(init_elapsed, 2),
                         "nav": round(nav_elapsed, 2),
-                        "block": round(block_elapsed, 2),
                         "poll": round(poll_elapsed, 2)
                     }
                 })
-                log_debug(f"[ZendriverDaemon] Success in {total_elapsed:.2f}s (Nav: {nav_elapsed:.2f}s, Poll: {poll_elapsed:.2f}s)")
+                log_debug(f"[ZendriverDaemon] Success in {total_elapsed:.2f}s (Nav: {nav_elapsed:.2f}s, Poll: {poll_elapsed:.2f}s, Length: {len(html_content)})")
             else:
                 result["error"] = f"Short response: {len(html_content) if html_content else 0} bytes"
                 result["elapsed"] = round(total_elapsed, 2)
                 log_debug(f"[ZendriverDaemon] Fetch failure: Short response ({len(html_content) if html_content else 0} bytes)")
             
-            # 여기서 page.close()를 하지 않음! (탭을 하나라도 남겨두어야 StopIteration 방지 가능)
-            # 대신 나중에 탭이 너무 많아지면 정리하는 로직 필요할 수 있음
+            # 탭 정리 (탭이 너무 쌓이지 않게)
             
         except StopIteration:
             log_debug("[ZendriverDaemon] StopIteration caught during browser.get, resetting browser")
