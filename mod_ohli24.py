@@ -2259,6 +2259,9 @@ class LogicOhli24(AnimeModuleBase):
                 logger.debug(f"Calling entity.prepare_extra() for {episode_info.get('_id')}")
                 entity.prepare_extra()
                 logger.debug(f"entity.prepare_extra() done. URL found: {entity.url is not None}")
+                if not entity.url:
+                    logger.error(f"Failed to extract video URL for {episode_info.get('_id')}")
+                    return "extract_failed"
             except Exception as e:
                 logger.error(f"Failed to extract video info: {e}")
                 # 추출 실패 시 기존 방식(전체 큐)으로 넘기거나 에러 반환
