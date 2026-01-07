@@ -339,8 +339,8 @@ async def fetch_with_browser(url: str, timeout: int = 30) -> Dict[str, Any]:
             poll_elapsed = time.time() - poll_start
             total_elapsed = time.time() - start_time
             
-            # 최소 길이 임계값 조정 (50000 -> ohli24는 보통 100k 정도)
-            min_acceptable_length = 50000
+            # 최소 길이 임계값 (사이트마다 페이지 크기가 다름)
+            min_acceptable_length = 10000
             
             if html_content and len(html_content) > min_acceptable_length:
                 result.update({
