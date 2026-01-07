@@ -1950,20 +1950,48 @@ class LogicOhli24(AnimeModuleBase):
         # === [Layer 1: Botasaurus @request (빠름 - HTTP Request)] ===
         if not response_data or len(response_data) < 10:
             if LogicOhli24.ensure_essential_dependencies():
+                import platform
+                is_mac = platform.system() == "Darwin"
+                
                 try:
-                    logger.debug(f"[Layer1] Trying Botasaurus @request: {url}")
-                    from botasaurus.request import request as b_request
-                    
-                    @b_request(headers=headers, use_stealth=True, proxy=LogicOhli24.get_proxy())
-                    def fetch_url(request, data):
-                        return request.get(data)
-
-                    b_resp = fetch_url(url)
-                    if b_resp and len(b_resp) > 10:
-                        logger.info(f"[Layer1] Botasaurus success, HTML len: {len(b_resp)}")
-                        return b_resp
+                    if is_mac:
+                        # Mac에서는 gevent-Trio 충돌로 인해 서브프로세스로 실행
+                        logger.debug(f"[Layer1] Trying Botasaurus subprocess (Mac workaround): {url}")
+                        import subprocess
+                        script_path = os.path.join(os.path.dirname(__file__), "lib", "botasaurus_ohli24.py")
+                        
+                        cmd = [sys.executable, script_path, url, json.dumps(headers), LogicOhli24.get_proxy() or ""]
+                        result = subprocess.run(
+                            cmd,
+                            capture_output=True,
+                            text=True,
+                            timeout=timeout + 30
+                        )
+                        
+                        if result.returncode == 0 and result.stdout.strip():
+                            b_result = json.loads(result.stdout.strip())
+                            if b_result.get("success") and b_result.get("html"):
+                                logger.info(f"[Layer1] Botasaurus(sub) success, HTML len: {len(b_result['html'])}")
+                                return b_result["html"]
+                            else:
+                                logger.warning(f"[Layer1] Botasaurus(sub) failed: {b_result.get('error')}")
+                        else:
+                            logger.warning(f"[Layer1] Botasaurus subprocess error: {result.stderr}")
                     else:
-                        logger.warning(f"[Layer1] Botasaurus short response: {len(b_resp) if b_resp else 0}")
+                        # Linux 등에서는 (monkey-patching 문제가 없다면) 직접 실행 시도
+                        logger.debug(f"[Layer1] Trying Botasaurus @request (Direct): {url}")
+                        from botasaurus.request import request as b_request
+                        
+                        @b_request(headers=headers, use_stealth=True, proxy=LogicOhli24.get_proxy())
+                        def fetch_url(request, data):
+                            return request.get(data)
+
+                        b_resp = fetch_url(url)
+                        if b_resp and len(b_resp) > 10:
+                            logger.info(f"[Layer1] Botasaurus success, HTML len: {len(b_resp)}")
+                            return b_resp
+                        else:
+                            logger.warning(f"[Layer1] Botasaurus short response: {len(b_resp) if b_resp else 0}")
                 except Exception as e:
                     logger.warning(f"[Layer1] Botasaurus failed: {e}")
 
