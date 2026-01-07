@@ -114,19 +114,6 @@ from plugin import *
 import os
 import traceback
 from flask import render_template
-import subprocess
-import sys
-
-# curl_cffi 자동 설치 루틴
-try:
-    import curl_cffi
-except ImportError:
-    try:
-        P.logger.info("curl_cffi not found. Attempting to install...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "curl-cffi"])
-        P.logger.info("curl_cffi installed successfully.")
-    except Exception as e:
-        P.logger.error(f"Failed to install curl_cffi: {e}")
 
 class LogicLog(PluginModuleBase):
     def __init__(self, P):
@@ -156,6 +143,20 @@ class LogicGuide(PluginModuleBase):
 DEFINE_DEV = True
 
 P = create_plugin_instance(setting)
+
+# curl_cffi 자동 설치 루틴
+try:
+    import curl_cffi
+except ImportError:
+    try:
+        import subprocess
+        import sys
+        P.logger.info("curl_cffi not found. Attempting to install...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "curl-cffi"])
+        P.logger.info("curl_cffi installed successfully.")
+    except Exception as e:
+        P.logger.error(f"Failed to install curl_cffi: {e}")
+
 try:
     if DEFINE_DEV:
         from .mod_ohli24 import LogicOhli24

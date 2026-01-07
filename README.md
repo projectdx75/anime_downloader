@@ -81,6 +81,9 @@
 
 ## 📝 변경 이력 (Changelog)
 
+### v0.6.13 (2026-01-07)
+- **초기화 순서 오류 수정**: `P.logger` 접근 전 `P` 인스턴스 생성이 완료되도록 `curl_cffi` 자동 설치 루틴 위치 조정 (`NameError: name 'P' is not defined` 해결)
+
 ### v0.6.11 (2026-01-07)
 - **Docker 환경 최적화**:
     - `curl_cffi` 라이브러리 부재 시 자동 설치(pip install) 루틴 추가
