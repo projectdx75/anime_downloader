@@ -27,7 +27,7 @@
     <nav>
       {{ macros.m_tab_head_start() }}
         {{ macros.m_tab_head('normal', '일반', true) }}
-        {{ macros.m_tab_head('auto', '홈화면 자동', false) }}
+        {{ macros.m_tab_head('auto', '자동등록', false) }}
         {{ macros.m_tab_head('action', '기타', false) }}
       {{ macros.m_tab_head_end() }}
     </nav>
@@ -79,7 +79,34 @@
       {{ macros.global_setting_scheduler_button(arg['scheduler'], arg['is_running']) }}
       {{ macros.setting_input_text('ohli24_interval', '스케쥴링 실행 정보', value=arg['ohli24_interval'], col='3', desc=['Inverval(minute 단위)이나 Cron 설정']) }}
       {{ macros.setting_checkbox('ohli24_auto_start', '시작시 자동실행', value=arg['ohli24_auto_start'], desc='On : 시작시 자동으로 스케쥴러에 등록됩니다.') }}
-      {{ macros.setting_input_textarea('ohli24_auto_code_list', '자동 다운로드할 작품 코드', desc=['구분자 | 또는 엔터'], value=arg['ohli24_auto_code_list'], row='10') }}
+      <!-- 자동 다운로드 작품 코드 - Tag Chips UI -->
+      <div class="row" style="padding-top: 10px; padding-bottom:10px;">
+        <div class="col-sm-3 set-left">
+          <strong>자동 다운로드할 작품 코드</strong>
+        </div>
+        <div class="col-sm-9">
+          <!-- 숨겨진 실제 값 필드 (DB 저장용, | 구분) -->
+          <input type="hidden" id="ohli24_auto_code_list" name="ohli24_auto_code_list" value="{{arg['ohli24_auto_code_list']}}">
+          
+          <!-- Tag Chips 컨테이너 -->
+          <div id="tag_chips_container" class="tag-chips-wrapper mb-2">
+            <!-- 태그들이 여기에 동적으로 추가됨 -->
+          </div>
+          
+          <!-- 새 태그 입력 -->
+          <div class="input-group input-group-sm">
+            <input type="text" id="new_tag_input" class="form-control" placeholder="작품명 입력 후 Enter 또는 추가 버튼">
+            <div class="input-group-append">
+              <button type="button" class="btn btn-outline-primary" id="add_tag_btn">
+                <i class="bi bi-plus-lg"></i> 추가
+              </button>
+            </div>
+          </div>
+          <div style="padding-top:5px;">
+            <em class="text-muted">Enter로 추가, 태그 X로 삭제, 드래그로 순서 변경 가능</em>
+          </div>
+        </div>
+      </div>
       {{ macros.setting_checkbox('ohli24_auto_mode_all', '에피소드 모두 받기', value=arg['ohli24_auto_mode_all'], desc=['On : 이전 에피소드를 모두 받습니다.', 'Off : 최신 에피소드만 받습니다.']) }}
     {{ macros.m_tab_content_end() }}
   
@@ -305,6 +332,93 @@
     .folder-item i {
         font-size: 1.1rem;
     }
+
+    /* Tag Chips Styles */
+    .tag-chips-wrapper {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 12px;
+        min-height: 60px;
+        background: rgba(0, 0, 0, 0.2);
+        border: 1px dashed rgba(255, 255, 255, 0.15);
+        border-radius: 8px;
+        transition: all 0.3s ease;
+    }
+    
+    .tag-chips-wrapper:empty::before {
+        content: '작품이 없습니다. 아래에서 추가하세요.';
+        color: #64748b;
+        font-style: italic;
+    }
+    
+    .tag-chips-wrapper.drag-over {
+        border-color: #3b82f6;
+        background: rgba(59, 130, 246, 0.1);
+    }
+    
+    .tag-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.3) 0%, rgba(37, 99, 235, 0.4) 100%);
+        border: 1px solid rgba(96, 165, 250, 0.4);
+        border-radius: 20px;
+        font-size: 0.9rem;
+        color: #e2e8f0;
+        cursor: grab;
+        transition: all 0.2s ease;
+        user-select: none;
+    }
+    
+    .tag-chip:hover {
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.5) 0%, rgba(37, 99, 235, 0.6) 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+    }
+    
+    .tag-chip.dragging {
+        opacity: 0.5;
+        cursor: grabbing;
+    }
+    
+    .tag-chip .tag-text {
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    
+    .tag-chip .tag-remove {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        background: rgba(239, 68, 68, 0.5);
+        border-radius: 50%;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 0.75rem;
+    }
+    
+    .tag-chip .tag-remove:hover {
+        background: rgba(239, 68, 68, 0.9);
+        transform: scale(1.1);
+    }
+    
+    .tag-chip .tag-index {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 50%;
+        font-size: 0.7rem;
+        color: #94a3b8;
+    }
 </style>
 
 <script type="text/javascript">
@@ -323,6 +437,9 @@ $(document).ready(function(){
   }, 100);
 
   use_collapse('ohli24_auto_make_folder');
+  
+  // Tag Chips 초기화
+  initTagChips();
 });
 
 $('#ani365_auto_make_folder').change(function() {
@@ -583,6 +700,160 @@ $(document).ready(function() {
   // Action 탭이 활성화될 때 체크 (또는 그냥 로딩 시 한 번)
   runSystemCheck();
 });
+
+// ======================================
+// Tag Chips 기능
+// ======================================
+
+function initTagChips() {
+  var hiddenField = $('#ohli24_auto_code_list');
+  var container = $('#tag_chips_container');
+  
+  // 초기 값 파싱 (| 또는 줄바꿈으로 구분)
+  var value = hiddenField.val().trim();
+  if (value) {
+    var items = value.split(/[|\n]/).map(s => s.trim()).filter(s => s.length > 0);
+    items.forEach(function(item, index) {
+      addTagChip(item, index);
+    });
+  }
+  updateTagIndices();
+}
+
+function addTagChip(text, index) {
+  var container = $('#tag_chips_container');
+  var chip = $(`
+    <div class="tag-chip" draggable="true" data-value="${escapeHtml(text)}">
+      <span class="tag-index">${index + 1}</span>
+      <span class="tag-text" title="${escapeHtml(text)}">${escapeHtml(text)}</span>
+      <span class="tag-remove" title="삭제"><i class="bi bi-x"></i></span>
+    </div>
+  `);
+  container.append(chip);
+}
+
+function updateHiddenField() {
+  var container = $('#tag_chips_container');
+  var values = [];
+  container.find('.tag-chip').each(function() {
+    values.push($(this).data('value'));
+  });
+  $('#ohli24_auto_code_list').val(values.join('|'));
+}
+
+function updateTagIndices() {
+  $('#tag_chips_container .tag-chip').each(function(index) {
+    $(this).find('.tag-index').text(index + 1);
+  });
+}
+
+// 태그 삭제
+$('#tag_chips_container').on('click', '.tag-remove', function(e) {
+  e.stopPropagation();
+  var chip = $(this).closest('.tag-chip');
+  var text = chip.data('value');
+  chip.fadeOut(200, function() {
+    $(this).remove();
+    updateHiddenField();
+    updateTagIndices();
+  });
+  $.notify('"' + text + '" 삭제됨', {type: 'info'});
+});
+
+// 새 태그 추가 (버튼)
+$('#add_tag_btn').on('click', function() {
+  addNewTag();
+});
+
+// 새 태그 추가 (엔터키)
+$('#new_tag_input').on('keypress', function(e) {
+  if (e.which === 13) {
+    e.preventDefault();
+    addNewTag();
+  }
+});
+
+function addNewTag() {
+  var input = $('#new_tag_input');
+  var text = input.val().trim();
+  
+  if (!text) {
+    $.notify('작품명을 입력하세요', {type: 'warning'});
+    return;
+  }
+  
+  // 중복 체크
+  var exists = false;
+  $('#tag_chips_container .tag-chip').each(function() {
+    if ($(this).data('value') === text) {
+      exists = true;
+      return false;
+    }
+  });
+  
+  if (exists) {
+    $.notify('이미 등록된 작품입니다', {type: 'warning'});
+    return;
+  }
+  
+  var count = $('#tag_chips_container .tag-chip').length;
+  addTagChip(text, count);
+  updateHiddenField();
+  input.val('');
+  $.notify('"' + text + '" 추가됨', {type: 'success'});
+}
+
+// 드래그 앤 드롭 순서 변경
+var draggedChip = null;
+
+$('#tag_chips_container').on('dragstart', '.tag-chip', function(e) {
+  draggedChip = this;
+  $(this).addClass('dragging');
+  e.originalEvent.dataTransfer.effectAllowed = 'move';
+});
+
+$('#tag_chips_container').on('dragend', '.tag-chip', function(e) {
+  $(this).removeClass('dragging');
+  draggedChip = null;
+  updateHiddenField();
+  updateTagIndices();
+});
+
+$('#tag_chips_container').on('dragover', function(e) {
+  e.preventDefault();
+  e.originalEvent.dataTransfer.dropEffect = 'move';
+  $(this).addClass('drag-over');
+  
+  var afterElement = getDragAfterElement(this, e.originalEvent.clientX);
+  if (afterElement == null) {
+    this.appendChild(draggedChip);
+  } else {
+    this.insertBefore(draggedChip, afterElement);
+  }
+});
+
+$('#tag_chips_container').on('dragleave', function(e) {
+  $(this).removeClass('drag-over');
+});
+
+$('#tag_chips_container').on('drop', function(e) {
+  e.preventDefault();
+  $(this).removeClass('drag-over');
+});
+
+function getDragAfterElement(container, x) {
+  var chips = [...container.querySelectorAll('.tag-chip:not(.dragging)')];
+  
+  return chips.reduce((closest, child) => {
+    var box = child.getBoundingClientRect();
+    var offset = x - box.left - box.width / 2;
+    if (offset < 0 && offset > closest.offset) {
+      return { offset: offset, element: child };
+    } else {
+      return closest;
+    }
+  }, { offset: Number.NEGATIVE_INFINITY }).element;
+}
 
 </script>
 

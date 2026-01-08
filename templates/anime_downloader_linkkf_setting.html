@@ -17,7 +17,7 @@
     <nav>
       {{ macros.m_tab_head_start() }}
         {{ macros.m_tab_head('normal', '일반', true) }}
-        {{ macros.m_tab_head('auto', '홈화면 자동', false) }}
+        {{ macros.m_tab_head('auto', '자동등록', false) }}
         {{ macros.m_tab_head('action', '기타', false) }}
       {{ macros.m_tab_head_end() }}
     </nav>
@@ -63,7 +63,19 @@
       {{ macros.global_setting_scheduler_button(arg['scheduler'], arg['is_running']) }}
       {{ macros.setting_input_text('linkkf_interval', '스케쥴링 실행 정보', value=arg['linkkf_interval'], col='3', desc=['Inverval(minute 단위)이나 Cron 설정']) }}
       {{ macros.setting_checkbox('linkkf_auto_start', '시작시 자동실행', value=arg['linkkf_auto_start'], desc='On : 시작시 자동으로 스케쥴러에 등록됩니다.') }}
-      {{ macros.setting_input_textarea('linkkf_auto_code_list', '자동 다운로드할 작품 코드', desc=['all 입력시 모두 받기', '구분자 | 또는 엔터'], value=arg['linkkf_auto_code_list'], row='10') }}
+      <!-- 자동 다운로드 작품 코드 - Tag Chips UI -->
+      <div class="row" style="padding-top: 10px; padding-bottom:10px;">
+        <div class="col-sm-3 set-left"><strong>자동 다운로드할 작품 코드</strong></div>
+        <div class="col-sm-9">
+          <input type="hidden" id="linkkf_auto_code_list" name="linkkf_auto_code_list" value="{{arg['linkkf_auto_code_list']}}">
+          <div id="tag_chips_container" class="tag-chips-wrapper mb-2"></div>
+          <div class="input-group input-group-sm">
+            <input type="text" id="new_tag_input" class="form-control" placeholder="작품명 입력 후 Enter (all: 모두 받기)">
+            <div class="input-group-append"><button type="button" class="btn btn-outline-primary" id="add_tag_btn"><i class="bi bi-plus-lg"></i> 추가</button></div>
+          </div>
+          <div style="padding-top:5px;"><em class="text-muted">Enter로 추가, X로 삭제, 드래그 순서변경 | all 입력시 모두 받기</em></div>
+        </div>
+      </div>
       {{ macros.setting_checkbox('linkkf_auto_mode_all', '에피소드 모두 받기', value=arg['linkkf_auto_mode_all'], desc=['On : 이전 에피소드를 모두 받습니다.', 'Off : 최신 에피소드만 받습니다.']) }}
     {{ macros.m_tab_content_end() }}
 
@@ -319,6 +331,15 @@
     .folder-item.selected {
         background: rgba(16, 185, 129, 0.3) !important;
     }
+    /* Tag Chips Styles */
+    .tag-chips-wrapper { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; min-height: 60px; background: rgba(0,0,0,0.2); border: 1px dashed rgba(255,255,255,0.15); border-radius: 8px; }
+    .tag-chips-wrapper:empty::before { content: '작품이 없습니다.'; color: #64748b; font-style: italic; }
+    .tag-chip { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; background: linear-gradient(135deg, rgba(16,185,129,0.3), rgba(5,150,105,0.4)); border: 1px solid rgba(16,185,129,0.4); border-radius: 20px; font-size: 0.9rem; color: #e2e8f0; cursor: grab; transition: all 0.2s ease; }
+    .tag-chip:hover { background: linear-gradient(135deg, rgba(16,185,129,0.5), rgba(5,150,105,0.6)); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(16,185,129,0.3); }
+    .tag-chip .tag-text { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tag-chip .tag-remove { width: 18px; height: 18px; background: rgba(239,68,68,0.5); border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; }
+    .tag-chip .tag-remove:hover { background: rgba(239,68,68,0.9); }
+    .tag-chip .tag-index { width: 20px; height: 20px; background: rgba(0,0,0,0.3); border-radius: 50%; font-size: 0.7rem; color: #94a3b8; display: flex; align-items: center; justify-content: center; }
 </style>
 
 <script type="text/javascript">
@@ -483,6 +504,54 @@ $(document).ready(function(){
   setTimeout(function() {
       $('.content-cloak, #menu_module_div, #menu_page_div').addClass('visible');
   }, 100);
+  initTagChips();
 });
+
+// Tag Chips 기능
+function initTagChips() {
+  var value = $('#linkkf_auto_code_list').val().trim();
+  if (value) {
+    var items = value.split(/[|\n]/).map(s => s.trim()).filter(s => s.length > 0);
+    items.forEach(function(item, index) { addTagChip(item, index); });
+  }
+  updateTagIndices();
+}
+function addTagChip(text, index) {
+  var chip = $('<div class="tag-chip" draggable="true" data-value="'+escapeHtml(text)+'"><span class="tag-index">'+(index+1)+'</span><span class="tag-text" title="'+escapeHtml(text)+'">'+escapeHtml(text)+'</span><span class="tag-remove"><i class="bi bi-x"></i></span></div>');
+  $('#tag_chips_container').append(chip);
+}
+function updateHiddenField() {
+  var values = [];
+  $('#tag_chips_container .tag-chip').each(function() { values.push($(this).data('value')); });
+  $('#linkkf_auto_code_list').val(values.join('|'));
+}
+function updateTagIndices() {
+  $('#tag_chips_container .tag-chip').each(function(i) { $(this).find('.tag-index').text(i+1); });
+}
+$('#tag_chips_container').on('click', '.tag-remove', function(e) {
+  e.stopPropagation();
+  var chip = $(this).closest('.tag-chip');
+  chip.fadeOut(200, function() { $(this).remove(); updateHiddenField(); updateTagIndices(); });
+});
+$('#add_tag_btn').on('click', function() { addNewTag(); });
+$('#new_tag_input').on('keypress', function(e) { if (e.which === 13) { e.preventDefault(); addNewTag(); } });
+function addNewTag() {
+  var text = $('#new_tag_input').val().trim();
+  if (!text) { $.notify('작품명을 입력하세요', {type:'warning'}); return; }
+  var exists = false;
+  $('#tag_chips_container .tag-chip').each(function() { if ($(this).data('value') === text) exists = true; });
+  if (exists) { $.notify('이미 등록된 작품입니다', {type:'warning'}); return; }
+  addTagChip(text, $('#tag_chips_container .tag-chip').length);
+  updateHiddenField();
+  $('#new_tag_input').val('');
+  $.notify('"'+text+'" 추가됨', {type:'success'});
+}
+var draggedChip = null;
+$('#tag_chips_container').on('dragstart', '.tag-chip', function(e) { draggedChip = this; $(this).addClass('dragging'); });
+$('#tag_chips_container').on('dragend', '.tag-chip', function() { $(this).removeClass('dragging'); draggedChip = null; updateHiddenField(); updateTagIndices(); });
+$('#tag_chips_container').on('dragover', function(e) { e.preventDefault(); var after = getDragAfterElement(this, e.originalEvent.clientX); if (!after) this.appendChild(draggedChip); else this.insertBefore(draggedChip, after); });
+function getDragAfterElement(container, x) {
+  return [...container.querySelectorAll('.tag-chip:not(.dragging)')].reduce((c, el) => { var box = el.getBoundingClientRect(); var offset = x - box.left - box.width/2; return (offset < 0 && offset > c.offset) ? {offset, element: el} : c; }, {offset: Number.NEGATIVE_INFINITY}).element;
+}
 </script>
 {% endblock %}
