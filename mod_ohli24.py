@@ -2303,7 +2303,7 @@ class LogicOhli24(AnimeModuleBase):
             
             # GDM 소스 타입 결정 (멀티쓰레드/aria2c 사용 여부에 따라)
             # GDM의 'general'은 yt-dlp + aria2c를 사용함
-            gdm_source_type = "ani24"
+            gdm_source_type = "ohli24"
             if download_method in ['ytdlp', 'aria2c']:
                 gdm_source_type = "general"
 
@@ -2315,7 +2315,7 @@ class LogicOhli24(AnimeModuleBase):
                 "caller_plugin": f"{P.package_name}_{self.name}",
                 "callback_id": episode_info["_id"],
                 "title": entity.filename or episode_info.get('title'),
-                "thumbnail": episode_info.get('image'),
+                "thumbnail": episode_info.get('thumbnail') or episode_info.get('image'),
                 "meta": {
                     "series": entity.content_title,
                     "season": entity.season,
