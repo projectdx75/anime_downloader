@@ -5,6 +5,10 @@ import os, traceback, time, json
 from datetime import datetime
 
 class AnimeModuleBase(PluginModuleBase):
+    # 업데이트 체크 캐싱 (클래스 레벨)
+    _last_update_check = 0
+    _latest_version = None
+    
     def __init__(self, P, setup_default=None, **kwargs):
         super(AnimeModuleBase, self).__init__(P, **kwargs)
         self.P = P  # Ensure P is available via self.P
@@ -131,6 +135,37 @@ class AnimeModuleBase(PluginModuleBase):
                 arg3 = request.form.get('arg3') or request.args.get('arg3')
                 return self.process_command(command, arg1, arg2, arg3, req)
 
+            elif sub == 'self_update':
+                # 자가 업데이트 (Git Pull) 및 모듈 리로드
+                try:
+                    import subprocess
+                    plugin_path = os.path.dirname(os.path.dirname(__file__)) if '__file__' in dir() else os.path.dirname(__file__)
+                    # 실제 플러그인 루트 디렉토리
+                    plugin_path = os.path.dirname(__file__)
+                    self.P.logger.info(f"애니 다운로더 자가 업데이트 시작: {plugin_path}")
+                    
+                    cmd = ['git', '-C', plugin_path, 'pull']
+                    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                    stdout, stderr = process.communicate()
+                    
+                    if process.returncode != 0:
+                        raise Exception(f"Git pull 실패: {stderr}")
+                    
+                    self.P.logger.info(f"Git pull 결과: {stdout}")
+                    
+                    # 모듈 리로드
+                    self.reload_plugin()
+                    
+                    return jsonify({'ret': 'success', 'msg': f"업데이트 및 리로드 완료!<br><pre>{stdout}</pre>", 'data': stdout})
+                except Exception as e:
+                    self.P.logger.error(f"자가 업데이트 중 오류: {str(e)}")
+                    self.P.logger.error(traceback.format_exc())
+                    return jsonify({'ret': 'danger', 'msg': f"업데이트 실패: {str(e)}"})
+
+            elif sub == 'check_update':
+                force = req.form.get('force') == 'true'
+                return jsonify({'ret': 'success', 'data': self.get_update_info(force=force)})
+
             return jsonify({'ret': 'fail', 'log': f"Unknown sub: {sub}"})
 
         except Exception as e:
@@ -198,3 +233,92 @@ class AnimeModuleBase(PluginModuleBase):
         except Exception as e:
             return {'ret': 'fail', 'msg': str(e)}
 
+    def get_update_info(self, force=False):
+        """GitHub에서 최신 버전 정보 가져오기 (캐싱 활용)"""
+        import requests
+        now = time.time()
+        
+        # 실제 로컬 파일에서 현재 버전 읽기
+        current_version = self.P.plugin_info.get('version', '0.0.0')
+        try:
+            info_path = os.path.join(os.path.dirname(__file__), 'info.yaml')
+            if os.path.exists(info_path):
+                import yaml
+                with open(info_path, 'r', encoding='utf-8') as f:
+                    local_info = yaml.safe_load(f)
+                    current_version = str(local_info.get('version', current_version))
+        except: pass
+
+        # 1시간마다 체크 (force=True면 즉시)
+        if not force and AnimeModuleBase._latest_version and (now - AnimeModuleBase._last_update_check < 3600):
+            return {
+                'current': current_version,
+                'latest': AnimeModuleBase._latest_version,
+                'has_update': self._is_newer(AnimeModuleBase._latest_version, current_version)
+            }
+            
+        try:
+            url = "https://raw.githubusercontent.com/projectdx75/anime_downloader/master/info.yaml"
+            res = requests.get(url, timeout=5)
+            if res.status_code == 200:
+                import yaml
+                data = yaml.safe_load(res.text)
+                AnimeModuleBase._latest_version = str(data.get('version', ''))
+                AnimeModuleBase._last_update_check = now
+                
+                return {
+                    'current': current_version,
+                    'latest': AnimeModuleBase._latest_version,
+                    'has_update': self._is_newer(AnimeModuleBase._latest_version, current_version)
+                }
+        except Exception as e:
+            self.P.logger.error(f"Update check failed: {e}")
+            
+        return {
+            'current': current_version,
+            'latest': AnimeModuleBase._latest_version or current_version,
+            'has_update': False
+        }
+
+    def _is_newer(self, latest, current):
+        """버전 비교 (0.7.8 vs 0.7.7)"""
+        if not latest or not current: return False
+        try:
+            l_parts = [int(p) for p in latest.split('.')]
+            c_parts = [int(p) for p in current.split('.')]
+            return l_parts > c_parts
+        except:
+            return latest != current
+
+    def reload_plugin(self):
+        """플러그인 모듈 핫 리로드"""
+        import sys
+        import importlib
+        
+        try:
+            package_name = self.P.package_name
+            self.P.logger.info(f"플러그인 리로드 시작: {package_name}")
+            
+            # 관련 모듈 찾기 및 리로드
+            modules_to_reload = []
+            for module_name in list(sys.modules.keys()):
+                if module_name.startswith(package_name):
+                    modules_to_reload.append(module_name)
+            
+            # 의존성 역순으로 정렬 (깊은 모듈 먼저)
+            modules_to_reload.sort(key=lambda x: x.count('.'), reverse=True)
+            
+            for module_name in modules_to_reload:
+                try:
+                    module = sys.modules[module_name]
+                    importlib.reload(module)
+                    self.P.logger.debug(f"Reloaded: {module_name}")
+                except Exception as e:
+                    self.P.logger.warning(f"Failed to reload {module_name}: {e}")
+            
+            self.P.logger.info(f"플러그인 모듈 [{package_name}] 리로드 완료")
+            return True
+        except Exception as e:
+            self.P.logger.error(f"모듈 리로드 중 실패: {str(e)}")
+            self.P.logger.error(traceback.format_exc())
+            return False
