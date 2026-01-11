@@ -139,11 +139,23 @@ class AnimeModuleBase(PluginModuleBase):
                 # 자가 업데이트 (Git Pull) 및 모듈 리로드
                 try:
                     import subprocess
-                    plugin_path = os.path.dirname(os.path.dirname(__file__)) if '__file__' in dir() else os.path.dirname(__file__)
-                    # 실제 플러그인 루트 디렉토리
                     plugin_path = os.path.dirname(__file__)
                     self.P.logger.info(f"애니 다운로더 자가 업데이트 시작: {plugin_path}")
                     
+                    # 먼저 변경될 파일 목록 확인 (model 파일 변경 감지)
+                    diff_cmd = ['git', '-C', plugin_path, 'diff', '--name-only', 'HEAD', 'origin/main']
+                    subprocess.run(['git', '-C', plugin_path, 'fetch'], capture_output=True)  # fetch first
+                    diff_result = subprocess.run(diff_cmd, capture_output=True, text=True)
+                    changed_files = diff_result.stdout.strip().split('\n') if diff_result.stdout.strip() else []
+                    
+                    # 모델 파일 변경 여부 확인
+                    model_patterns = ['model', 'db', 'migration']
+                    needs_restart = any(
+                        any(pattern in f.lower() for pattern in model_patterns) 
+                        for f in changed_files if f
+                    )
+                    
+                    # Git Pull 실행
                     cmd = ['git', '-C', plugin_path, 'pull']
                     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                     stdout, stderr = process.communicate()
@@ -153,10 +165,20 @@ class AnimeModuleBase(PluginModuleBase):
                     
                     self.P.logger.info(f"Git pull 결과: {stdout}")
                     
-                    # 모듈 리로드
-                    self.reload_plugin()
+                    # 모델 변경 없으면 리로드 시도
+                    if not needs_restart:
+                        self.reload_plugin()
+                        msg = f"업데이트 완료! 새로고침하세요.<br><pre>{stdout}</pre>"
+                    else:
+                        self.P.logger.warning("모델 파일 변경 감지 - 서버 재시작 필요")
+                        msg = f"<strong>모델 변경 감지!</strong> 서버 재시작이 필요합니다.<br><pre>{stdout}</pre>"
                     
-                    return jsonify({'ret': 'success', 'msg': f"업데이트 및 리로드 완료!<br><pre>{stdout}</pre>", 'data': stdout})
+                    return jsonify({
+                        'ret': 'success', 
+                        'msg': msg, 
+                        'data': stdout,
+                        'needs_restart': needs_restart
+                    })
                 except Exception as e:
                     self.P.logger.error(f"자가 업데이트 중 오류: {str(e)}")
                     self.P.logger.error(traceback.format_exc())
@@ -299,24 +321,33 @@ class AnimeModuleBase(PluginModuleBase):
             package_name = self.P.package_name
             self.P.logger.info(f"플러그인 리로드 시작: {package_name}")
             
+            # 리로드에서 제외할 패턴 (모델/DB 관련 - SQLAlchemy 충돌 방지)
+            skip_patterns = ['model', 'db', 'migration', 'setup', 'create_plugin']
+            
             # 관련 모듈 찾기 및 리로드
             modules_to_reload = []
             for module_name in list(sys.modules.keys()):
                 if module_name.startswith(package_name):
-                    modules_to_reload.append(module_name)
+                    # 모델 관련 모듈은 건너뛰기
+                    should_skip = any(pattern in module_name.lower() for pattern in skip_patterns)
+                    if not should_skip:
+                        modules_to_reload.append(module_name)
             
             # 의존성 역순으로 정렬 (깊은 모듈 먼저)
             modules_to_reload.sort(key=lambda x: x.count('.'), reverse=True)
             
+            reloaded_count = 0
             for module_name in modules_to_reload:
                 try:
                     module = sys.modules[module_name]
                     importlib.reload(module)
                     self.P.logger.debug(f"Reloaded: {module_name}")
+                    reloaded_count += 1
                 except Exception as e:
-                    self.P.logger.warning(f"Failed to reload {module_name}: {e}")
+                    self.P.logger.warning(f"Skip reload {module_name}: {e}")
             
-            self.P.logger.info(f"플러그인 모듈 [{package_name}] 리로드 완료")
+            self.P.logger.info(f"플러그인 [{package_name}] 리로드 완료: {reloaded_count}개 모듈")
+            self.P.logger.info("템플릿/정적 파일은 새로고침 시 자동 적용됩니다.")
             return True
         except Exception as e:
             self.P.logger.error(f"모듈 리로드 중 실패: {str(e)}")

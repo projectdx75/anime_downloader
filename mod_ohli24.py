@@ -1186,31 +1186,149 @@ class LogicOhli24(AnimeModuleBase):
         self, command: str, arg1: str, arg2: str, arg3: str, req: Any
     ) -> Any:
         """커맨드 처리."""
-        ret: Dict[str, Any] = {"ret": "success"}
+        try:
+            if command == "list":
+                # 1. 자체 큐 목록 가져오기
+                ret = self.queue.get_entity_list() if self.queue else []
+                
+                # 2. GDM 태스크 가져오기 (설치된 경우)
+                try:
+                    from gommi_downloader_manager.mod_queue import ModuleQueue
+                    if ModuleQueue:
+                        gdm_tasks = ModuleQueue.get_all_downloads()
+                        # 이 모듈(ohli24)이 추가한 작업만 필터링
+                        ohli24_tasks = [t for t in gdm_tasks if t.caller_plugin == f"{P.package_name}_{self.name}"]
+                        
+                        for task in ohli24_tasks:
+                            # 템플릿 호환 형식으로 변환
+                            gdm_item = self._convert_gdm_task_to_queue_item(task)
+                            ret.append(gdm_item)
+                except Exception as e:
+                    logger.debug(f"GDM tasks fetch error: {e}")
+                
+                return jsonify(ret)
+                
+            elif command in ["stop", "remove", "cancel"]:
+                entity_id = arg1
+                if entity_id and str(entity_id).startswith("dl_"):
+                    # GDM 작업 처리
+                    try:
+                        from gommi_downloader_manager.mod_queue import ModuleQueue
+                        if ModuleQueue:
+                            if command == "stop" or command == "cancel":
+                                task = ModuleQueue.get_download(entity_id)
+                                if task:
+                                    task.cancel()
+                                    return jsonify({"ret": "success", "log": "GDM 작업을 중지하였습니다."})
+                            elif command == "remove" or command == "delete":
+                                # GDM에서 삭제 처리
+                                class DummyReq:
+                                    def __init__(self, id):
+                                        self.form = {"id": id}
+                                ModuleQueue.process_ajax("delete", DummyReq(entity_id))
+                                return jsonify({"ret": "success", "log": "GDM 작업을 삭제하였습니다."})
+                    except Exception as e:
+                        logger.error(f"GDM command error: {e}")
+                        return jsonify({"ret": "error", "log": f"GDM 명령 실패: {e}"})
+                
+                # 자체 큐 처리
+                return super().process_command(command, arg1, arg2, arg3, req)
 
-        if command == "download_program":
-            _pass = arg2
-            db_item = ModelOhli24Program.get(arg1)
-            if _pass == "false" and db_item is not None:
-                ret["ret"] = "warning"
-                ret["msg"] = "이미 DB에 있는 항목 입니다."
-            elif (
-                _pass == "true"
-                and db_item is not None
-                and ModelOhli24Program.get_by_id_in_queue(db_item.id) is not None
-            ):
-                ret["ret"] = "warning"
-                ret["msg"] = "이미 큐에 있는 항목 입니다."
-            else:
-                if db_item is None:
-                    db_item = ModelOhli24Program(arg1, self.get_episode(arg1))
-                    db_item.save()
-                db_item.init_for_queue()
-                self.download_queue.put(db_item)
-                ret["msg"] = "다운로드를 추가 하였습니다."
-            return jsonify(ret)
+            if command == "download_program":
+                ret: Dict[str, Any] = {"ret": "success"}
+                _pass = arg2
+                db_item = ModelOhli24Program.get(arg1)
+                if _pass == "false" and db_item is not None:
+                    ret["ret"] = "warning"
+                    ret["msg"] = "이미 DB에 있는 항목 입니다."
+                elif (
+                    _pass == "true"
+                    and db_item is not None
+                    and ModelOhli24Program.get_by_id_in_queue(db_item.id) is not None
+                ):
+                    ret["ret"] = "warning"
+                    ret["msg"] = "이미 큐에 있는 항목 입니다."
+                else:
+                    if db_item is None:
+                        db_item = ModelOhli24Program(arg1, self.get_episode(arg1))
+                        db_item.save()
+                    db_item.init_for_queue()
+                    self.download_queue.put(db_item)
+                    ret["msg"] = "다운로드를 추가 하였습니다."
+                return jsonify(ret)
 
-        return super().process_command(command, arg1, arg2, arg3, req)
+            return super().process_command(command, arg1, arg2, arg3, req)
+        except Exception as e:
+            logger.error(f"process_command Error: {e}")
+            logger.error(traceback.format_exc())
+            return jsonify({'ret': 'fail', 'log': str(e)})
+
+    def _convert_gdm_task_to_queue_item(self, task):
+        """GDM DownloadTask 객체를 FfmpegQueueEntity.as_dict() 호환 형식으로 변환"""
+        status_kor_map = {
+            "pending": "대기중",
+            "extracting": "분석중",
+            "downloading": "다운로드중",
+            "paused": "일시정지",
+            "completed": "완료",
+            "error": "실패",
+            "cancelled": "취소됨"
+        }
+        
+        status_str_map = {
+            "pending": "WAITING",
+            "extracting": "ANALYZING",
+            "downloading": "DOWNLOADING",
+            "paused": "PAUSED",
+            "completed": "COMPLETED",
+            "error": "FAILED",
+            "cancelled": "FAILED"
+        }
+        
+        t_dict = task.as_dict()
+        
+        return {
+            "entity_id": t_dict["id"],
+            "url": t_dict["url"],
+            "filename": t_dict["filename"] or t_dict["title"],
+            "ffmpeg_status_kor": status_kor_map.get(t_dict["status"], "알수없음"),
+            "ffmpeg_percent": t_dict["progress"],
+            "created_time": t_dict["created_time"],
+            "current_speed": t_dict["speed"],
+            "download_time": t_dict["eta"],
+            "status_str": status_str_map.get(t_dict["status"], "WAITING"),
+            "idx": t_dict["id"],
+            "callback_id": "ohli24",
+            "start_time": t_dict["start_time"] or t_dict["created_time"],
+            "percent": t_dict["progress"],
+            "save_fullpath": t_dict["filepath"],
+            "is_gdm": True
+        }
+
+    def plugin_callback(self, data):
+        """GDM 모듈로부터 다운로드 상태 업데이트 수신"""
+        try:
+            callback_id = data.get('callback_id')
+            status = data.get('status')
+            
+            logger.info(f"[Ohli24] Received GDM callback: id={callback_id}, status={status}")
+            
+            if callback_id:
+                from framework import F
+                with F.app.app_context():
+                    db_item = ModelOhli24Item.get_by_ohli24_id(callback_id)
+                    if db_item:
+                        if status == "completed":
+                            db_item.status = "completed"
+                            db_item.completed_time = datetime.now()
+                            db_item.filepath = data.get('filepath')
+                            db_item.save()
+                            logger.info(f"[Ohli24] Updated DB item {db_item.id} to COMPLETED via GDM callback")
+                        elif status == "error":
+                            pass
+        except Exception as e:
+            logger.error(f"[Ohli24] Callback processing error: {e}")
+            logger.error(traceback.format_exc())
 
     @staticmethod
     def add_whitelist(*args: str) -> Dict[str, Any]:

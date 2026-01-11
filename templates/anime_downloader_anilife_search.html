@@ -197,7 +197,10 @@
                 tmp += '</div>';
                 tmp += '<div class=\"card-body\">'
                 tmp += '<h5 class=\"card-title\">' + data.anime_list[i].title + '</h5>';
-                tmp += '<a href=\"./request?code=' + data.anime_list[i].code + '\" class=\"btn btn-primary cut-text\">' + data.anime_list[i].title + '</a>';
+                tmp += '<div class=\"card-actions\">';
+                tmp += '<a href=\"./request?code=' + data.anime_list[i].code + '\" class=\"btn btn-primary cut-text\"><i class="fa fa-info-circle"></i> 상세</a>';
+                tmp += '<button type=\"button\" class=\"btn btn-sch btn-add-schedule\" data-code=\"' + data.anime_list[i].code + '\" data-title=\"' + data.anime_list[i].title.replace(/"/g, '&quot;') + '\"><i class="fa fa-calendar-plus-o"></i> 스케쥴</button>';
+                tmp += '</div>';
                 tmp += '</div>';
                 tmp += '</div>';
                 tmp += '</div>';
@@ -262,7 +265,10 @@
                 tmp += '</div>';
                 tmp += '<div class="card-body">'
                 tmp += '<h5 class="card-title">' + data.anime_list[i].title + '</h5>';
-                tmp += '<a href="' + request_url + '" class="btn btn-primary cut-text">' + data.anime_list[i].title + '</a>';
+                tmp += '<div class="card-actions">';
+                tmp += '<a href="' + request_url + '" class="btn btn-primary cut-text"><i class="fa fa-info-circle"></i> 상세</a>';
+                tmp += '<button type="button" class="btn btn-sch btn-add-schedule" data-code="' + data.anime_list[i].code + '" data-title="' + data.anime_list[i].title.replace(/"/g, '&quot;') + '"><i class="fa fa-calendar-plus-o"></i> 스케쥴</button>';
+                tmp += '</div>';
                 tmp += '</div>';
                 tmp += '</div>';
                 tmp += '</div>';
@@ -314,7 +320,10 @@
                 tmp += '</div>';
                 tmp += '<div class="card-body">'
                 tmp += '<h5 class="card-title">' + data.anime_list[i].title + '</h5>';
-                tmp += '<a href="./request?code=' + data.anime_list[i].code + '" class="btn btn-primary cut-text">' + data.anime_list[i].title + '</a>';
+                tmp += '<div class="card-actions">';
+                tmp += '<a href="./request?code=' + data.anime_list[i].code + '" class="btn btn-primary cut-text"><i class="fa fa-info-circle"></i> 상세</a>';
+                tmp += '<button type="button" class="btn btn-sch btn-add-schedule" data-code="' + data.anime_list[i].code + '" data-title="' + data.anime_list[i].title.replace(/"/g, '&quot;') + '"><i class="fa fa-calendar-plus-o"></i> 스케쥴</button>';
+                tmp += '</div>';
                 tmp += '</div>';
                 tmp += '</div>';
                 tmp += '</div>';
@@ -578,6 +587,38 @@
         };
 
         document.addEventListener("scroll", debounce(onScroll, 300));
+        
+        // ================================
+        // 스케쥴 등록 버튼 핸들러
+        // ================================
+        $('body').on('click', '.btn-add-schedule', function(e) {
+            e.preventDefault();
+            var code = $(this).data('code');
+            var title = $(this).data('title');
+            var btn = $(this);
+            
+            btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i>');
+            
+            $.ajax({
+                url: '/' + package_name + '/ajax/' + sub + '/add_schedule',
+                type: 'POST',
+                data: { code: code, title: title },
+                dataType: 'json',
+                success: function(ret) {
+                    if (ret.ret === 'success' || ret.ret === 'exist') {
+                        $.notify('<strong>' + (ret.ret === 'exist' ? '이미 등록됨' : '스케쥴 등록 완료') + '</strong>', { type: ret.ret === 'exist' ? 'info' : 'success' });
+                    } else {
+                        $.notify('<strong>등록 실패: ' + (ret.msg || ret.ret) + '</strong>', { type: 'warning' });
+                    }
+                },
+                error: function() {
+                    $.notify('<strong>스케쥴 등록 중 오류</strong>', { type: 'danger' });
+                },
+                complete: function() {
+                    btn.prop('disabled', false).html('<i class="fa fa-calendar-plus-o"></i> 스케쥴');
+                }
+            });
+        });
     </script>
     <style>
         button.code-button {
@@ -1221,6 +1262,57 @@
         color: #fff !important;
         box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
     }
+    /* Card Actions Layout */
+    .card-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: auto;
+    }
+    .card-actions .btn {
+        font-size: 13px;
+        padding: 8px 12px;
+        border-radius: 8px;
+    }
+    .card-actions .btn-sch {
+        background: linear-gradient(135deg, #f472b6 0%, #ec4899 100%) !important;
+        border: none !important;
+        color: white !important;
+    }
+    .card-actions .btn-sch:hover {
+        background: linear-gradient(135deg, #ec4899 0%, #db2777 100%) !important;
+        transform: translateY(-1px);
+    }
+    
+    /* Reduced Wrapper Margins */
+    #yommi_wrapper {
+        max-width: 100% !important;
+        padding: 10px 8px !important;
+        margin: 0 auto;
+    }
+    
+    @media (min-width: 1200px) {
+        #yommi_wrapper {
+            max-width: 95% !important;
+            padding: 20px 15px !important;
+        }
+    }
+    
+    @media (max-width: 768px) {
+        .row.infinite-scroll > [class*="col-"] {
+            padding: 6px !important;
+        }
+        .card-body {
+            padding: 10px !important;
+        }
+        .card-title {
+            font-size: 0.85rem !important;
+        }
+        .card-actions .btn {
+            font-size: 12px;
+            padding: 6px 10px;
+        }
+    }
 </style>
 
 <script type="text/javascript">
@@ -1231,6 +1323,5 @@ $(document).ready(function(){
   }, 100);
 });
 </script>
-</style>
 
 {% endblock %}

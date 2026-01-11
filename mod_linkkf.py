@@ -107,9 +107,13 @@ class LogicLinkkf(AnimeModuleBase):
             "linkkf_uncompleted_auto_enqueue": "False",
             "linkkf_image_url_prefix_series": "",
             "linkkf_image_url_prefix_episode": "",
-            "linkkf_discord_notify": "True",
             "linkkf_download_method": "ffmpeg",  # ffmpeg, ytdlp, aria2c
             "linkkf_download_threads": "16",     # yt-dlp/aria2c 병렬 쓰레드 수
+            # 알림 설정
+            "linkkf_notify_enabled": "False",
+            "linkkf_discord_webhook_url": "",
+            "linkkf_telegram_bot_token": "",
+            "linkkf_telegram_chat_id": "",
         }
         # default_route_socketio(P, self)
         self.web_list_model = ModelLinkkfItem
@@ -470,6 +474,32 @@ class LogicLinkkf(AnimeModuleBase):
                     logger.error(f"browse_dir error: {e}")
                     return jsonify({"ret": "error", "error": str(e)}), 500
 
+            elif sub == "test_notification":
+                # 테스트 알림 전송
+                try:
+                    discord_url = P.ModelSetting.get("linkkf_discord_webhook_url")
+                    telegram_token = P.ModelSetting.get("linkkf_telegram_bot_token")
+                    telegram_chat_id = P.ModelSetting.get("linkkf_telegram_chat_id")
+                    
+                    if not discord_url and not (telegram_token and telegram_chat_id):
+                        return jsonify({"ret": "error", "msg": "Discord Webhook URL 또는 Telegram 설정을 입력하세요."})
+                    
+                    test_message = "🔔 **테스트 알림**\nLinkkf 알림 설정이 완료되었습니다!\n\n알림이 정상적으로 수신되고 있습니다."
+                    sent_to = []
+                    
+                    if discord_url:
+                        self.send_discord_notification(discord_url, "테스트", test_message)
+                        sent_to.append("Discord")
+                    
+                    if telegram_token and telegram_chat_id:
+                        self.send_telegram_notification(telegram_token, telegram_chat_id, test_message)
+                        sent_to.append("Telegram")
+                    
+                    return jsonify({"ret": "success", "msg": f"{', '.join(sent_to)}으로 알림 전송 완료!"})
+                except Exception as e:
+                    logger.error(f"test_notification error: {e}")
+                    return jsonify({"ret": "error", "msg": str(e)})
+
             return super().process_ajax(sub, req)
 
         except Exception as e:
@@ -477,6 +507,144 @@ class LogicLinkkf(AnimeModuleBase):
             P.logger.error(traceback.format_exc())
             return jsonify({"ret": "error", "log": str(e)})
 
+    def process_command(self, command, arg1, arg2, arg3, req):
+        try:
+            if command == "list":
+                # 1. 자체 큐 목록 가져오기
+                ret = self.queue.get_entity_list() if self.queue else []
+                
+                # 2. GDM 태스크 가져오기 (설치된 경우)
+                try:
+                    from gommi_downloader_manager.mod_queue import ModuleQueue
+                    if ModuleQueue:
+                        gdm_tasks = ModuleQueue.get_all_downloads()
+                        # 이 모듈(linkkf)이 추가한 작업만 필터링
+                        linkkf_tasks = [t for t in gdm_tasks if t.caller_plugin == f"{P.package_name}_{self.name}"]
+                        
+                        for task in linkkf_tasks:
+                            # 템플릿 호환 형식으로 변환
+                            gdm_item = self._convert_gdm_task_to_queue_item(task)
+                            ret.append(gdm_item)
+                except Exception as e:
+                    logger.debug(f"GDM tasks fetch error: {e}")
+                
+                return jsonify(ret)
+                
+            elif command in ["stop", "remove", "cancel"]:
+                entity_id = arg1
+                if entity_id and str(entity_id).startswith("dl_"):
+                    # GDM 작업 처리
+                    try:
+                        from gommi_downloader_manager.mod_queue import ModuleQueue
+                        if ModuleQueue:
+                            if command == "stop" or command == "cancel":
+                                task = ModuleQueue.get_download(entity_id)
+                                if task:
+                                    task.cancel()
+                                    return jsonify({"ret": "success", "log": "GDM 작업을 중지하였습니다."})
+                            elif command == "remove":
+                                # GDM에서 삭제 처리 (명령어 'delete' 사용)
+                                # process_ajax의 delete 로직 참고
+                                class DummyReq:
+                                    def __init__(self, id):
+                                        self.form = {"id": id}
+                                ModuleQueue.process_ajax("delete", DummyReq(entity_id))
+                                return jsonify({"ret": "success", "log": "GDM 작업을 삭제하였습니다."})
+                    except Exception as e:
+                        logger.error(f"GDM command error: {e}")
+                        return jsonify({"ret": "error", "log": f"GDM 명령 실패: {e}"})
+                
+                # 자체 큐 처리
+                return super().process_command(command, arg1, arg2, arg3, req)
+                
+            return super().process_command(command, arg1, arg2, arg3, req)
+        except Exception as e:
+            logger.error(f"process_command Error: {e}")
+            logger.error(traceback.format_exc())
+            return jsonify({'ret': 'fail', 'log': str(e)})
+
+    def _convert_gdm_task_to_queue_item(self, task):
+        """GDM DownloadTask 객체를 FfmpegQueueEntity.as_dict() 호환 형식으로 변환"""
+        # 상태 맵핑
+        status_kor_map = {
+            "pending": "대기중",
+            "extracting": "분석중",
+            "downloading": "다운로드중",
+            "paused": "일시정지",
+            "completed": "완료",
+            "error": "실패",
+            "cancelled": "취소됨"
+        }
+        
+        status_str_map = {
+            "pending": "WAITING",
+            "extracting": "ANALYZING",
+            "downloading": "DOWNLOADING",
+            "paused": "PAUSED",
+            "completed": "COMPLETED",
+            "error": "FAILED",
+            "cancelled": "FAILED"
+        }
+        
+        # GDM task는 as_dict()를 제공함
+        t_dict = task.as_dict()
+        
+        return {
+            "entity_id": t_dict["id"],
+            "url": t_dict["url"],
+            "filename": t_dict["filename"] or t_dict["title"],
+            "ffmpeg_status_kor": status_kor_map.get(t_dict["status"], "알수없음"),
+            "ffmpeg_percent": t_dict["progress"],
+            "created_time": t_dict["created_time"],
+            "current_speed": t_dict["speed"],
+            "download_time": t_dict["eta"],
+            "status_str": status_str_map.get(t_dict["status"], "WAITING"),
+            "idx": t_dict["id"],
+            "callback_id": "linkkf",
+            "start_time": t_dict["start_time"] or t_dict["created_time"],
+            "percent": t_dict["progress"],
+            "save_fullpath": t_dict["filepath"],
+            "is_gdm": True # GDM 작업임을 표시 (디버깅용)
+        }
+
+    def plugin_callback(self, data):
+        """
+        GDM 모듈로부터 다운로드 상태 업데이트 수신
+        data = {
+            'callback_id': self.callback_id,
+            'status': self.status,
+            'filepath': self.filepath,
+            'filename': os.path.basename(self.filepath) if self.filepath else '',
+            'error': self.error_message
+        }
+        """
+        try:
+            callback_id = data.get('callback_id')
+            status = data.get('status')
+            
+            logger.info(f"[Linkkf] Received GDM callback: id={callback_id}, status={status}")
+            
+            # DB 상태 업데이트
+            if callback_id:
+                from framework import F
+                with F.app.app_context():
+                    db_item = ModelLinkkfItem.get_by_linkkf_id(callback_id)
+                    if db_item:
+                        if status == "completed":
+                            db_item.status = "completed"
+                            db_item.completed_time = datetime.now()
+                            db_item.filepath = data.get('filepath')
+                            db_item.save()
+                            logger.info(f"[Linkkf] Updated DB item {db_item.id} to COMPLETED via GDM callback")
+                            
+                            # 알림 전송 (필요 시)
+                            # self.socketio_callback("list_refresh", "")
+                        elif status == "error":
+                            # 필요 시 에러 처리
+                            pass
+        except Exception as e:
+            logger.error(f"[Linkkf] Callback processing error: {e}")
+            logger.error(traceback.format_exc())
 
     def socketio_callback(self, refresh_type, data):
         """
@@ -1780,6 +1948,29 @@ class LogicLinkkf(AnimeModuleBase):
     def plugin_load(self):
         try:
             logger.debug("%s plugin_load", P.package_name)
+            
+            # 새 설정 초기화 (기존 설치에서 누락된 설정 추가)
+            new_settings = {
+                "linkkf_notify_enabled": "False",
+                "linkkf_discord_webhook_url": "",
+                "linkkf_telegram_bot_token": "",
+                "linkkf_telegram_chat_id": "",
+            }
+            for key, default_value in new_settings.items():
+                if P.ModelSetting.get(key) is None:
+                    P.ModelSetting.set(key, default_value)
+                    logger.info(f"[Linkkf] Initialized new setting: {key}")
+            
+            # 추가 설정: 자동 다운로드 vs 알림만
+            if P.ModelSetting.get("linkkf_auto_download_new") is None:
+                P.ModelSetting.set("linkkf_auto_download_new", "True")
+                logger.info("[Linkkf] Initialized setting: linkkf_auto_download_new")
+            
+            # 모니터링 주기 설정 (기본 10분)
+            if P.ModelSetting.get("linkkf_monitor_interval") is None:
+                P.ModelSetting.set("linkkf_monitor_interval", "10")
+                logger.info("[Linkkf] Initialized setting: linkkf_monitor_interval")
+            
             # 클래스 레벨 큐 초기화
             if LogicLinkkf.queue is None:
                 LogicLinkkf.queue = FfmpegQueue(
@@ -1805,6 +1996,229 @@ class LogicLinkkf(AnimeModuleBase):
 
     def plugin_unload(self):
         pass
+
+    def scheduler_function(self):
+        """스케줄러 함수 - linkkf 자동 다운로드 처리"""
+        from framework import F
+        logger.info("linkkf scheduler_function::=========================")
+        
+        # Flask 앱 컨텍스트 내에서 실행 (스케줄러는 별도 스레드)
+        with F.app.app_context():
+            try:
+                content_code_list = P.ModelSetting.get_list("linkkf_auto_code_list", "|")
+                auto_mode_all = P.ModelSetting.get_bool("linkkf_auto_mode_all")
+                
+                logger.info(f"Auto-download codes: {content_code_list}")
+                logger.info(f"Auto mode all episodes: {auto_mode_all}")
+                
+                if not content_code_list:
+                    logger.info("[Scheduler] No auto-download codes configured")
+                    return
+                
+                # 각 작품 코드별 처리
+                for code in content_code_list:
+                    code = code.strip()
+                    if not code:
+                        continue
+                        
+                    if code.lower() == "all":
+                        # 사이트 전체 최신 에피소드 스캔
+                        logger.info("[Scheduler] 'all' mode - scanning latest episodes from site")
+                        self.scan_latest_episodes(auto_mode_all)
+                        continue
+                    
+                    logger.info(f"[Scheduler] Processing code: {code}")
+                    
+                    try:
+                        # 작품 정보 조회
+                        series_info = self.get_series_info(code)
+                        
+                        if not series_info or "episode" not in series_info:
+                            logger.warning(f"[Scheduler] No episode info for: {code}")
+                            continue
+                        
+                        episodes = series_info.get("episode", [])
+                        logger.info(f"[Scheduler] Found {len(episodes)} episodes for: {series_info.get('title', code)}")
+                        
+                        # 에피소드 순회 및 자동 등록
+                        added_count = 0
+                        added_episodes = []
+                        for episode_info in episodes:
+                            try:
+                                result = self.add(episode_info)
+                                if result and result.startswith("enqueue"):
+                                    added_count += 1
+                                    added_episodes.append(episode_info.get('title', 'Unknown'))
+                                    logger.info(f"[Scheduler] Auto-enqueued: {episode_info.get('title', 'Unknown')}")
+                                    self.socketio_callback("list_refresh", "")
+                                    
+                                # auto_mode_all이 False면 최신 1개만 (리스트가 최신순이라고 가정)
+                                if not auto_mode_all and added_count > 0:
+                                    logger.info(f"[Scheduler] Auto mode: latest only - stopping after 1 episode")
+                                    break
+                                    
+                            except Exception as ep_err:
+                                logger.error(f"[Scheduler] Episode add error: {ep_err}")
+                                continue
+                        
+                        # 새 에피소드 추가됨 → 알림 전송
+                        if added_count > 0:
+                            self.send_notification(
+                                title=series_info.get('title', code),
+                                episodes=added_episodes,
+                                count=added_count
+                            )
+                        
+                        logger.info(f"[Scheduler] Completed {code}: added {added_count} episodes")
+                        
+                    except Exception as code_err:
+                        logger.error(f"[Scheduler] Error processing {code}: {code_err}")
+                        logger.error(traceback.format_exc())
+                        continue
+                        
+            except Exception as e:
+                logger.error(f"[Scheduler] Fatal error: {e}")
+                logger.error(traceback.format_exc())
+
+    def send_notification(self, title, episodes, count):
+        """Discord/Telegram 알림 전송"""
+        if not P.ModelSetting.get_bool("linkkf_notify_enabled"):
+            return
+        
+        # 메시지 생성
+        episode_list = "\n".join([f"• {ep}" for ep in episodes[:5]])
+        if count > 5:
+            episode_list += f"\n... 외 {count - 5}개"
+        
+        message = f"🎬 **{title}**\n새 에피소드 {count}개가 다운로드 큐에 추가되었습니다!\n\n{episode_list}"
+        
+        # Discord Webhook
+        discord_url = P.ModelSetting.get("linkkf_discord_webhook_url")
+        if discord_url:
+            self.send_discord_notification(discord_url, title, message)
+        
+        # Telegram Bot
+        telegram_token = P.ModelSetting.get("linkkf_telegram_bot_token")
+        telegram_chat_id = P.ModelSetting.get("linkkf_telegram_chat_id")
+        if telegram_token and telegram_chat_id:
+            self.send_telegram_notification(telegram_token, telegram_chat_id, message)
+
+    def scan_latest_episodes(self, auto_mode_all):
+        """사이트에서 최신 에피소드 목록을 스캔하고 새 에피소드 감지"""
+        try:
+            auto_download = P.ModelSetting.get_bool("linkkf_auto_download_new")
+            
+            # 최신 방영 목록 가져오기 (1페이지만 - 가장 최신)
+            latest_data = self.get_anime_info("ing", 1)
+            
+            if not latest_data or "episode" not in latest_data:
+                logger.warning("[Scheduler] Failed to fetch latest anime list")
+                return
+            
+            items = latest_data.get("episode", [])
+            logger.info(f"[Scheduler] Scanned {len(items)} items from 'ing' page")
+            
+            total_added = 0
+            all_new_episodes = []
+            
+            # 각 작품의 최신 에피소드 확인
+            for item in items[:20]:  # 상위 20개만 처리 (성능 고려)
+                try:
+                    code = item.get("code")
+                    if not code:
+                        continue
+                    
+                    # 해당 작품의 에피소드 목록 조회
+                    series_info = self.get_series_info(code)
+                    if not series_info or "episode" not in series_info:
+                        continue
+                    
+                    episodes = series_info.get("episode", [])
+                    series_title = series_info.get("title", code)
+                    
+                    # 새 에피소드만 추가 (add 메서드가 중복 체크함)
+                    for ep in episodes[:5]:  # 최신 5개만 확인
+                        try:
+                            if auto_download:
+                                result = self.add(ep)
+                                if result and result.startswith("enqueue"):
+                                    total_added += 1
+                                    all_new_episodes.append(f"{series_title} - {ep.get('title', '')}")
+                                    self.socketio_callback("list_refresh", "")
+                            else:
+                                # 알림만 (다운로드 안함) - DB 체크로 새 에피소드인지 확인
+                                ep_code = ep.get("code", "")
+                                existing = ModelLinkkfItem.get_by_code(ep_code) if ep_code else None
+                                if not existing:
+                                    all_new_episodes.append(f"{series_title} - {ep.get('title', '')}")
+                            
+                            if not auto_mode_all and total_added > 0:
+                                break
+                        except Exception:
+                            continue
+                    
+                    if not auto_mode_all and total_added > 0:
+                        break
+                        
+                except Exception as e:
+                    logger.debug(f"[Scheduler] Error scanning {item.get('code', 'unknown')}: {e}")
+                    continue
+            
+            # 결과 알림
+            if all_new_episodes:
+                mode_text = "자동 다운로드" if auto_download else "새 에피소드 감지"
+                self.send_notification(
+                    title=f"[{mode_text}] 사이트 모니터링",
+                    episodes=all_new_episodes,
+                    count=len(all_new_episodes)
+                )
+                logger.info(f"[Scheduler] 'all' mode completed: {len(all_new_episodes)} new episodes found")
+            else:
+                logger.info("[Scheduler] 'all' mode: No new episodes found")
+                
+        except Exception as e:
+            logger.error(f"[Scheduler] scan_latest_episodes error: {e}")
+            logger.error(traceback.format_exc())
+
+    def send_discord_notification(self, webhook_url, title, message):
+        """Discord Webhook으로 알림 전송"""
+        try:
+            payload = {
+                "embeds": [{
+                    "title": f"📺 Linkkf 자동 다운로드",
+                    "description": message,
+                    "color": 0x10B981,  # 초록색
+                    "footer": {"text": "FlaskFarm Anime Downloader"}
+                }]
+            }
+            response = requests.post(webhook_url, json=payload, timeout=10)
+            if response.status_code in [200, 204]:
+                logger.info(f"[Notify] Discord 알림 전송 성공: {title}")
+            else:
+                logger.warning(f"[Notify] Discord 알림 실패: {response.status_code}")
+        except Exception as e:
+            logger.error(f"[Notify] Discord 알림 오류: {e}")
+
+    def send_telegram_notification(self, bot_token, chat_id, message):
+        """Telegram Bot API로 알림 전송"""
+        try:
+            # Markdown 형식으로 변환 (** -> *)
+            telegram_message = message.replace("**", "*")
+            
+            url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+            payload = {
+                "chat_id": chat_id,
+                "text": telegram_message,
+                "parse_mode": "Markdown"
+            }
+            response = requests.post(url, json=payload, timeout=10)
+            result = response.json()
+            if result.get("ok"):
+                logger.info(f"[Notify] Telegram 알림 전송 성공")
+            else:
+                logger.warning(f"[Notify] Telegram 알림 실패: {result.get('description', 'Unknown')}")
+        except Exception as e:
+            logger.error(f"[Notify] Telegram 알림 오류: {e}")
 
     def download_thread_function(self):
         while True:
@@ -2148,39 +2562,47 @@ class ModelLinkkfItem(db.Model):
         return ret
 
     def save(self):
-        db.session.add(self)
-        db.session.commit()
+        from framework import F
+        with F.app.app_context():
+            db.session.add(self)
+            db.session.commit()
 
     @classmethod
     def get_by_id(cls, idx):
-        return db.session.query(cls).filter_by(id=idx).first()
+        from framework import F
+        with F.app.app_context():
+            return db.session.query(cls).filter_by(id=idx).first()
 
     @classmethod
     def get_by_linkkf_id(cls, linkkf_id):
-        return db.session.query(cls).filter_by(linkkf_id=linkkf_id).first()
+        from framework import F
+        with F.app.app_context():
+            return db.session.query(cls).filter_by(linkkf_id=linkkf_id).first()
 
     @classmethod
     def append(cls, q):
-        logger.debug(q)
-        item = ModelLinkkfItem()
-        item.content_code = q["program_code"]
-        item.season = q["season"]
-        item.episode_no = q["epi_queue"]
-        item.title = q["content_title"]
-        item.episode_title = q["title"]
-        # item.linkkf_va = q["va"]
-        item.linkkf_code = q["code"]
-        item.linkkf_id = q["_id"]
-        item.quality = q["quality"]
-        item.filepath = q["filepath"]
-        item.filename = q["filename"]
-        item.savepath = q["savepath"]
-        item.video_url = q["url"]
-        item.vtt_url = q["vtt"]
-        item.thumbnail = q.get("image", "")
-        item.status = "wait"
-        item.linkkf_info = q["linkkf_info"]
-        item.save()
+        from framework import F
+        with F.app.app_context():
+            logger.debug(q)
+            item = ModelLinkkfItem()
+            item.content_code = q["program_code"]
+            item.season = q["season"]
+            item.episode_no = q["epi_queue"]
+            item.title = q["content_title"]
+            item.episode_title = q["title"]
+            # item.linkkf_va = q["va"]
+            item.linkkf_code = q["code"]
+            item.linkkf_id = q["_id"]
+            item.quality = q["quality"]
+            item.filepath = q["filepath"]
+            item.filename = q["filename"]
+            item.savepath = q["savepath"]
+            item.video_url = q["url"]
+            item.vtt_url = q["vtt"]
+            item.thumbnail = q.get("image", "")
+            item.status = "wait"
+            item.linkkf_info = q["linkkf_info"]
+            item.save()
 
     @classmethod
     def get_paging_info(cls, count, page, page_size):
@@ -2208,51 +2630,57 @@ class ModelLinkkfItem(db.Model):
 
     @classmethod
     def delete_by_id(cls, idx):
-        db.session.query(cls).filter_by(id=idx).delete()
-        db.session.commit()
+        from framework import F
+        with F.app.app_context():
+            db.session.query(cls).filter_by(id=idx).delete()
+            db.session.commit()
         return True
 
     @classmethod
     def web_list(cls, req):
-        ret = {}
-        page = int(req.form["page"]) if "page" in req.form else 1
-        page_size = 30
-        job_id = ""
-        search = req.form["search_word"] if "search_word" in req.form else ""
-        option = req.form["option"] if "option" in req.form else "all"
-        order = req.form["order"] if "order" in req.form else "desc"
-        query = cls.make_query(search=search, order=order, option=option)
-        count = query.count()
-        query = query.limit(page_size).offset((page - 1) * page_size)
-        lists = query.all()
-        ret["list"] = [item.as_dict() for item in lists]
-        ret["paging"] = cls.get_paging_info(count, page, page_size)
-        return ret
+        from framework import F
+        with F.app.app_context():
+            ret = {}
+            page = int(req.form["page"]) if "page" in req.form else 1
+            page_size = 30
+            job_id = ""
+            search = req.form["search_word"] if "search_word" in req.form else ""
+            option = req.form["option"] if "option" in req.form else "all"
+            order = req.form["order"] if "order" in req.form else "desc"
+            query = cls.make_query(search=search, order=order, option=option)
+            count = query.count()
+            query = query.limit(page_size).offset((page - 1) * page_size)
+            lists = query.all()
+            ret["list"] = [item.as_dict() for item in lists]
+            ret["paging"] = cls.get_paging_info(count, page, page_size)
+            return ret
 
     @classmethod
     def make_query(cls, search="", order="desc", option="all"):
-        query = db.session.query(cls)
-        if search is not None and search != "":
-            if search.find("|") != -1:
-                tmp = search.split("|")
-                conditions = []
-                for tt in tmp:
-                    if tt != "":
-                        conditions.append(cls.filename.like("%" + tt.strip() + "%"))
-                query = query.filter(or_(*conditions))
-            elif search.find(",") != -1:
-                tmp = search.split(",")
-                for tt in tmp:
-                    if tt != "":
-                        query = query.filter(cls.filename.like("%" + tt.strip() + "%"))
-            else:
-                query = query.filter(cls.filename.like("%" + search + f"%"))
-        
-        if option == "completed":
-            query = query.filter(cls.status == "completed")
+        from framework import F
+        with F.app.app_context():
+            query = db.session.query(cls)
+            if search is not None and search != "":
+                if search.find("|") != -1:
+                    tmp = search.split("|")
+                    conditions = []
+                    for tt in tmp:
+                        if tt != "":
+                            conditions.append(cls.filename.like("%" + tt.strip() + "%"))
+                    query = query.filter(or_(*conditions))
+                elif search.find(",") != -1:
+                    tmp = search.split(",")
+                    for tt in tmp:
+                        if tt != "":
+                            query = query.filter(cls.filename.like("%" + tt.strip() + "%"))
+                else:
+                    query = query.filter(cls.filename.like("%" + search + f"%"))
             
-        if order == "desc":
-            query = query.order_by(desc(cls.id))
-        else:
-            query = query.order_by(cls.id)
-        return query
+            if option == "completed":
+                query = query.filter(cls.status == "completed")
+                
+            if order == "desc":
+                query = query.order_by(desc(cls.id))
+            else:
+                query = query.order_by(cls.id)
+            return query

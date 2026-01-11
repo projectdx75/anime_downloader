@@ -216,19 +216,58 @@ class LogicAniLife(AnimeModuleBase):
     def process_command(self, command, arg1, arg2, arg3, req):
         try:
             if command == "list":
+                # 1. 자체 큐 목록 가져오기
                 ret = self.queue.get_entity_list() if self.queue else []
+                
+                # 2. GDM 태스크 가져오기 (설치된 경우)
+                try:
+                    from gommi_downloader_manager.mod_queue import ModuleQueue
+                    if ModuleQueue:
+                        gdm_tasks = ModuleQueue.get_all_downloads()
+                        # 이 모듈(anilife)이 추가한 작업만 필터링
+                        anilife_tasks = [t for t in gdm_tasks if t.caller_plugin == f"{P.package_name}_{self.name}"]
+                        
+                        for task in anilife_tasks:
+                            # 템플릿 호환 형식으로 변환
+                            gdm_item = self._convert_gdm_task_to_queue_item(task)
+                            ret.append(gdm_item)
+                except Exception as e:
+                    logger.debug(f"GDM tasks fetch error: {e}")
+                
                 return jsonify(ret)
-            elif command == "stop":
-                entity_id = int(arg1) if arg1 else -1
-                result = self.queue.command("cancel", entity_id) if self.queue else {"ret": "error"}
+                
+            elif command in ["stop", "remove", "cancel"]:
+                entity_id = arg1
+                if entity_id and str(entity_id).startswith("dl_"):
+                    # GDM 작업 처리
+                    try:
+                        from gommi_downloader_manager.mod_queue import ModuleQueue
+                        if ModuleQueue:
+                            if command == "stop" or command == "cancel":
+                                task = ModuleQueue.get_download(entity_id)
+                                if task:
+                                    task.cancel()
+                                    return jsonify({"ret": "success", "log": "GDM 작업을 중지하였습니다."})
+                            elif command == "remove" or command == "delete":
+                                # GDM에서 삭제 처리
+                                class DummyReq:
+                                    def __init__(self, id):
+                                        self.form = {"id": id}
+                                ModuleQueue.process_ajax("delete", DummyReq(entity_id))
+                                return jsonify({"ret": "success", "log": "GDM 작업을 삭제하였습니다."})
+                    except Exception as e:
+                        logger.error(f"GDM command error: {e}")
+                        return jsonify({"ret": "error", "log": f"GDM 명령 실패: {e}"})
+                
+                # 자체 큐 처리
+                entity_id = int(arg1) if arg1 and str(arg1).isdigit() else -1
+                command_to_call = "cancel" if command == "stop" else command
+                if self.queue:
+                    result = self.queue.command(command_to_call, entity_id)
+                else:
+                    result = {"ret": "error", "log": "Queue not initialized"}
                 return jsonify(result)
-            elif command == "remove":
-                entity_id = int(arg1) if arg1 else -1
-                result = self.queue.command("remove", entity_id) if self.queue else {"ret": "error"}
-                return jsonify(result)
-            elif command in ["reset", "delete_completed"]:
-                result = self.queue.command(command, 0) if self.queue else {"ret": "error"}
-                return jsonify(result)
+
             elif command == "merge_subtitle":
                 # AniUtil already imported at module level
                 db_id = int(arg1)
@@ -247,6 +286,73 @@ class LogicAniLife(AnimeModuleBase):
             self.P.logger.error(f"process_command Error: {e}")
             self.P.logger.error(traceback.format_exc())
             return jsonify({'ret': 'fail', 'log': str(e)})
+
+    def _convert_gdm_task_to_queue_item(self, task):
+        """GDM DownloadTask 객체를 FfmpegQueueEntity.as_dict() 호환 형식으로 변환"""
+        status_kor_map = {
+            "pending": "대기중",
+            "extracting": "분석중",
+            "downloading": "다운로드중",
+            "paused": "일시정지",
+            "completed": "완료",
+            "error": "실패",
+            "cancelled": "취소됨"
+        }
+        
+        status_str_map = {
+            "pending": "WAITING",
+            "extracting": "ANALYZING",
+            "downloading": "DOWNLOADING",
+            "paused": "PAUSED",
+            "completed": "COMPLETED",
+            "error": "FAILED",
+            "cancelled": "FAILED"
+        }
+        
+        t_dict = task.as_dict()
+        
+        return {
+            "entity_id": t_dict["id"],
+            "url": t_dict["url"],
+            "filename": t_dict["filename"] or t_dict["title"],
+            "ffmpeg_status_kor": status_kor_map.get(t_dict["status"], "알수없음"),
+            "ffmpeg_percent": t_dict["progress"],
+            "created_time": t_dict["created_time"],
+            "current_speed": t_dict["speed"],
+            "download_time": t_dict["eta"],
+            "status_str": status_str_map.get(t_dict["status"], "WAITING"),
+            "idx": t_dict["id"],
+            "callback_id": "anilife",
+            "start_time": t_dict["start_time"] or t_dict["created_time"],
+            "percent": t_dict["progress"],
+            "save_fullpath": t_dict["filepath"],
+            "is_gdm": True
+        }
+
+    def plugin_callback(self, data):
+        """GDM 모듈로부터 다운로드 상태 업데이트 수신"""
+        try:
+            callback_id = data.get('callback_id')
+            status = data.get('status')
+            
+            logger.info(f"[AniLife] Received GDM callback: id={callback_id}, status={status}")
+            
+            if callback_id:
+                from framework import F
+                with F.app.app_context():
+                    db_item = ModelAniLifeItem.get_by_anilife_id(callback_id)
+                    if db_item:
+                        if status == "completed":
+                            db_item.status = "completed"
+                            db_item.completed_time = datetime.now()
+                            db_item.filepath = data.get('filepath')
+                            db_item.save()
+                            logger.info(f"[AniLife] Updated DB item {db_item.id} to COMPLETED via GDM callback")
+                        elif status == "error":
+                            pass
+        except Exception as e:
+            logger.error(f"[AniLife] Callback processing error: {e}")
+            logger.error(traceback.format_exc())
 
     # @staticmethod
     def get_html(
@@ -971,6 +1077,35 @@ class LogicAniLife(AnimeModuleBase):
                     logger.error(f"reset_db error: {e}")
                     return jsonify({"ret": "error", "msg": str(e)})
             
+            elif sub == "add_schedule":
+                # 스케쥴 등록 (자동 다운로드 목록에 코드 추가)
+                try:
+                    code = request.form.get("code", "")
+                    title = request.form.get("title", "")
+                    logger.debug(f"add_schedule: code={code}, title={title}")
+                    
+                    if not code:
+                        return jsonify({"ret": "error", "msg": "코드가 없습니다."})
+                    
+                    # 기존 whitelist 가져오기
+                    whitelist = P.ModelSetting.get("anilife_auto_code_list") or ""
+                    code_list = [c.strip() for c in whitelist.replace("\n", "|").split("|") if c.strip()]
+                    
+                    if code in code_list:
+                        return jsonify({"ret": "exist", "msg": "이미 등록되어 있습니다."})
+                    
+                    # 코드 추가
+                    code_list.append(code)
+                    new_whitelist = "|".join(code_list)
+                    P.ModelSetting.set("anilife_auto_code_list", new_whitelist)
+                    
+                    logger.info(f"[Anilife] Schedule added: {code} ({title})")
+                    return jsonify({"ret": "success", "msg": f"스케쥴 등록 완료: {title}"})
+                except Exception as e:
+                    logger.error(f"add_schedule error: {e}")
+                    logger.error(traceback.format_exc())
+                    return jsonify({"ret": "error", "msg": str(e)})
+            
             # Fallback to base class for common subs (queue_command, entity_list, browse_dir, command, etc.)
             return super().process_ajax(sub, req)
 
@@ -1087,12 +1222,73 @@ class LogicAniLife(AnimeModuleBase):
             return False
 
     def scheduler_function(self):
-        logger.debug(f"ohli24 scheduler_function::=========================")
-
-        content_code_list = P.ModelSetting.get_list("anilife_auto_code_list", "|")
-        url = f'{P.ModelSetting.get("anilife_url")}/dailyani'
-        if "all" in content_code_list:
-            ret_data = LogicAniLife.get_auto_anime_info(self, url=url)
+        """스케줄러 함수 - anilife 자동 다운로드 처리"""
+        logger.info("anilife scheduler_function::=========================")
+        
+        try:
+            content_code_list = P.ModelSetting.get_list("anilife_auto_code_list", "|")
+            auto_mode_all = P.ModelSetting.get_bool("anilife_auto_mode_all")
+            
+            logger.info(f"Auto-download codes: {content_code_list}")
+            logger.info(f"Auto mode all episodes: {auto_mode_all}")
+            
+            if not content_code_list:
+                logger.info("[Scheduler] No auto-download codes configured")
+                return
+            
+            # 각 작품 코드별 처리
+            for code in content_code_list:
+                code = code.strip()
+                if not code:
+                    continue
+                    
+                if code.lower() == "all":
+                    # TODO: 전체 최신 에피소드 스캔 로직 (추후 구현)
+                    logger.info("[Scheduler] 'all' mode - skipping for now")
+                    continue
+                
+                logger.info(f"[Scheduler] Processing code: {code}")
+                
+                try:
+                    # 작품 정보 조회
+                    series_info = self.get_series_info(code)
+                    
+                    if not series_info or "episode" not in series_info:
+                        logger.warning(f"[Scheduler] No episode info for: {code}")
+                        continue
+                    
+                    episodes = series_info.get("episode", [])
+                    logger.info(f"[Scheduler] Found {len(episodes)} episodes for: {series_info.get('title', code)}")
+                    
+                    # 에피소드 순회 및 자동 등록
+                    added_count = 0
+                    for episode_info in episodes:
+                        try:
+                            result = self.add(episode_info)
+                            if result and result.startswith("enqueue"):
+                                added_count += 1
+                                logger.info(f"[Scheduler] Auto-enqueued: {episode_info.get('title', 'Unknown')}")
+                                self.socketio_callback("list_refresh", "")
+                                
+                            # auto_mode_all이 False면 최신 1개만 (리스트가 최신순이라고 가정)
+                            if not auto_mode_all and added_count > 0:
+                                logger.info(f"[Scheduler] Auto mode: latest only - stopping after 1 episode")
+                                break
+                                
+                        except Exception as ep_err:
+                            logger.error(f"[Scheduler] Episode add error: {ep_err}")
+                            continue
+                    
+                    logger.info(f"[Scheduler] Completed {code}: added {added_count} episodes")
+                    
+                except Exception as code_err:
+                    logger.error(f"[Scheduler] Error processing {code}: {code_err}")
+                    logger.error(traceback.format_exc())
+                    continue
+                    
+        except Exception as e:
+            logger.error(f"[Scheduler] Fatal error: {e}")
+            logger.error(traceback.format_exc())
 
     def reset_db(self):
         db.session.query(ModelAniLifeItem).delete()
@@ -2073,118 +2269,137 @@ class ModelAniLifeItem(db.Model):
         return ret
 
     def save(self):
-        db.session.add(self)
-        db.session.commit()
+        from framework import F
+        with F.app.app_context():
+            db.session.add(self)
+            db.session.commit()
 
     @classmethod
     def get_by_id(cls, idx):
-        return db.session.query(cls).filter_by(id=idx).first()
+        from framework import F
+        with F.app.app_context():
+            return db.session.query(cls).filter_by(id=idx).first()
 
     @classmethod
     def get_by_anilife_id(cls, anilife_id):
-        return db.session.query(cls).filter_by(anilife_id=anilife_id).first()
+        from framework import F
+        with F.app.app_context():
+            return db.session.query(cls).filter_by(anilife_id=anilife_id).first()
 
     @classmethod
     def delete_by_id(cls, idx):
-        try:
-            logger.debug(f"delete_by_id: {idx} (type: {type(idx)})")
-            if isinstance(idx, str) and ',' in idx:
-                id_list = [int(x.strip()) for x in idx.split(',') if x.strip()]
-                logger.debug(f"Batch delete: {id_list}")
-                count = db.session.query(cls).filter(cls.id.in_(id_list)).delete(synchronize_session='fetch')
-                logger.debug(f"Deleted count: {count}")
-            else:
-                db.session.query(cls).filter_by(id=int(idx)).delete()
-                logger.debug(f"Single delete: {idx}")
-            db.session.commit()
-            return True
-        except Exception as e:
-            logger.error(f"Exception: {str(e)}")
-            logger.error(traceback.format_exc())
-            return False
+        from framework import F
+        with F.app.app_context():
+            try:
+                logger.debug(f"delete_by_id: {idx} (type: {type(idx)})")
+                if isinstance(idx, str) and ',' in idx:
+                    id_list = [int(x.strip()) for x in idx.split(',') if x.strip()]
+                    logger.debug(f"Batch delete: {id_list}")
+                    count = db.session.query(cls).filter(cls.id.in_(id_list)).delete(synchronize_session='fetch')
+                    logger.debug(f"Deleted count: {count}")
+                else:
+                    db.session.query(cls).filter_by(id=int(idx)).delete()
+                    logger.debug(f"Single delete: {idx}")
+                db.session.commit()
+                return True
+            except Exception as e:
+                logger.error(f"Exception: {str(e)}")
+                # logger.error(traceback.format_exc())
+                return False
 
     @classmethod
     def delete_all(cls):
-        try:
-            db.session.query(cls).delete()
-            db.session.commit()
-            return True
-        except Exception as e:
-            logger.error(f"Exception: {str(e)}")
-            logger.error(traceback.format_exc())
-            return False
+        from framework import F
+        with F.app.app_context():
+            try:
+                db.session.query(cls).delete()
+                db.session.commit()
+                return True
+            except Exception as e:
+                logger.error(f"Exception: {str(e)}")
+                # logger.error(traceback.format_exc())
+                return False
 
     @classmethod
     def web_list(cls, req):
-        ret = {}
-        page = int(req.form["page"]) if "page" in req.form else 1
-        page_size = 30
-        job_id = ""
-        search = req.form["search_word"] if "search_word" in req.form else ""
-        option = req.form["option"] if "option" in req.form else "all"
-        order = req.form["order"] if "order" in req.form else "desc"
-        query = cls.make_query(search=search, order=order, option=option)
-        count = query.count()
-        query = query.limit(page_size).offset((page - 1) * page_size)
-        lists = query.all()
-        ret["list"] = [item.as_dict() for item in lists]
-        ret["paging"] = Util.get_paging_info(count, page, page_size)
-        return ret
+        from framework import F
+        with F.app.app_context():
+            ret = {}
+            page = int(req.form["page"]) if "page" in req.form else 1
+            page_size = 30
+            job_id = ""
+            search = req.form["search_word"] if "search_word" in req.form else ""
+            option = req.form["option"] if "option" in req.form else "all"
+            order = req.form["order"] if "order" in req.form else "desc"
+            query = cls.make_query(search=search, order=order, option=option)
+            count = query.count()
+            query = query.limit(page_size).offset((page - 1) * page_size)
+            lists = query.all()
+            ret["list"] = [item.as_dict() for item in lists]
+            ret["paging"] = Util.get_paging_info(count, page, page_size)
+            return ret
 
     @classmethod
     def make_query(cls, search="", order="desc", option="all"):
-        query = db.session.query(cls)
-        if search is not None and search != "":
-            if search.find("|") != -1:
-                tmp = search.split("|")
-                conditions = []
-                for tt in tmp:
-                    if tt != "":
-                        conditions.append(cls.filename.like("%" + tt.strip() + "%"))
-                query = query.filter(or_(*conditions))
-            elif search.find(",") != -1:
-                tmp = search.split(",")
-                for tt in tmp:
-                    if tt != "":
-                        query = query.filter(cls.filename.like("%" + tt.strip() + "%"))
-            else:
-                query = query.filter(cls.filename.like("%" + search + "%"))
-        if option == "completed":
-            query = query.filter(cls.status == "completed")
+        from framework import F
+        with F.app.app_context():
+            query = db.session.query(cls)
+            if search is not None and search != "":
+                if search.find("|") != -1:
+                    tmp = search.split("|")
+                    conditions = []
+                    for tt in tmp:
+                        if tt != "":
+                            conditions.append(cls.filename.like("%" + tt.strip() + "%"))
+                    query = query.filter(or_(*conditions))
+                elif search.find(",") != -1:
+                    tmp = search.split(",")
+                    for tt in tmp:
+                        if tt != "":
+                            query = query.filter(cls.filename.like("%" + tt.strip() + "%"))
+                else:
+                    query = query.filter(cls.filename.like("%" + search + "%"))
+            if option == "completed":
+                query = query.filter(cls.status == "completed")
 
-        query = (
-            query.order_by(desc(cls.id)) if order == "desc" else query.order_by(cls.id)
-        )
-        return query
+            query = (
+                query.order_by(desc(cls.id)) if order == "desc" else query.order_by(cls.id)
+            )
+            return query
 
     @classmethod
     def get_list_uncompleted(cls):
-        return db.session.query(cls).filter(cls.status != "completed").all()
+        from framework import F
+        with F.app.app_context():
+            return db.session.query(cls).filter(cls.status != "completed").all()
 
     @classmethod
     def append(cls, q):
-        # 중복 체크
-        existing = cls.get_by_anilife_id(q["_id"])
-        if existing:
-            logger.debug(f"Item already exists in DB: {q['_id']}")
-            return existing
-            
-        item = ModelAniLifeItem()
-        item.content_code = q["content_code"]
-        item.season = q["season"]
-        item.episode_no = q.get("epi_queue")
-        item.title = q["content_title"]
-        item.episode_title = q["title"]
-        item.anilife_va = q.get("va")
-        item.anilife_vi = q.get("_vi")
-        item.anilife_id = q["_id"]
-        item.quality = q["quality"]
-        item.filepath = q.get("filepath")
-        item.filename = q.get("filename")
-        item.savepath = q.get("savepath")
-        item.video_url = q.get("url")
-        item.vtt_url = q.get("vtt")
-        item.thumbnail = q.get("thumbnail")
-        item.status = "wait"
-        item.anilife_info = q.get("anilife_info")
-        item.save()
+        from framework import F
+        with F.app.app_context():
+            # 중복 체크
+            existing = cls.get_by_anilife_id(q["_id"])
+            if existing:
+                logger.debug(f"Item already exists in DB: {q['_id']}")
+                return existing
+                
+            item = ModelAniLifeItem()
+            item.content_code = q["content_code"]
+            item.season = q["season"]
+            item.episode_no = q.get("epi_queue")
+            item.title = q["content_title"]
+            item.episode_title = q["title"]
+            item.anilife_va = q.get("va")
+            item.anilife_vi = q.get("_vi")
+            item.anilife_id = q["_id"]
+            item.quality = q["quality"]
+            item.filepath = q.get("filepath")
+            item.filename = q.get("filename")
+            item.savepath = q.get("savepath")
+            item.video_url = q.get("url")
+            item.vtt_url = q.get("vtt")
+            item.thumbnail = q.get("image", "")
+            item.status = "wait"
+            item.anilife_info = q["anilife_info"]
+            item.save()
+            return item

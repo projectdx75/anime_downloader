@@ -82,6 +82,93 @@
         </div>
       </div>
       {{ macros.setting_checkbox('linkkf_auto_mode_all', '에피소드 모두 받기', value=arg['linkkf_auto_mode_all'], desc=['On : 이전 에피소드를 모두 받습니다.', 'Off : 최신 에피소드만 받습니다.']) }}
+      {{ macros.setting_checkbox('linkkf_auto_download_new', '새 에피소드 자동 다운로드', value=arg['linkkf_auto_download_new'], desc=['On : 새 에피소드 감지 시 자동으로 큐에 추가합니다.', 'Off : 알림만 보내고 다운로드는 수동으로 합니다.']) }}
+      
+      <div class="row" style="padding-top: 10px; padding-bottom:10px;">
+        <div class="col-sm-3 set-left"><strong>모니터링 주기</strong></div>
+        <div class="col-sm-9">
+          <select class="form-control form-control-sm col-sm-3" id="linkkf_monitor_interval" name="linkkf_monitor_interval">
+            <option value="5" {% if arg.get('linkkf_monitor_interval', '10') == '5' %}selected{% endif %}>5분</option>
+            <option value="10" {% if arg.get('linkkf_monitor_interval', '10') == '10' or not arg.get('linkkf_monitor_interval') %}selected{% endif %}>10분 (기본)</option>
+            <option value="15" {% if arg.get('linkkf_monitor_interval', '10') == '15' %}selected{% endif %}>15분</option>
+            <option value="30" {% if arg.get('linkkf_monitor_interval', '10') == '30' %}selected{% endif %}>30분</option>
+            <option value="60" {% if arg.get('linkkf_monitor_interval', '10') == '60' %}selected{% endif %}>1시간</option>
+          </select>
+          <div style="padding-top:5px;"><em class="text-muted">'all' 모드 사용 시 사이트를 확인하는 주기입니다.</em></div>
+        </div>
+      </div>
+    {{ macros.m_tab_content_end() }}
+
+    {{ macros.m_tab_content_start('action', false) }}
+      <div class="row mb-3">
+        <div class="col-sm-12">
+          <h5 class="text-white mb-3"><i class="bi bi-lightning-fill mr-2"></i>수동 작업</h5>
+        </div>
+      </div>
+      <div class="row mb-4">
+        <div class="col-sm-3 set-left"><strong>스케줄러 1회 실행</strong></div>
+        <div class="col-sm-9">
+          <button type="button" class="btn btn-outline-success btn-sm" id="global_one_execute_btn">
+            <i class="bi bi-play-circle mr-1"></i> 1회 실행
+          </button>
+          <div style="padding-top:5px;"><em class="text-muted">자동 다운로드 스케줄러를 즉시 1회 실행합니다.</em></div>
+        </div>
+      </div>
+      <div class="row mb-4">
+        <div class="col-sm-3 set-left"><strong>DB 초기화</strong></div>
+        <div class="col-sm-9">
+          <button type="button" class="btn btn-outline-danger btn-sm" id="global_reset_db_btn">
+            <i class="bi bi-trash mr-1"></i> DB 초기화
+          </button>
+          <div style="padding-top:5px;"><em class="text-muted">다운로드 기록 DB를 초기화합니다.</em></div>
+        </div>
+      </div>
+      
+      <hr style="border-color: rgba(255,255,255,0.1); margin: 30px 0;">
+      
+      <div class="row mb-3">
+        <div class="col-sm-12">
+          <h5 class="text-white mb-3"><i class="bi bi-bell-fill mr-2"></i>알림 설정</h5>
+        </div>
+      </div>
+      {{ macros.setting_checkbox('linkkf_notify_enabled', '알림 활성화', value=arg['linkkf_notify_enabled'], desc='새 에피소드가 큐에 추가되면 알림을 보냅니다.') }}
+      
+      <div class="row mb-3">
+        <div class="col-sm-12">
+          <h6 class="text-info mb-2"><i class="bi bi-discord mr-1"></i> Discord</h6>
+        </div>
+      </div>
+      <div class="row" style="padding-top: 10px; padding-bottom:10px;">
+        <div class="col-sm-3 set-left"><strong>Discord Webhook URL</strong></div>
+        <div class="col-sm-9">
+          <div class="input-group">
+            <input type="text" class="form-control form-control-sm" id="linkkf_discord_webhook_url" name="linkkf_discord_webhook_url" value="{{arg['linkkf_discord_webhook_url']}}">
+            <div class="input-group-append">
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="copy_discord_url_btn" title="URL 복사">
+                <i class="bi bi-clipboard"></i>
+              </button>
+            </div>
+          </div>
+          <div style="padding-top:5px;"><em class="text-muted">Discord 서버 설정 → 연동 → 웹훅에서 URL을 복사하세요.</em></div>
+        </div>
+      </div>
+      
+      <div class="row mb-3 mt-4">
+        <div class="col-sm-12">
+          <h6 class="text-info mb-2"><i class="bi bi-telegram mr-1"></i> Telegram</h6>
+        </div>
+      </div>
+      {{ macros.setting_input_text('linkkf_telegram_bot_token', 'Telegram Bot Token', col='9', value=arg['linkkf_telegram_bot_token'], desc='@BotFather에서 생성한 봇 토큰입니다.') }}
+      {{ macros.setting_input_text('linkkf_telegram_chat_id', 'Telegram Chat ID', col='4', value=arg['linkkf_telegram_chat_id'], desc='알림을 받을 채팅방 ID (개인: 숫자, 그룹: -숫자)') }}
+      
+      <div class="row mb-3 mt-3">
+        <div class="col-sm-3"></div>
+        <div class="col-sm-9">
+          <button type="button" class="btn btn-outline-info btn-sm" id="test_notify_btn">
+            <i class="bi bi-send mr-1"></i> 테스트 알림 전송
+          </button>
+        </div>
+      </div>
     {{ macros.m_tab_content_end() }}
 
     </div><!--tab-content-->
@@ -371,6 +458,94 @@ $("body").on('click', '#go_btn', function(e){
   window.open(url, "_blank");
 });
 
+// 1회 실행 버튼
+$(document).on('click', '#global_one_execute_btn', function(e){
+  e.preventDefault();
+  $.ajax({
+    url: '/'+package_name+'/ajax/'+sub+'/immediately_execute',
+    type: "POST",
+    cache: false,
+    dataType: "json",
+    success: function(ret) {
+      if (ret.ret == 'success') {
+        $.notify('스케줄러 1회 실행을 시작합니다.', {type:'success'});
+      } else {
+        $.notify(ret.msg || '실행 실패', {type:'danger'});
+      }
+    },
+    error: function(xhr, status, error) {
+      $.notify('에러: ' + error, {type:'danger'});
+    }
+  });
+});
+
+// DB 초기화 버튼
+$(document).on('click', '#global_reset_db_btn', function(e){
+  e.preventDefault();
+  if (!confirm('정말 DB를 초기화하시겠습니까?')) return;
+  $.ajax({
+    url: '/'+package_name+'/ajax/'+sub+'/reset_db',
+    type: "POST",
+    cache: false,
+    dataType: "json",
+    success: function(ret) {
+      if (ret.ret == 'success') {
+        $.notify('DB가 초기화되었습니다.', {type:'success'});
+      } else {
+        $.notify(ret.msg || '초기화 실패', {type:'danger'});
+      }
+    },
+    error: function(xhr, status, error) {
+      $.notify('에러: ' + error, {type:'danger'});
+    }
+  });
+});
+// Discord Webhook URL 복사 버튼
+$(document).on('click', '#copy_discord_url_btn', function(e){
+  e.preventDefault();
+  var url = $('#linkkf_discord_webhook_url').val();
+  if (!url) {
+    $.notify('복사할 URL이 없습니다.', {type:'warning'});
+    return;
+  }
+  navigator.clipboard.writeText(url).then(function() {
+    $.notify('URL이 클립보드에 복사되었습니다.', {type:'success'});
+  }).catch(function() {
+    // Fallback for older browsers
+    var temp = $('<input>').val(url).appendTo('body').select();
+    document.execCommand('copy');
+    temp.remove();
+    $.notify('URL이 클립보드에 복사되었습니다.', {type:'success'});
+  });
+});
+
+// 테스트 알림 버튼
+$(document).on('click', '#test_notify_btn', function(e){
+  e.preventDefault();
+  var btn = $(this);
+  btn.prop('disabled', true).html('<i class="bi bi-arrow-repeat spin mr-1"></i> 전송 중...');
+  
+  $.ajax({
+    url: '/'+package_name+'/ajax/'+sub+'/test_notification',
+    type: "POST",
+    cache: false,
+    dataType: "json",
+    success: function(ret) {
+      if (ret.ret == 'success') {
+        $.notify('테스트 알림을 전송했습니다!', {type:'success'});
+      } else {
+        $.notify(ret.msg || '알림 전송 실패', {type:'danger'});
+      }
+    },
+    error: function(xhr, status, error) {
+      $.notify('에러: ' + error, {type:'danger'});
+    },
+    complete: function() {
+      btn.prop('disabled', false).html('<i class="bi bi-send mr-1"></i> 테스트 알림 전송');
+    }
+  });
+});
+
 // ======================================
 // 폴더 탐색 기능
 // ======================================
@@ -562,10 +737,15 @@ function getDragAfterElement(container, x) {
 // ======================================
 // 자가 업데이트 기능
 // ======================================
-$('#btn-self-update').on('click', function() {
-  if (!confirm('최신 코드를 다운로드하고 플러그인을 리로드하시겠습니까?')) return;
+$(document).on('click', '#btn-self-update', function() {
+  $('#updateConfirmModal').modal('show');
+});
+
+// 실제 업데이트 실행 (모달에서 확인 버튼 클릭 시)
+$(document).on('click', '#confirmUpdateBtn', function() {
+  $('#updateConfirmModal').modal('hide');
   
-  var btn = $(this);
+  var btn = $('#btn-self-update');
   var originalHTML = btn.html();
   btn.prop('disabled', true).html('<i class="bi bi-arrow-repeat spin"></i> 업데이트 중...');
   
@@ -590,4 +770,68 @@ $('#btn-self-update').on('click', function() {
   });
 });
 </script>
+
+<!-- Update Confirmation Modal (Linkkf Green Theme) -->
+<div class="modal fade" id="updateConfirmModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content animate__animated animate__zoomIn" style="background: linear-gradient(145deg, #1e293b 0%, #0f172a 100%); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 20px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);">
+            <div class="modal-body text-center" style="padding: 40px 30px;">
+                <div style="width: 80px; height: 80px; background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.2) 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 24px; border: 2px solid rgba(16, 185, 129, 0.3);">
+                    <i class="bi bi-arrow-repeat" style="color: #10b981; font-size: 36px;"></i>
+                </div>
+                <h4 style="color: #f1f5f9; font-weight: 700; margin-bottom: 12px;">플러그인 업데이트</h4>
+                <p style="color: #94a3b8; font-size: 15px; margin-bottom: 8px;">최신 코드를 다운로드하고 플러그인을 리로드합니다.</p>
+                <p style="color: #64748b; font-size: 13px; margin-bottom: 32px;"><i class="bi bi-info-circle"></i> 서버 재시작 없이 즉시 적용됩니다.</p>
+                <div style="display: flex; gap: 12px; justify-content: center;">
+                    <button type="button" class="btn" data-dismiss="modal" style="width: 120px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #94a3b8; border-radius: 10px; padding: 12px 24px; font-weight: 600;">취소</button>
+                    <button type="button" id="confirmUpdateBtn" class="btn" style="width: 140px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); border: none; color: white; border-radius: 10px; padding: 12px 24px; font-weight: 600; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);">
+                        <i class="bi bi-download"></i> 업데이트
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Update Button Enhanced Visibility (Linkkf Green) */
+#btn-self-update {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+    border: none !important;
+    color: white !important;
+    font-weight: 600;
+    padding: 8px 16px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+    transition: all 0.2s ease;
+}
+#btn-self-update:hover:not(:disabled) {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+}
+#btn-self-update:disabled {
+    background: linear-gradient(135deg, #475569 0%, #334155 100%) !important;
+    color: #94a3b8 !important;
+    cursor: not-allowed;
+    box-shadow: none;
+    opacity: 0.7;
+}
+#btn-self-update .bi-arrow-repeat.spin,
+.spin {
+    animation: spin 1s linear infinite;
+}
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Animate.css for modal */
+.animate__animated { animation-duration: 0.3s; }
+.animate__zoomIn { animation-name: zoomIn; }
+@keyframes zoomIn {
+    from { opacity: 0; transform: scale3d(0.3, 0.3, 0.3); }
+    50% { opacity: 1; }
+}
+</style>
 {% endblock %}

@@ -5,21 +5,44 @@
 <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet" />
 <script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
 
+<!-- Artplayer CDN -->
+<script src="https://cdn.jsdelivr.net/npm/artplayer/dist/artplayer.js"></script>
+
+<!-- Plyr CDN -->
+<link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
+<script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
+
 <!-- Video Player Modal -->
 <div class="modal fade" id="videoModal" tabindex="-1" role="dialog" aria-labelledby="videoModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl" role="document">
         <div class="modal-content" style="background: #0f172a; border-radius: 12px;">
             <div class="modal-header" style="border-bottom: 1px solid rgba(255,255,255,0.1);">
                 <h5 class="modal-title" id="videoModalLabel" style="color: #f1f5f9;">비디오 플레이어</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close" style="color: #f1f5f9;">
-                    <span aria-hidden="true">&times;</span>
-                </button>
+                <div class="ml-auto d-flex align-items-center">
+                    <select id="player-select" class="form-control form-control-sm mr-3" style="width: auto; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2);">
+                        <option value="videojs">VideoJS</option>
+                        <option value="artplayer">Artplayer</option>
+                        <option value="plyr">Plyr</option>
+                    </select>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close" style="color: #f1f5f9;">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
             </div>
             <div class="modal-body" style="padding: 0;">
                 <div class="video-container">
-                    <video id="video-player" class="video-js vjs-big-play-centered vjs-theme-fantasy m-auto" controls preload="auto" playsinline webkit-playsinline>
-                        <p class="vjs-no-js">JavaScript가 필요합니다.</p>
-                    </video>
+                    <!-- Video.js Player -->
+                    <div id="videojs-container" style="width: 100%; height: 100%;">
+                        <video id="video-player" class="video-js vjs-big-play-centered vjs-theme-fantasy m-auto" controls preload="auto" playsinline webkit-playsinline>
+                            <p class="vjs-no-js">JavaScript가 필요합니다.</p>
+                        </video>
+                    </div>
+                    <!-- Artplayer Container -->
+                    <div id="artplayer-container" style="display: none; width: 100%; height: 100%; min-height: 450px;"></div>
+                    <!-- Plyr Container -->
+                    <div id="plyr-container" style="display: none; width: 100%; height: 100%;">
+                        <video id="plyr-player" playsinline controls style="width: 100%; height: 100%;"></video>
+                    </div>
                     <!-- 화면 꽉 채우기 토글 버튼 (모바일용) -->
                     <button id="btn-video-zoom" class="video-zoom-btn" title="화면 비율 조절">
                         <i class="fa fa-expand"></i>

@@ -861,10 +861,15 @@ function getDragAfterElement(container, x) {
 // ======================================
 // 자가 업데이트 기능
 // ======================================
-$('#btn-self-update').on('click', function() {
-  if (!confirm('최신 코드를 다운로드하고 플러그인을 리로드하시겠습니까?')) return;
+$(document).on('click', '#btn-self-update', function() {
+  $('#updateConfirmModal').modal('show');
+});
+
+// 실제 업데이트 실행 (이벤트 위임 - 모달이 스크립트 이후에 있으므로)
+$(document).on('click', '#confirmUpdateBtn', function() {
+  $('#updateConfirmModal').modal('hide');
   
-  var btn = $(this);
+  var btn = $('#btn-self-update');
   var originalHTML = btn.html();
   btn.prop('disabled', true).html('<i class="bi bi-arrow-repeat spin"></i> 업데이트 중...');
   
@@ -874,8 +879,11 @@ $('#btn-self-update').on('click', function() {
     dataType: 'json',
     success: function(ret) {
       if (ret.ret === 'success') {
-        $.notify('<strong>업데이트 완료!</strong> 페이지를 새로고침합니다.', {type: 'success'});
-        setTimeout(function() { location.reload(); }, 1500);
+        if (ret.needs_restart) {
+          $.notify('<strong>⚠️ 모델 변경 감지!</strong><br>서버 재시작이 필요합니다.', {type: 'warning', delay: 10000});
+        } else {
+          $.notify('<strong>✅ 업데이트 완료!</strong><br>페이지를 새로고침하세요.', {type: 'success', delay: 5000});
+        }
       } else {
         $.notify('<strong>업데이트 실패: ' + ret.msg + '</strong>', {type: 'danger'});
       }
@@ -890,5 +898,65 @@ $('#btn-self-update').on('click', function() {
 });
 
 </script>
+
+<!-- Update Confirmation Modal -->
+<div class="modal fade" id="updateConfirmModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content animate__animated animate__zoomIn" style="background: linear-gradient(145deg, #1e293b 0%, #0f172a 100%); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 20px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);">
+            <div class="modal-body text-center" style="padding: 40px 30px;">
+                <div style="width: 80px; height: 80px; background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(99, 102, 241, 0.2) 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 24px; border: 2px solid rgba(59, 130, 246, 0.3);">
+                    <i class="bi bi-arrow-repeat" style="color: #3b82f6; font-size: 36px;"></i>
+                </div>
+                <h4 style="color: #f1f5f9; font-weight: 700; margin-bottom: 12px;">플러그인 업데이트</h4>
+                <p style="color: #94a3b8; font-size: 15px; margin-bottom: 8px;">최신 코드를 다운로드하고 플러그인을 리로드합니다.</p>
+                <p style="color: #64748b; font-size: 13px; margin-bottom: 32px;"><i class="bi bi-info-circle"></i> 서버 재시작 없이 즉시 적용됩니다.</p>
+                <div style="display: flex; gap: 12px; justify-content: center;">
+                    <button type="button" class="btn" data-dismiss="modal" style="width: 120px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #94a3b8; border-radius: 10px; padding: 12px 24px; font-weight: 600;">취소</button>
+                    <button type="button" id="confirmUpdateBtn" class="btn" style="width: 140px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); border: none; color: white; border-radius: 10px; padding: 12px 24px; font-weight: 600; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);">
+                        <i class="bi bi-download"></i> 업데이트
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Update Button Enhanced Visibility */
+#btn-self-update {
+    background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%) !important;
+    border: none !important;
+    color: white !important;
+    font-weight: 600;
+    padding: 8px 16px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
+    transition: all 0.2s ease;
+}
+#btn-self-update:hover:not(:disabled) {
+    background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(14, 165, 233, 0.4);
+}
+#btn-self-update:disabled {
+    background: linear-gradient(135deg, #475569 0%, #334155 100%) !important;
+    color: #94a3b8 !important;
+    cursor: not-allowed;
+    box-shadow: none;
+    opacity: 0.7;
+}
+#btn-self-update .bi-arrow-repeat.spin {
+    animation: spin 1s linear infinite;
+}
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Animate.css for modal */
+.animate__zoomIn {
+    animation-duration: 0.3s;
+}
+</style>
 
 {% endblock %}
