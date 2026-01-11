@@ -157,10 +157,9 @@ $(document).ready(function(){
         gdmSocket.on('status', function(data) {
             // 이 모듈과 관련된 작업만 처리
             if (data.caller_plugin === PACKAGE_NAME + '_' + MODULE_NAME) {
-                // GDM 데이터를 큐 형식으로 변환하여 UI 업데이트
-                // 수동 새로고침 없이 실시간 반영을 위해 renderList 호출 주기를 짧게 하거나 직접 UI 갱신
+                // GDM 데이터를 큐 형식으로 변환하여 UI 즉시 업데이트
                 silentFetchList(function(newList) {
-                    renderList(newList);
+                    smartSyncList(newList);
                 });
             }
         });
@@ -188,15 +187,13 @@ function silentFetchList(callback) {
 
 function autoRefreshList() {
     silentFetchList(function(data) {
-        if (data.length !== current_list_length) {
-            current_list_length = data.length;
-            renderList(data);
-        }
+        // 무조건 스마트 싱크 호출 (내부에서 변경 사항이 있을 때만 업데이트됨)
+        smartSyncList(data);
         
         var hasActiveDownload = false;
         if (data && data.length > 0) {
             for (var j = 0; j < data.length; j++) {
-                if (data[j].status_str === 'DOWNLOADING' || data[j].status_str === 'WAITING' || data[j].status_str === 'STARTED') {
+                if (data[j].status_str === 'DOWNLOADING' || data[j].status_str === 'WAITING' || data[j].status_str === 'STARTED' || data[j].status_str === 'ANALYZING') {
                     hasActiveDownload = true;
                     break;
                 }
@@ -218,6 +215,51 @@ function on_start() {
         current_list_length = data.length;
         renderList(data);
     });
+}
+
+function smartSyncList(data) {
+    if (!data) return;
+    
+    if (data.length == 0) {
+        if (current_list_length !== 0) {
+            current_list_length = 0;
+            renderList(data);
+        }
+        return;
+    }
+
+    // 1. 기존 리스트에 있는 항목들과 비교하여 업데이트 또는 삭제
+    var currentIds = data.map(function(item) { return item.idx; });
+    
+    // 현재 DOM에 있는 항목들 중 사라진 항목 제거
+    $('#list tr[id^="tr1_"]').each(function() {
+        var domIdx = $(this).attr('id').replace('tr1_', '');
+        // GDM ID 등 문자열 포함 가능성 고려하여 타입 맞춤
+        if (currentIds.indexOf(domIdx) === -1 && currentIds.indexOf(parseInt(domIdx)) === -1) {
+            $(this).remove();
+            $('#collapse_' + domIdx).remove();
+        }
+    });
+
+    // 2. 새로운 리스트 순회하며 업데이트 또는 추가
+    for (var i = 0; i < data.length; i++) {
+        var item = data[i];
+        var row = $('#tr1_' + item.idx);
+        
+        if (row.length > 0) {
+            // 이미 존재하는 경우: 상태 및 데이터만 업데이트 (깜빡임 방지)
+            status_html(item);
+            button_html(item);
+            
+            // 파일명이나 다른 필드도 변할 수 있으므로 필요한 경우 갱신
+            // (여기서는 진행률과 상태가 핵심이므로 status_html에서 처리됨)
+        } else {
+            // 새로 추가된 경우: 리스트의 올바른 위치에 삽입 (간단히 append)
+            $("#list").append(make_item(item));
+        }
+    }
+    
+    current_list_length = data.length;
 }
 
 function renderList(data) {
@@ -292,8 +334,8 @@ function make_item1(data) {
 
     str += '<td id="status_'+data.idx+'" style="text-align:center;"><span class="badge-status ' + status_class + '">'+ data.status_kor + '</span></td>';
     
-    var visi = (parseInt(data.percent) > 0) ? 'visible' : 'hidden';
-    str += '<td><div class="progress custom-progress"><div id="progress_'+data.idx+'" class="progress-bar" style="visibility: '+visi+'; width:'+data.percent+'%">'+data.percent +'%</div></div></td>';
+    // 진행률 표시: 0%이더라도 다운로드 중이면 바를 표시 (깜빡임 서프레스)
+    str += '<td><div class="progress custom-progress"><div id="progress_'+data.idx+'" class="progress-bar" style="width:'+data.percent+'%">'+data.percent +'%</div></div></td>';
     
     str += '<td style="text-align:center;">'+ data.duration_str + '</td>';
     str += '<td id="current_pf_count_'+data.idx+'" style="text-align:center; color: #f87171;">'+ data.current_pf_count + '</td>';
@@ -352,7 +394,6 @@ function status_html(data) {
     
     progress.style.width = data.percent+ '%';
     progress.innerHTML = data.percent+ '%';
-    progress.style.visibility = 'visible';
     
     var statusEl = document.getElementById("status_" + data.idx);
     if (statusEl) {
