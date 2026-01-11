@@ -700,9 +700,13 @@ class LogicLinkkf(AnimeModuleBase):
                         if status == "completed":
                             db_item.status = "completed"
                             db_item.completed_time = datetime.now()
-                            db_item.filepath = data.get('filepath')
+                            # 경로 정규화 후 저장
+                            new_filepath = data.get('filepath')
+                            if new_filepath:
+                                db_item.filepath = os.path.normpath(new_filepath)
                             db_item.save()
-                            logger.info(f"[Linkkf] Updated DB item {db_item.id} to COMPLETED via GDM callback")
+                            logger.info(f"[Linkkf] Successfully updated DB item {db_item.id} (Linkkf ID: {callback_id}) to COMPLETED via GDM callback")
+                            logger.info(f"[Linkkf] Final filepath in DB: {db_item.filepath}")
                             
                             # 알림 전송 (필요 시)
                             # self.socketio_callback("list_refresh", "")
@@ -1689,14 +1693,14 @@ class LogicLinkkf(AnimeModuleBase):
                             
                         if P.ModelSetting.get("linkkf_auto_make_folder") == "True":
                             program_path = os.path.join(tmp_save_path, entity["save_folder"])
-                            entity["save_path"] = program_path
+                            entity["save_path"] = os.path.normpath(program_path)
                             if P.ModelSetting.get("linkkf_auto_make_season_folder"):
-                                entity["save_path"] = os.path.join(
+                                entity["save_path"] = os.path.normpath(os.path.join(
                                     entity["save_path"], "Season %s" % int(entity["season"])
-                                )
+                                ))
                         else:
                             # 기본 경로 설정
-                            entity["save_path"] = tmp_save_path
+                            entity["save_path"] = os.path.normpath(tmp_save_path)
                         
                         entity["image"] = data["poster_url"]
                         # filename 생성 시 숫자만 전달 ("01화" 아님)
@@ -1705,7 +1709,7 @@ class LogicLinkkf(AnimeModuleBase):
                         )
 
                         # Check for existing file (for Play button)
-                        entity["filepath"] = os.path.join(entity["save_path"], entity["filename"])
+                        entity["filepath"] = os.path.normpath(os.path.join(entity["save_path"], entity["filename"]))
                         if os.path.exists(entity["filepath"]):
                             entity["exist_video"] = True
                             if "first_exist_filepath" not in data:
@@ -1879,12 +1883,14 @@ class LogicLinkkf(AnimeModuleBase):
         
         # 3. Early file existence check - filepath is already in episode_info from get_series_info
         filepath = episode_info.get("filepath")
+        if filepath:
+            filepath = os.path.normpath(filepath)
         
         # 미완성 다운로드 감지 (Frag 파일, .ytdl 파일, .part 파일이 있으면 재다운로드 허용)
         has_incomplete_files = False
         if filepath:
             import glob
-            dirname = os.path.dirname(filepath)
+            dirname = os.path.normpath(os.path.dirname(filepath))
             has_ytdl = os.path.exists(filepath + ".ytdl")
             has_part = os.path.exists(filepath + ".part")
             has_frag = False
@@ -2337,13 +2343,13 @@ class LinkkfQueueEntity(FfmpegQueueEntity):
             
             if default_path:
                 save_folder = info.get("save_folder", "Unknown")
-                self.savepath = os.path.join(default_path, save_folder)
+                self.savepath = os.path.normpath(os.path.join(default_path, save_folder))
             else:
                 self.savepath = "/tmp/anime_downloads"
             logger.info(f"[DEBUG] Final savepath set to: '{self.savepath}'")
         
         # filepath = savepath + filename (전체 경로)
-        self.filepath = os.path.join(self.savepath, self.filename) if self.filename else self.savepath
+        self.filepath = os.path.normpath(os.path.join(self.savepath, self.filename)) if self.filename else self.savepath
         logger.info(f"[DEBUG] filepath set to: '{self.filepath}'")
         
         # playid URL에서 실제 비디오 URL과 자막 URL 추출은 prepare_extra에서 수행합니다.
