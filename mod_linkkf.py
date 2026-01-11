@@ -196,7 +196,6 @@ class LogicLinkkf(AnimeModuleBase):
                     logger.error(traceback.format_exc())
                     ret["ret"] = "error"
                     ret["log"] = str(e)
-                return jsonify(ret)
             elif sub == "add_queue_checked_list":
                 # 선택된 에피소드 일괄 추가 (백그라운드 스레드로 처리)
                 import threading
@@ -248,6 +247,69 @@ class LogicLinkkf(AnimeModuleBase):
                     
                 except Exception as e:
                     logger.error(f"add_queue_checked_list error: {e}")
+                    logger.error(traceback.format_exc())
+                    ret["ret"] = "error"
+                    ret["log"] = str(e)
+                return jsonify(ret)
+            elif sub == "add_sub_queue_checked_list":
+                # 선택된 에피소드 자막만 일괄 다운로드 (백그라운드 스레드로 처리)
+                import threading
+                from flask import current_app
+                
+                logger.info("========= add_sub_queue_checked_list START =========")
+                ret = {"ret": "success", "message": "백그라운드에서 자막 다운로드 중..."}
+                try:
+                    form_data = request.form.get("data")
+                    if not form_data:
+                        ret["ret"] = "error"
+                        ret["log"] = "No data received"
+                        return jsonify(ret)
+                    
+                    episode_list = json.loads(form_data)
+                    logger.info(f"Received {len(episode_list)} episodes to download subtitles in background")
+                    
+                    # Flask app 참조 저장
+                    app = current_app._get_current_object()
+                    
+                    def download_subtitles_background(flask_app, episode_list):
+                        added = 0
+                        skipped = 0
+                        with flask_app.app_context():
+                            for episode_info in episode_list:
+                                try:
+                                    # LinkkfQueueEntity를 사용하여 자막 URL 추출 (prepare_extra 활용)
+                                    entity = LinkkfQueueEntity(P, self, episode_info)
+                                    entity.prepare_extra()
+                                    
+                                    if entity.vtt:
+                                        # 자막 다운로드 및 변환
+                                        # entity.filepath는 prepare_extra에서 설정됨 (기본 저장 경로 + 파일명)
+                                        res = Util.download_subtitle(entity.vtt, entity.filepath, headers=entity.headers)
+                                        if res:
+                                            added += 1
+                                            logger.debug(f"Downloaded subtitle for {episode_info.get('title')}")
+                                        else:
+                                            skipped += 1
+                                            logger.info(f"Failed to download subtitle for {episode_info.get('title')}")
+                                    else:
+                                        skipped += 1
+                                        logger.info(f"No subtitle found for {episode_info.get('title')}")
+                                except Exception as e:
+                                    logger.error(f"Error in download_subtitles_background for one episode: {e}")
+                                    skipped += 1
+                            
+                            logger.info(f"add_sub_queue_checked_list completed: downloaded={added}, skipped={skipped}")
+
+                    thread = threading.Thread(
+                        target=download_subtitles_background,
+                        args=(app, episode_list)
+                    )
+                    thread.daemon = True
+                    thread.start()
+                    
+                    ret["count"] = len(episode_list)
+                except Exception as e:
+                    logger.error(f"add_sub_queue_checked_list error: {e}")
                     logger.error(traceback.format_exc())
                     ret["ret"] = "error"
                     ret["log"] = str(e)
@@ -2526,7 +2588,7 @@ class LinkkfQueueEntity(FfmpegQueueEntity):
 
 class ModelLinkkfItem(db.Model):
     __tablename__ = "{package_name}_linkkf_item".format(package_name=P.package_name)
-    __table_args__ = {"mysql_collate": "utf8_general_ci"}
+    __table_args__ = {"mysql_collate": "utf8_general_ci", "extend_existing": True}
     __bind_key__ = P.package_name
     id = db.Column(db.Integer, primary_key=True)
     created_time = db.Column(db.DateTime)

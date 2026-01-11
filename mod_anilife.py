@@ -2228,7 +2228,7 @@ class AniLifeQueueEntity(FfmpegQueueEntity):
 
 class ModelAniLifeItem(db.Model):
     __tablename__ = "{package_name}_anilife_item".format(package_name=P.package_name)
-    __table_args__ = {"mysql_collate": "utf8_general_ci"}
+    __table_args__ = {"mysql_collate": "utf8_general_ci", "extend_existing": True}
     __bind_key__ = P.package_name
     id = db.Column(db.Integer, primary_key=True)
     created_time = db.Column(db.DateTime)

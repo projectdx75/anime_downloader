@@ -768,6 +768,12 @@ $(document).ready(function(){
                     str += '<button class="action-btn btn-play" data-path="' + item.filepath + '" data-filename="' + item.filename + '"><i class="fa fa-play"></i> 재생</button>';
                     str += '<button class="action-btn btn-merge-sub" data-id="' + item.id + '" data-filename="' + item.filename + '"><i class="fa fa-cc"></i> 자막합침</button>';
                 }
+                
+                // [작품소개] 버튼 추가 - JSON 버튼 왼쪽에 배치
+                if (item.content_code) {
+                    str += '<button class="action-btn" onclick="location.href=\'/' + package_name + '/' + sub + '/request?code=' + item.content_code + '\'"><i class="fa fa-info-circle"></i> 작품소개</button>';
+                }
+                
                 str += '<button class="action-btn" onclick="m_modal(current_data.list[' + i + '])"><i class="fa fa-code"></i> JSON</button>';
                 str += '<button class="action-btn" onclick="search_item(\'' + (item.title || '') + '\')"><i class="fa fa-search"></i> 검색</button>';
                 str += '<button class="action-btn" onclick="db_remove(' + item.id + ')"><i class="fa fa-trash"></i> 삭제</button>';

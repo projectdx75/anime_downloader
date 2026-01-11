@@ -3447,7 +3447,7 @@ class Ohli24QueueEntity(AnimeQueueEntity):
 class ModelOhli24Item(ModelBase):
     P = P
     __tablename__ = "{package_name}_ohli24_item".format(package_name=P.package_name)
-    __table_args__ = {"mysql_collate": "utf8_general_ci"}
+    __table_args__ = {"mysql_collate": "utf8_general_ci", "extend_existing": True}
     __bind_key__ = P.package_name
     id = db.Column(db.Integer, primary_key=True)
     created_time = db.Column(db.DateTime)
@@ -3603,7 +3603,7 @@ class ModelOhli24Item(ModelBase):
 class ModelOhli24Program(ModelBase):
     P = P
     __tablename__ = f"{P.package_name}_{name}_program"
-    __table_args__ = {"mysql_collate": "utf8_general_ci"}
+    __table_args__ = {"mysql_collate": "utf8_general_ci", "extend_existing": True}
     __bind_key__ = P.package_name
 
     id = db.Column(db.Integer, primary_key=True)
