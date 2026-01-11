@@ -593,18 +593,23 @@ class LogicLinkkf(AnimeModuleBase):
             "entity_id": t_dict["id"],
             "url": t_dict["url"],
             "filename": t_dict["filename"] or t_dict["title"],
-            "ffmpeg_status_kor": status_kor_map.get(t_dict["status"], "알수없음"),
-            "ffmpeg_percent": t_dict["progress"],
+            "status_kor": status_kor_map.get(t_dict["status"], "알수없음"),
+            "percent": t_dict["progress"],
             "created_time": t_dict["created_time"],
-            "current_speed": t_dict["speed"],
-            "download_time": t_dict["eta"],
+            "current_speed": t_dict["speed"] or "0 B/s",
+            "download_time": t_dict["eta"] or "-",
             "status_str": status_str_map.get(t_dict["status"], "WAITING"),
             "idx": t_dict["id"],
             "callback_id": "linkkf",
             "start_time": t_dict["start_time"] or t_dict["created_time"],
-            "percent": t_dict["progress"],
             "save_fullpath": t_dict["filepath"],
-            "is_gdm": True # GDM 작업임을 표시 (디버깅용)
+            "duration_str": "GDM",
+            "current_pf_count": 0,
+            "duration": "-",
+            "current_duration": "-",
+            "current_bitrate": "-",
+            "max_pf_count": 0,
+            "is_gdm": True
         }
 
     def plugin_callback(self, data):

@@ -1,410 +1,381 @@
 {% extends "base.html" %}
 {% block content %}
-    <link rel="stylesheet" href="{{ url_for('.static', filename='css/mobile_custom.css') }}"/>
-    <link rel="stylesheet" href="{{ url_for('.static', filename='css/' ~ arg['sub'] ~ '.css') }}"/>
+<link rel="stylesheet" href="{{ url_for('.static', filename='css/mobile_custom.css') }}"/>
+<link rel="stylesheet" href="{{ url_for('.static', filename='css/' ~ arg['sub'] ~ '.css') }}"/>
 
-    <div class="content-cloak">
-        <div class="d-flex justify-content-start align-items-center gap-2 mb-4">
-            <button id="reset_btn" class="btn custom-btn btn-reset-queue"><i class="fa fa-refresh mr-2"></i> 초기화</button>
-            <button id="delete_completed_btn" class="btn custom-btn btn-delete-completed"><i class="fa fa-trash-o mr-2"></i> 완료 삭제</button>
-            <button id="go_gdm_btn" class="btn custom-btn btn-gdm"><i class="fa fa-download mr-2"></i> Go GDM</button>
-        </div>
-    </div>
+<style>
+    .queue-header-container {
+        display: flex; justify-content: space-between; align-items: flex-end;
+        margin-bottom: 20px; border-bottom: 1px solid rgba(16, 185, 129, 0.2); padding-bottom: 10px;
+    }
+    .queue-title { color: var(--forest-accent); font-weight: 700; margin: 0; }
+    .queue-meta { font-size: 12px; color: #6ee7b7; opacity: 0.6; }
+
+    .custom-queue-table {
+        background: rgba(6, 78, 59, 0.2); border-collapse: separate; border-spacing: 0 4px; color: #ecfdf5;
+    }
+    .custom-queue-table thead th {
+        background: rgba(2, 44, 34, 0.8) !important; color: #6ee7b7; font-size: 13px;
+        text-transform: uppercase; border: none !important; padding: 12px 8px !important;
+        text-align: center;
+    }
+    .custom-queue-table tbody tr {
+        background: rgba(6, 78, 59, 0.3); transition: all 0.2s;
+    }
+    .custom-queue-table tbody tr:hover { background: rgba(6, 78, 59, 0.5) !important; }
+    .custom-queue-table td { border: none !important; vertical-align: middle !important; padding: 14px 8px !important; }
+
+    /* Badges & Status */
+    .badge-status {
+        padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700;
+        display: inline-block; min-width: 60px; text-align: center;
+    }
+    .status-downloading { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .status-wait { background: rgba(251, 191, 36, 0.1); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.2); }
+    .status-completed { background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+    .status-fail { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+
+    /* Progress Bar */
+    .custom-progress { height: 18px; background: rgba(0,0,0,0.4); border-radius: 9px; overflow: hidden; border: 1px solid rgba(16, 185, 129, 0.1); }
+    .custom-progress .progress-bar {
+        background: linear-gradient(90deg, #10b981, #059669) !important;
+        font-weight: 700; font-size: 11px;
+        transition: width 0.4s ease-out;
+        box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
+    }
+
+    /* Action Buttons */
+    .action-btn-mini {
+        width: 32px; height: 32px; border-radius: 8px; border: none; font-size: 14px;
+        display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s;
+    }
+    .action-btn-mini.btn-danger { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+    .action-btn-mini.btn-danger:hover { background: #ef4444; color: white; transform: scale(1.1); }
+    .action-btn-mini.btn-warning { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+    .action-btn-mini.btn-warning:hover { background: #f59e0b; color: white; transform: scale(1.1); }
     
-    <!-- Desktop Table View - Simplified -->
-    <div class="table-responsive d-none d-md-block">
-        <table id="result_table" class="table table-sm tableRowHover">
-            <thead class="thead-dark">
-            <tr>
-                <th style="width:30%; text-align:left; padding-left:16px;">파일명</th>
-                <th style="width:10%; text-align:center;">상태</th>
-                <th style="width:30%; text-align:center;">진행률</th>
-                <th style="width:12%; text-align:center;">속도</th>
-                <th style="width:10%; text-align:center;">시작시간</th>
-                <th style="width:8%; text-align:center;">Action</th>
-            </tr>
+    .action-btn-group { display: flex; justify-content: center; gap: 4px; }
+
+    .header-buttons { display: flex; gap: 10px; align-items: center; }
+    .queue-btn-top {
+        display: flex; align-items: center; gap: 6px; padding: 6px 14px;
+        border: none; border-radius: 8px; font-weight: 600; font-size: 13px;
+        cursor: pointer; transition: all 0.3s ease;
+    }
+    .queue-btn-top.btn-danger { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+    .queue-btn-top.btn-danger:hover { background: #ef4444; color: white; box-shadow: 0 0 15px rgba(239, 68, 68, 0.4); }
+    .queue-btn-top.btn-warning { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+    .queue-btn-top.btn-warning:hover { background: #f59e0b; color: white; box-shadow: 0 0 15px rgba(245, 158, 11, 0.4); }
+
+    /* Details */
+    .queue-detail-container { color: #d1fae5; font-size: 13px; }
+    .detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px 20px; }
+    .detail-item { display: flex; gap: 10px; align-items: flex-start; }
+    .detail-item .label { color: #6ee7b7; font-weight: 700; min-width: 100px; opacity: 0.7; font-size: 11px; text-transform: uppercase; }
+    .detail-item .value { color: #ecfdf5; word-break: break-all; }
+
+    /* Smooth Load */
+    .content-cloak { opacity: 0; transition: opacity 0.5s ease-out; }
+    .content-cloak.visible { opacity: 1; }
+</style>
+
+<div class="content-cloak">
+    <div class="queue-header-container">
+        <h4 class="queue-title"><i class="fa fa-download"></i> 다운로드 큐</h4>
+        <div class="header-buttons">
+            <button id="reset_btn" class="queue-btn-top btn-danger">
+                <i class="fa fa-refresh"></i> 초기화
+            </button>
+            <button id="delete_completed_btn" class="queue-btn-top btn-warning">
+                <i class="fa fa-trash"></i> 완료 삭제
+            </button>
+        </div>
+        <div class="queue-meta">실시간 동기화 활성화됨 (3초 주기)</div>
+    </div>
+
+    <div class="table-responsive-custom">
+        <table id="result_table" class="table custom-queue-table tableRowHover">
+            <thead>
+                <tr>
+                    <th style="width:5%;">IDX</th>
+                    <th style="width:8%;">Plugin</th>
+                    <th style="width:10%;">시작시간</th>
+                    <th style="width:25%;">파일명</th>
+                    <th style="width:8%;">상태</th>
+                    <th style="width:18%;">진행률</th>
+                    <th style="width:6%;">길이</th>
+                    <th style="width:5%;">PF</th>
+                    <th style="width:10%;">현재 상태</th>
+                    <th style="width:5%;">Action</th>
+                </tr>
             </thead>
             <tbody id="list"></tbody>
         </table>
     </div>
-
-    <!-- Mobile Card View -->
-    <div id="list_mobile" class="d-md-none"></div>
-
-    <script type="text/javascript">
-        const package_name = "{{arg['package_name'] }}";
-        const sub = "{{arg['sub'] }}";
-        var current_data = null;
-
-        function on_start(silent = false) {
-            $.ajax({
-                url: '/' + package_name + '/ajax/' + sub + '/entity_list',
-                type: "POST",
-                cache: false,
-                data: {},
-                dataType: "json",
-                global: !silent,
-                success: function (data) {
-                    current_data = data;
-                    
-                    const list_body = $("#list");
-                    const list_mobile = $("#list_mobile");
-                    
-                    if (data.length == 0) {
-                        list_body.html("<tr><td colspan='6' class='text-center py-5'><div class='empty-state'><i class='fa fa-inbox fa-3x mb-3' style='opacity:0.3'></i><h5>작업이 없습니다</h5></div></td></tr>");
-                        list_mobile.html("<div class='text-center p-5'><i class='fa fa-inbox fa-3x mb-3' style='opacity:0.3'></i><h5>작업이 없습니다</h5></div>");
-                    } else {
-                        // Table View update
-                        var str_table = '';
-                        for (i in data) str_table += make_item(data[i]);
-                        list_body.html(str_table);
-                        
-                        // Mobile Card View update
-                        var str_mobile = '';
-                        for (i in data) str_mobile += make_item_mobile(data[i]);
-                        list_mobile.html(str_mobile);
-                    }
-                }
-            });
-        }
-
-        $(document).ready(function () {
-            const socket_url = window.location.protocol + "//" + document.domain + ":" + location.port + "/anime_downloader/anilife/queue";
-            const socket = io.connect(socket_url);
-
-            socket.on('connect', function() {});
-            
-            socket.on('start', function (data) { on_start(); });
-            socket.on('list_refresh', function (data) { on_start(); });
-            socket.on('status', function (data) { status_html(data); });
-            socket.on('add', function (data) {
-                if (current_data == null || current_data.length == 0) {
-                    current_data = Array();
-                    $("#list").html(make_item(data));
-                    $("#list_mobile").html(make_item_mobile(data));
-                } else {
-                    $("#list").append(make_item(data));
-                    $("#list_mobile").append(make_item_mobile(data));
-                }
-                current_data.push(data);
-            });
-
-            // 3초마다 자동 새로고침
-            setInterval(function() { on_start(true); }, 3000);
-
-            // 초기 로드
-            globalSendCommand('list', null, null, null, function (data) {
-                current_data = data;
-                $("#list").html('');
-                $("#list_mobile").html('');
-                if (data.length == 0) {
-                    $("#list").html("<tr><td colspan='6' class='text-center py-5'><div class='empty-state'><i class='fa fa-inbox fa-3x mb-3' style='opacity:0.3'></i><h5>작업이 없습니다</h5></div></td></tr>");
-                    $("#list_mobile").html("<div class='text-center p-5'><i class='fa fa-inbox fa-3x mb-3' style='opacity:0.3'></i><h5>작업이 없습니다</h5></div>");
-                } else {
-                    var str_table = '';
-                    var str_mobile = '';
-                    for (i in data) {
-                        str_table += make_item(data[i]);
-                        str_mobile += make_item_mobile(data[i]);
-                    }
-                    $("#list").html(str_table);
-                    $("#list_mobile").html(str_mobile);
-                }
-            });
-        });
-
-        $("body").on('click', '#stop_btn', function (e) {
-            e.stopPropagation();
-            e.preventDefault();
-            var idx = $(this).data('idx');
-            globalSendCommand('stop', idx, null, null, function (ret) { on_start(); });
-        });
-
-        function make_item_mobile(data) {
-            var statusClass = get_status_class(data.status_str);
-            var str = '<div class="queue-card mb-3" id="card_' + data.idx + '">';
-            str += '  <div class="card-header-flex">';
-            str += '    <span id="card_status_kor_' + data.idx + '" class="status-badge ' + statusClass + '">' + data.status_kor + '</span>';
-            str += '  </div>';
-            str += '  <div class="card-content">';
-            str += '    <div class="card-filename">' + data.filename + '</div>';
-            str += '    <div class="progress mt-3 mb-2" style="height: 8px;">';
-            str += '      <div id="card_progress_bar_' + data.idx + '" class="progress-bar" style="width:' + data.percent + '%;"></div>';
-            str += '    </div>';
-            str += '    <div class="card-meta">';
-            str += '      <div class="meta-item"><i class="fa fa-bolt"></i> <span id="card_current_speed_' + data.idx + '">' + (data.current_speed || '-') + '</span></div>';
-            str += '      <div class="meta-item"><i class="fa fa-clock-o"></i> <span>' + (data.start_time || '-') + '</span></div>';
-            str += '    </div>';
-            str += '  </div>';
-            str += '  <div id="card_button_' + data.idx + '" class="card-footer-actions">';
-            if (data.status_str == 'DOWNLOADING' || data.status_str == 'EXTRACTING' || data.status_str == 'PENDING') {
-                str += '    <button id="stop_btn" class="action-btn btn-stop w-100" data-idx="' + data.idx + '"><i class="fa fa-stop mr-1"></i> 중지</button>';
-            }
-            str += '  </div>';
-            str += '</div>';
-            return str;
-        }
-
-        function make_item(data) {
-            var statusClass = get_status_class(data.status_str);
-            var str = '<tr id="tr1_' + data.idx + '">';
-            str += '<td style="text-align:left; padding-left:16px; max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + data.filename + '">' + data.filename + '</td>';
-            str += '<td id="status_' + data.idx + '" style="text-align:center;"><span class="status-badge ' + statusClass + '">' + data.status_kor + '</span></td>';
-            str += '<td style="text-align:center;"><div class="progress" style="height:20px;"><div id="progress_' + data.idx + '" class="progress-bar" style="width:' + data.percent + '%">' + data.percent + '%</div></div></td>';
-            str += '<td id="current_speed_' + data.idx + '" style="text-align:center;">' + (data.current_speed || '-') + '</td>';
-            str += '<td style="text-align:center; font-size:0.85em;">' + (data.start_time ? data.start_time.split(' ')[1] || data.start_time : '-') + '</td>';
-            str += '<td id="button_' + data.idx + '" style="text-align:center;">';
-            if (data.status_str == 'DOWNLOADING' || data.status_str == 'EXTRACTING' || data.status_str == 'PENDING') {
-                str += '<button id="stop_btn" class="action-btn btn-stop" data-idx="' + data.idx + '"><i class="fa fa-stop"></i></button>';
-            }
-            str += '</td>';
-            str += '</tr>';
-            return str;
-        }
-
-        function get_status_class(status_str) {
-            var s = (status_str || '').toLowerCase();
-            if (s == 'completed') return 'status-completed';
-            if (s == 'downloading') return 'status-downloading';
-            if (s == 'extracting') return 'status-extracting';
-            if (s == 'pending') return 'status-pending';
-            if (s == 'error' || s == 'fail') return 'status-fail';
-            if (s == 'cancelled') return 'status-cancelled';
-            return 'status-pending';
-        }
-
-        function status_html(data) {
-            // Table Update
-            var progress = document.getElementById("progress_" + data.idx);
-            if (progress) {
-                progress.style.width = data.percent + '%';
-                progress.innerHTML = data.percent + '%';
-                var statusEl = document.getElementById("status_" + data.idx);
-                if (statusEl) statusEl.innerHTML = '<span class="status-badge ' + get_status_class(data.status_str) + '">' + data.status_kor + '</span>';
-                var speedEl = document.getElementById("current_speed_" + data.idx);
-                if (speedEl) speedEl.innerHTML = data.current_speed || '-';
-            }
-
-            // Mobile Card Update
-            var card_progress = document.getElementById("card_progress_bar_" + data.idx);
-            if (card_progress) {
-                card_progress.style.width = data.percent + '%';
-                var status_badge = document.getElementById("card_status_kor_" + data.idx);
-                if (status_badge) {
-                    status_badge.innerHTML = data.status_kor;
-                    status_badge.className = 'status-badge ' + get_status_class(data.status_str);
-                }
-                var card_speed = document.getElementById("card_current_speed_" + data.idx);
-                if (card_speed) card_speed.innerHTML = data.current_speed || '-';
-            }
-        }
-
-        $("body").on('click', '#reset_btn', function (e) {
-            e.preventDefault();
-            if (!confirm('모든 항목을 초기화하시겠습니까?')) return;
-            queue_command({'command': 'reset', 'entity_id': -1});
-        });
-
-        $("body").on('click', '#delete_completed_btn', function (e) {
-            e.preventDefault();
-            queue_command({'command': 'delete_completed', 'entity_id': -1});
-        });
-
-        $("body").on('click', '#go_gdm_btn', function (e) {
-            e.preventDefault();
-            window.location.href = '/gommi_downloader_manager/queue/list';
-        });
-
-        function queue_command(data) {
-            $.ajax({
-                url: '/' + package_name + '/ajax/' + sub + '/queue_command',
-                type: "POST",
-                cache: false,
-                data: data,
-                dataType: "json",
-                success: function (ret) {
-                    if (ret.ret == 'notify') {
-                        $.notify('<strong>' + ret.log + '</strong>', {type: 'warning'});
-                    } else if (ret.ret == 'success' || ret == true) {
-                        $.notify('명령을 완료했습니다.', {type: 'success'});
-                    }
-                    on_start();
-                }
-            });
-        }
-    </script>
-
-<style>
-    /* ========== Cosmic Violet Theme (Anilife Queue) ========== */
-    body {
-        background: linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #4c1d95 100%) !important;
-        background-attachment: fixed;
-        color: #e0e7ff;
-        min-height: 100vh;
-        font-family: 'Inter', 'Noto Sans KR', system-ui, sans-serif;
-    }
-    
-    /* 좌우 여백 축소 */
-    .container, .container-fluid {
-        max-width: 100% !important;
-        padding-left: 12px !important;
-        padding-right: 12px !important;
-    }
-    #content, .content, main {
-        padding-left: 8px !important;
-        padding-right: 8px !important;
-    }
-    
-    /* Table Styling */
-    .table {
-        color: #e0e7ff !important;
-        background: rgba(49, 46, 129, 0.4) !important;
-        border-radius: 12px;
-        overflow: hidden;
-    }
-    .table thead th, .thead-dark th {
-        background: linear-gradient(135deg, rgba(76, 29, 149, 0.9) 0%, rgba(49, 46, 129, 0.9) 100%) !important;
-        color: #c4b5fd !important;
-        border-color: rgba(167, 139, 250, 0.2) !important;
-        font-weight: 600;
-        font-size: 0.9em;
-    }
-    .table tbody tr {
-        background: rgba(30, 27, 75, 0.6) !important;
-        transition: background 0.2s;
-    }
-    .table tbody tr:hover {
-        background: rgba(76, 29, 149, 0.5) !important;
-    }
-    .table td, .table th {
-        border-color: rgba(167, 139, 250, 0.15) !important;
-        color: #e0e7ff !important;
-        vertical-align: middle !important;
-    }
-
-    /* Status Badges */
-    .status-badge {
-        font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 50rem;
-        text-transform: uppercase; letter-spacing: 0.3px; display: inline-block;
-    }
-    .status-completed { background: rgba(34, 197, 94, 0.25); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.4); }
-    .status-downloading { background: rgba(59, 130, 246, 0.25); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.4); }
-    .status-extracting { background: rgba(168, 85, 247, 0.25); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.4); }
-    .status-pending { background: rgba(148, 163, 184, 0.2); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.3); }
-    .status-fail { background: rgba(239, 68, 68, 0.25); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
-    .status-cancelled { background: rgba(107, 114, 128, 0.25); color: #9ca3af; border: 1px solid rgba(107, 114, 128, 0.4); }
-
-    /* Progress Bar */
-    .progress {
-        background: rgba(49, 46, 129, 0.6) !important;
-        border-radius: 10px;
-        overflow: hidden;
-    }
-    .progress-bar {
-        background: linear-gradient(90deg, #8b5cf6 0%, #a78bfa 100%) !important;
-        font-size: 11px;
-        font-weight: 600;
-        transition: width 0.3s ease;
-    }
-
-    /* Buttons */
-    .custom-btn {
-        padding: 8px 18px; border-radius: 10px; font-weight: 600; font-size: 13px;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); border: 1px solid rgba(255, 255, 255, 0.1);
-        display: inline-flex; align-items: center; justify-content: center; color: white !important;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-    }
-    .btn-reset-queue { background: rgba(59, 130, 246, 0.2); border-color: rgba(59, 130, 246, 0.3); }
-    .btn-reset-queue:hover { background: rgba(59, 130, 246, 0.4); transform: translateY(-2px); }
-    .btn-delete-completed { background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.3); }
-    .btn-delete-completed:hover { background: rgba(239, 68, 68, 0.4); transform: translateY(-2px); }
-    .btn-gdm { background: rgba(56, 189, 248, 0.2); border-color: rgba(56, 189, 248, 0.3); }
-    .btn-gdm:hover { background: rgba(56, 189, 248, 0.4); transform: translateY(-2px); }
-
-    .action-btn {
-        padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600;
-        transition: all 0.2s; border: 1px solid transparent; background: transparent;
-    }
-    .btn-stop { background: rgba(239, 68, 68, 0.2); color: #f87171; border-color: rgba(239, 68, 68, 0.3); }
-    .btn-stop:hover { background: #ef4444; color: white; }
-
-    /* Mobile Card Styles */
-    .queue-card {
-        background: rgba(30, 27, 75, 0.5);
-        backdrop-filter: blur(12px);
-        border: 1px solid rgba(167, 139, 250, 0.15);
-        border-radius: 16px;
-        overflow: hidden;
-        transition: all 0.3s;
-    }
-    .queue-card:hover { border-color: rgba(167, 139, 250, 0.4); transform: translateY(-2px); }
-    .card-header-flex {
-        padding: 10px 16px;
-        background: rgba(49, 46, 129, 0.3);
-        display: flex;
-        justify-content: flex-end;
-        align-items: center;
-    }
-    .card-content { padding: 16px; }
-    .card-filename {
-        font-size: 15px; font-weight: 600; color: #f8fafc;
-        line-height: 1.4; word-break: break-all;
-    }
-    .card-meta {
-        display: flex; justify-content: space-between; margin-top: 12px;
-        padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.05);
-    }
-    .meta-item {
-        display: flex; align-items: center; gap: 6px;
-        font-size: 12px; color: #94a3b8;
-    }
-    .meta-item i { color: #a78bfa; }
-    .card-footer-actions { padding: 0 16px 16px 16px; }
-
-    /* Empty State */
-    .empty-state { color: #64748b; }
-
-    /* Nav Pills Override */
-    ul.nav.nav-pills.bg-light {
-        background-color: rgba(30, 41, 59, 0.6) !important;
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 50rem !important;
-        padding: 6px !important;
-        display: inline-flex !important;
-        width: auto !important;
-        margin-bottom: 20px;
-    }
-    ul.nav.nav-pills .nav-item { margin: 2px; }
-    ul.nav.nav-pills .nav-link {
-        border-radius: 50rem !important;
-        padding: 8px 20px !important;
-        color: #94a3b8 !important;
-        font-weight: 600;
-        transition: all 0.3s ease;
-    }
-    ul.nav.nav-pills .nav-link:hover { background-color: rgba(255, 255, 255, 0.1); color: #fff !important; }
-    ul.nav.nav-pills .nav-link.active {
-        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
-        color: #fff !important;
-    }
-
-    /* Mobile Fix */
-    @media (max-width: 768px) {
-        body { overflow-x: hidden !important; }
-        .container, .container-fluid, .row, form {
-            width: 100% !important; max-width: 100% !important;
-            padding-left: 4px !important; padding-right: 4px !important;
-            margin-left: 0 !important; margin-right: 0 !important;
-        }
-    }
-</style>
+</div>
 
 <script type="text/javascript">
+    var PACKAGE_NAME = "{{ arg['package_name'] }}";
+    var MODULE_NAME = "{{ arg['module_name'] }}";
+    var current_list_length = 0;
+
 $(document).ready(function(){
-    setTimeout(function() {
-        $('.content-cloak, #menu_module_div, #menu_page_div').addClass('visible');
-    }, 100);
+    $(".content-cloak").addClass("visible");
+    
+    var protocol = location.protocol;
+    var socketUrl = protocol + "//" + document.domain + ":" + location.port;
+    
+    // Queue 전용 소켓 시도
+    var queueSocket = null;
+    try {
+        queueSocket = io.connect(socketUrl + '/anime_downloader/linkkf/queue');
+    } catch (e) {
+        console.error('Queue socket error:', e);
+    }
+    
+    var frameworkSocket = null;
+    try {
+        frameworkSocket = io.connect(socketUrl + '/framework');
+        frameworkSocket.on('linkkf_status', function(data) {
+            status_html(data);
+        });
+    } catch (e) {
+        console.error('Framework socket error:', e);
+    }
+    
+    var socket = queueSocket;
+    if (socket) {
+        socket.on('status_change', function(data) { button_html(data); });
+        socket.on('status', function(data){ status_html(data); });
+        socket.on('last', function(data){ status_html(data); button_html(data); });
+    }
+
+    // GDM 전용 소켓 추가 핸들링 (전역 업데이트 수신용)
+    var gdmSocket = null;
+    try {
+        gdmSocket = io.connect(socketUrl + '/gommi_downloader_manager');
+        gdmSocket.on('status', function(data) {
+            // 이 모듈과 관련된 작업만 처리
+            if (data.caller_plugin === PACKAGE_NAME + '_' + MODULE_NAME) {
+                // GDM 데이터를 큐 형식으로 변환하여 UI 업데이트
+                // 수동 새로고침 없이 실시간 반영을 위해 renderList 호출 주기를 짧게 하거나 직접 UI 갱신
+                silentFetchList(function(newList) {
+                    renderList(newList);
+                });
+            }
+        });
+    } catch (e) {
+        console.error('GDM socket error:', e);
+    }
+
+    on_start();
+    refreshIntervalId = setInterval(autoRefreshList, 3000);
 });
+
+var refreshIntervalId = null;
+
+function silentFetchList(callback) {
+    $.ajax({
+        url: '/' + PACKAGE_NAME + '/ajax/' + MODULE_NAME + '/command',
+        type: 'POST',
+        cache: false,
+        global: false,
+        data: {command: 'list'},
+        dataType: 'json',
+        success: function(data) { if (callback) callback(data); }
+    });
+}
+
+function autoRefreshList() {
+    silentFetchList(function(data) {
+        if (data.length !== current_list_length) {
+            current_list_length = data.length;
+            renderList(data);
+        }
+        
+        var hasActiveDownload = false;
+        if (data && data.length > 0) {
+            for (var j = 0; j < data.length; j++) {
+                if (data[j].status_str === 'DOWNLOADING' || data[j].status_str === 'WAITING' || data[j].status_str === 'STARTED') {
+                    hasActiveDownload = true;
+                    break;
+                }
+            }
+        }
+        
+        if (!hasActiveDownload && refreshIntervalId) {
+            clearInterval(refreshIntervalId);
+            refreshIntervalId = null;
+        }
+        if (hasActiveDownload && !refreshIntervalId) {
+            refreshIntervalId = setInterval(autoRefreshList, 3000);
+        }
+    });
+}
+
+function on_start() {
+    silentFetchList(function(data) {
+        current_list_length = data.length;
+        renderList(data);
+    });
+}
+
+function renderList(data) {
+    $("#list").html('');
+    if (!data || data.length == 0) {
+        $("#list").html("<tr><td colspan='10' style='text-align:center; padding: 40px; color: #6ee7b7;'>다운로드 대기 중인 작업이 없습니다.</td></tr>");
+    } else {
+        var str = '';
+        for(var i in data) {
+            str += make_item(data[i]);
+        }
+        $("#list").html(str);
+    }
+}
+
+$("body").on('click', '#stop_btn', function(e){
+    e.stopPropagation(); e.preventDefault();
+    globalSendCommand('stop', $(this).data('idx'), null, null, function(ret){
+        refresh_item(ret.data);
+    });
+});
+
+$("body").on('click', '#reset_btn', function(e){
+    e.preventDefault();
+    globalConfirmModal('초기화 하시겠습니까?', function(){
+        globalSendCommand('reset', null, null, null, function(ret){
+            autoRefreshList();
+        });
+    });
+});
+
+$("body").on('click', '#delete_completed_btn', function(e){
+    e.preventDefault();
+    globalSendCommand('delete_completed', null, null, null, function(ret){
+        autoRefreshList();
+    });
+});
+
+$("body").on('click', '#delete_btn', function(e){
+    e.stopPropagation(); e.preventDefault();
+    let idx = $(this).data('idx');
+    globalSendCommand('remove', idx, null, null, function(ret){
+        autoRefreshList();
+    });
+});
+
+function refresh_item(data) {
+    $('#tr1_'+data.idx).html(make_item1(data));
+    $('#collapse_'+data.idx).html(make_item2(data));
+}
+
+function make_item(data) {
+    var str = '<tr id="tr1_'+data.idx+'" style="cursor: pointer;" data-toggle="collapse" data-target="#collapse_'+ data.idx + '" aria-expanded="false" >';
+    str += make_item1(data);
+    str += '</tr>';
+    str += '<tr class="collapse tableRowHoverOff" id="collapse_' + data.idx + '">';
+    str += make_item2(data);
+    str += '</tr>';
+    return str;
+}
+
+function make_item1(data) {
+    var str = '<td style="text-align:center;">'+ data.idx + '</td>';
+    str += '<td style="text-align:center;"><span class="badge badge-info">'+ data.callback_id + '</span></td>';
+    str += '<td style="text-align:center; font-size: 12px; color: #6ee7b7;">'+ data.start_time + '</td>';
+    str += '<td style="font-weight: 600;">'+ data.filename + '</td>';
+    
+    var status_class = 'status-wait';
+    if (data.status_str === 'DOWNLOADING') status_class = 'status-downloading';
+    else if (data.status_str === 'COMPLETED') status_class = 'status-completed';
+    else if (data.status_str === 'STOP') status_class = 'status-fail';
+
+    str += '<td id="status_'+data.idx+'" style="text-align:center;"><span class="badge-status ' + status_class + '">'+ data.status_kor + '</span></td>';
+    
+    var visi = (parseInt(data.percent) > 0) ? 'visible' : 'hidden';
+    str += '<td><div class="progress custom-progress"><div id="progress_'+data.idx+'" class="progress-bar" style="visibility: '+visi+'; width:'+data.percent+'%">'+data.percent +'%</div></div></td>';
+    
+    str += '<td style="text-align:center;">'+ data.duration_str + '</td>';
+    str += '<td id="current_pf_count_'+data.idx+'" style="text-align:center; color: #f87171;">'+ data.current_pf_count + '</td>';
+    str += '<td style="text-align:center; font-size: 13px;"><div id="current_speed_'+data.idx+'">'+ data.current_speed + '</div><div id="download_time_'+data.idx+'" style="font-size: 11px; opacity: 0.6;">'+ data.download_time + '</div></td>';
+    
+    str += '<td id="button_'+data.idx+'" style="text-align:center; padding: 10px 4px !important;">';
+    str += '<div class="action-btn-group">';
+    if (data.status_str == 'DOWNLOADING' || data.status_str == 'WAITING') {
+        str += '<button id="stop_btn" class="action-btn-mini btn-danger" data-idx="'+data.idx+'" title="중지"><i class="fa fa-stop"></i></button>';
+    } else {
+        str += '<button id="delete_btn" class="action-btn-mini btn-warning" data-idx="'+data.idx+'" title="삭제"><i class="fa fa-times"></i></button>';
+    }
+    str += '</div>';
+    str += '</td>';
+    return str;
+}
+
+function make_item2(data) {
+    var str = '<td colspan="10" style="background: rgba(0,0,0,0.2); padding: 15px !important;">';
+    str += '<div id="detail_'+data.idx+'" class="queue-detail-container">';
+    str += get_detail(data);
+    str += '</div>';
+    str += '</td>';
+    return str;
+}
+
+function get_detail(data) {
+    var str = '<div class="detail-grid">';
+    str += '<div class="detail-item"><span class="label">파일 경로</span><span class="value">' + data.save_fullpath + '</span></div>';
+    str += '<div class="detail-item"><span class="label">URL</span><span class="value text-truncate">' + data.url + '</span></div>';
+    str += '<div class="detail-item"><span class="label">진행 상황</span><span class="value">' + data.percent+ '% (' + data.current_duration + ' / ' + data.duration + ')</span></div>';
+    str += '<div class="detail-item"><span class="label">비트레이트</span><span class="value">' + data.current_bitrate + '</span></div>';
+    str += '<div class="detail-item"><span class="label">허용 에러(PF)</span><span class="value">' + data.max_pf_count + '</span></div>';
+    if (data.status_str == 'COMPLETED') {
+        str += '<div class="detail-item"><span class="label">파일 크기</span><span class="value">' + data.filesize_str + '</span></div>';
+        str += '<div class="detail-item"><span class="label">최종 속도</span><span class="value">' + (data.download_speed || 'N/A') + '</span></div>';
+    }
+    str += '</div>';
+    return str;
+}
+
+function button_html(data) {
+    var str = '<div class="action-btn-group">';
+    if (data.status_str == 'DOWNLOADING' || data.status_str == 'WAITING') {
+        str += '<button id="stop_btn" class="action-btn-mini btn-danger" data-idx="'+data.idx+'" title="중지"><i class="fa fa-stop"></i></button>';
+    } else {
+        str += '<button id="delete_btn" class="action-btn-mini btn-warning" data-idx="'+data.idx+'" title="삭제"><i class="fa fa-times"></i></button>';
+    }
+    str += '</div>';
+    $("#button_" + data.idx).html(str);
+}
+
+function status_html(data) {
+    var progress = document.getElementById("progress_" + data.idx);
+    if (!progress) return;
+    
+    progress.style.width = data.percent+ '%';
+    progress.innerHTML = data.percent+ '%';
+    progress.style.visibility = 'visible';
+    
+    var statusEl = document.getElementById("status_" + data.idx);
+    if (statusEl) {
+        var status_class = 'status-wait';
+        if (data.status_str === 'DOWNLOADING') status_class = 'status-downloading';
+        else if (data.status_str === 'COMPLETED') status_class = 'status-completed';
+        else if (data.status_str === 'STOP') status_class = 'status-fail';
+        statusEl.innerHTML = '<span class="badge-status ' + status_class + '">'+ data.status_kor + '</span>';
+    }
+    
+    var pfEl = document.getElementById("current_pf_count_" + data.idx);
+    if (pfEl) pfEl.innerHTML = data.current_pf_count;
+    
+    var speedEl = document.getElementById("current_speed_" + data.idx);
+    if (speedEl) speedEl.innerHTML = data.current_speed;
+    
+    var timeEl = document.getElementById("download_time_" + data.idx);
+    if (timeEl) timeEl.innerHTML = data.download_time;
+    
+    var detailEl = document.getElementById("detail_" + data.idx);
+    if (detailEl) detailEl.innerHTML = get_detail(data);
+}
 </script>
+
 {% endblock %}
+

@@ -150,6 +150,24 @@ $(document).ready(function(){
         socket.on('last', function(data){ status_html(data); button_html(data); });
     }
 
+    // GDM 전용 소켓 추가 핸들링 (전역 업데이트 수신용)
+    var gdmSocket = null;
+    try {
+        gdmSocket = io.connect(socketUrl + '/gommi_downloader_manager');
+        gdmSocket.on('status', function(data) {
+            // 이 모듈과 관련된 작업만 처리
+            if (data.caller_plugin === PACKAGE_NAME + '_' + MODULE_NAME) {
+                // GDM 데이터를 큐 형식으로 변환하여 UI 업데이트
+                // 수동 새로고침 없이 실시간 반영을 위해 renderList 호출 주기를 짧게 하거나 직접 UI 갱신
+                silentFetchList(function(newList) {
+                    renderList(newList);
+                });
+            }
+        });
+    } catch (e) {
+        console.error('GDM socket error:', e);
+    }
+
     on_start();
     refreshIntervalId = setInterval(autoRefreshList, 3000);
 });

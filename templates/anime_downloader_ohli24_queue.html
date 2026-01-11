@@ -3,451 +3,379 @@
 <link rel="stylesheet" href="{{ url_for('.static', filename='css/mobile_custom.css') }}"/>
 <link rel="stylesheet" href="{{ url_for('.static', filename='css/' ~ arg['sub'] ~ '.css') }}"/>
 
+<style>
+    .queue-header-container {
+        display: flex; justify-content: space-between; align-items: flex-end;
+        margin-bottom: 20px; border-bottom: 1px solid rgba(16, 185, 129, 0.2); padding-bottom: 10px;
+    }
+    .queue-title { color: var(--forest-accent); font-weight: 700; margin: 0; }
+    .queue-meta { font-size: 12px; color: #6ee7b7; opacity: 0.6; }
 
-<div id="ohli24_queue_wrapper" class="ohli24-common-wrapper container-fluid mt-4 content-cloak ohli24-queue-page">
-    <div class="glass-card p-4">
-        <!-- 헤더 버튼 그룹 -->
-        <div class="ohli24-header">
-            <div class="ohli24-header-left">
-                <div class="ohli24-icon-box">
-                    <i class="bi bi-cloud-download-fill text-primary" style="font-size: 1.5rem;"></i>
-                </div>
-                <div>
-                    <h3 class="ohli24-header-title">다운로드 큐</h3>
-                    <span class="ohli24-header-subtitle">총 <span id="queue_count" class="text-info font-weight-bold">0</span>개의 항목</span>
-                </div>
-            </div>
-            <div class="ohli24-header-right d-flex flex-wrap">
-                <button id="reset_btn" class="btn-modern btn-modern-danger mr-2 mb-2">
-                    <i class="bi bi-arrow-counterclockwise mr-1"></i> 전체 초기화
-                </button>
-                <button id="delete_completed_btn" class="btn-modern btn-modern-warning mr-2 mb-2">
-                    <i class="bi bi-trash mr-1"></i> 완료 항목 삭제
-                </button>
-            </div>
+    .custom-queue-table {
+        background: rgba(6, 78, 59, 0.2); border-collapse: separate; border-spacing: 0 4px; color: #ecfdf5;
+    }
+    .custom-queue-table thead th {
+        background: rgba(2, 44, 34, 0.8) !important; color: #6ee7b7; font-size: 13px;
+        text-transform: uppercase; border: none !important; padding: 12px 8px !important;
+        text-align: center;
+    }
+    .custom-queue-table tbody tr {
+        background: rgba(6, 78, 59, 0.3); transition: all 0.2s;
+    }
+    .custom-queue-table tbody tr:hover { background: rgba(6, 78, 59, 0.5) !important; }
+    .custom-queue-table td { border: none !important; vertical-align: middle !important; padding: 14px 8px !important; }
+
+    /* Badges & Status */
+    .badge-status {
+        padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700;
+        display: inline-block; min-width: 60px; text-align: center;
+    }
+    .status-downloading { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .status-wait { background: rgba(251, 191, 36, 0.1); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.2); }
+    .status-completed { background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+    .status-fail { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+
+    /* Progress Bar */
+    .custom-progress { height: 18px; background: rgba(0,0,0,0.4); border-radius: 9px; overflow: hidden; border: 1px solid rgba(16, 185, 129, 0.1); }
+    .custom-progress .progress-bar {
+        background: linear-gradient(90deg, #10b981, #059669) !important;
+        font-weight: 700; font-size: 11px;
+        transition: width 0.4s ease-out;
+        box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
+    }
+
+    /* Action Buttons */
+    .action-btn-mini {
+        width: 32px; height: 32px; border-radius: 8px; border: none; font-size: 14px;
+        display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s;
+    }
+    .action-btn-mini.btn-danger { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+    .action-btn-mini.btn-danger:hover { background: #ef4444; color: white; transform: scale(1.1); }
+    .action-btn-mini.btn-warning { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+    .action-btn-mini.btn-warning:hover { background: #f59e0b; color: white; transform: scale(1.1); }
+    
+    .action-btn-group { display: flex; justify-content: center; gap: 4px; }
+
+    .header-buttons { display: flex; gap: 10px; align-items: center; }
+    .queue-btn-top {
+        display: flex; align-items: center; gap: 6px; padding: 6px 14px;
+        border: none; border-radius: 8px; font-weight: 600; font-size: 13px;
+        cursor: pointer; transition: all 0.3s ease;
+    }
+    .queue-btn-top.btn-danger { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+    .queue-btn-top.btn-danger:hover { background: #ef4444; color: white; box-shadow: 0 0 15px rgba(239, 68, 68, 0.4); }
+    .queue-btn-top.btn-warning { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+    .queue-btn-top.btn-warning:hover { background: #f59e0b; color: white; box-shadow: 0 0 15px rgba(245, 158, 11, 0.4); }
+
+    /* Details */
+    .queue-detail-container { color: #d1fae5; font-size: 13px; }
+    .detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px 20px; }
+    .detail-item { display: flex; gap: 10px; align-items: flex-start; }
+    .detail-item .label { color: #6ee7b7; font-weight: 700; min-width: 100px; opacity: 0.7; font-size: 11px; text-transform: uppercase; }
+    .detail-item .value { color: #ecfdf5; word-break: break-all; }
+
+    /* Smooth Load */
+    .content-cloak { opacity: 0; transition: opacity 0.5s ease-out; }
+    .content-cloak.visible { opacity: 1; }
+</style>
+
+<div class="content-cloak">
+    <div class="queue-header-container">
+        <h4 class="queue-title"><i class="fa fa-download"></i> 다운로드 큐</h4>
+        <div class="header-buttons">
+            <button id="reset_btn" class="queue-btn-top btn-danger">
+                <i class="fa fa-refresh"></i> 초기화
+            </button>
+            <button id="delete_completed_btn" class="queue-btn-top btn-warning">
+                <i class="fa fa-trash"></i> 완료 삭제
+            </button>
         </div>
-        
-        <!-- 다운로드 목록 -->
-        <div id="download_list_div" class="queue-list d-flex flex-column gap-3"></div>
-        
-        <!-- 빈 상태 표시 -->
-        <div id="empty_state" class="empty-state d-flex flex-column align-items-center justify-content-center py-5" style="display: none; min-height: 300px;">
-            <div class="empty-icon-wrapper mb-4">
-                <i class="bi bi-inbox-fill text-muted opacity-20" style="font-size: 5rem;"></i>
-            </div>
-            <h4 class="text-white-50 font-weight-bold mb-2">다운로드 대기 항목 없음</h4>
-            <p class="text-muted mb-0">새로운 에피소드를 추가하면 이곳에 실시간으로 나타납니다.</p>
-            <div class="mt-4">
-                <span class="badge badge-pill badge-dark py-2 px-3" style="background: rgba(255,255,255,0.05); color: #64748b; font-weight: 500;">
-                    <i class="bi bi-info-circle mr-1"></i> 에피소드 목록에서 '다운로드'를 눌러보세요
-                </span>
-            </div>
-        </div>
+        <div class="queue-meta">실시간 동기화 활성화됨 (3초 주기)</div>
+    </div>
+
+    <div class="table-responsive-custom">
+        <table id="result_table" class="table custom-queue-table tableRowHover">
+            <thead>
+                <tr>
+                    <th style="width:5%;">IDX</th>
+                    <th style="width:8%;">Plugin</th>
+                    <th style="width:10%;">시작시간</th>
+                    <th style="width:25%;">파일명</th>
+                    <th style="width:8%;">상태</th>
+                    <th style="width:18%;">진행률</th>
+                    <th style="width:6%;">길이</th>
+                    <th style="width:5%;">PF</th>
+                    <th style="width:10%;">현재 상태</th>
+                    <th style="width:5%;">Action</th>
+                </tr>
+            </thead>
+            <tbody id="list"></tbody>
+        </table>
     </div>
 </div>
 
-<style>
-    /* Premium Glassmorphism UI */
-    .ohli24-queue-page {
-        animation: fadeIn 0.5s ease-out;
-    }
-
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-
-    .icon-box {
-        width: 48px;
-        height: 48px;
-        background: rgba(59, 130, 246, 0.1);
-        border-radius: 14px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border: 1px solid rgba(59, 130, 246, 0.2);
-    }
-
-    /* Modern Buttons */
-    .btn-modern {
-        border: none;
-        border-radius: 12px;
-        padding: 10px 18px;
-        font-weight: 600;
-        font-size: 0.9rem;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        text-transform: none;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    }
-
-    .btn-modern:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2);
-        filter: brightness(1.1);
-    }
-
-    .btn-modern:active {
-        transform: translateY(0);
-    }
-
-    .btn-modern-danger { background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%); }
-    .btn-modern-warning { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
-    .btn-modern-info { background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%); }
-    .btn-modern-secondary { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); }
-
-    /* Queue Items */
-    .queue-item {
-        background: rgba(0, 0, 0, 0.2);
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        border-radius: 16px;
-        padding: 16px;
-        transition: all 0.3s ease;
-        display: flex;
-        align-items: center;
-        gap: 15px;
-    }
-
-    .queue-item:hover {
-        background: rgba(255, 255, 255, 0.03);
-        border-color: rgba(255, 255, 255, 0.1);
-        transform: translateX(4px);
-    }
-
-    .item-number {
-        font-family: 'JetBrains Mono', monospace;
-        font-weight: 700;
-        color: #64748b;
-        font-size: 1.1rem;
-        min-width: 40px;
-    }
-
-    .item-info {
-        flex: 1;
-        min-width: 0;
-    }
-
-    .item-filename {
-        color: #f1f5f9;
-        font-weight: 600;
-        font-size: 0.95rem;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        margin-bottom: 4px;
-    }
-
-    .item-meta {
-        font-size: 0.8rem;
-        color: #94a3b8;
-    }
-
-    /* Modern Progress Bar */
-    .progress-container {
-        flex: 1.5;
-        min-width: 150px;
-    }
-
-    .progress-wrapper {
-        position: relative;
-        height: 28px;
-        background: rgba(0, 0, 0, 0.3);
-        border-radius: 14px;
-        overflow: hidden;
-        border: 1px solid rgba(255, 255, 255, 0.05);
-    }
-
-    .progress-bar {
-        height: 100%;
-        border-radius: 14px;
-        transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s ease;
-    }
-
-    .status-waiting { background: linear-gradient(90deg, #64748b, #475569); }
-    .status-downloading { 
-        background: linear-gradient(90deg, #3b82f6, #2563eb);
-        box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
-    }
-    .status-completed { 
-        background: linear-gradient(90deg, #10b981, #059669);
-        box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
-    }
-    .status-failed { background: linear-gradient(90deg, #ef4444, #dc2626); }
-
-    .progress-label {
-        position: absolute;
-        top: 0; left: 0; width: 100%; height: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.75rem;
-        font-weight: 700;
-        color: white;
-        text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-        pointer-events: none;
-        padding: 0 10px;
-        white-space: nowrap;
-        overflow: hidden;
-    }
-
-    /* Actions */
-    .cancel-btn {
-        background: rgba(239, 68, 68, 0.1);
-        border: 1px solid rgba(239, 68, 68, 0.2);
-        color: #f87171;
-        padding: 6px 12px;
-        border-radius: 8px;
-        font-size: 0.8rem;
-        font-weight: 600;
-        transition: all 0.2s;
-        cursor: pointer;
-    }
-
-    .cancel-btn:hover {
-        background: #ef4444;
-        color: white;
-    }
-
-    @media (max-width: 992px) {
-        .queue-item { flex-direction: column; align-items: stretch; }
-        .progress-container { flex: none; width: 100%; }
-        .item-actions { display: flex; justify-content: flex-end; }
-    }
-
-    .empty-state {
-        animation: fadeIn 0.8s ease-out;
-    }
-
-    .empty-icon-wrapper i {
-        display: inline-block;
-        transition: transform 0.3s ease;
-    }
-
-    .empty-state:hover .empty-icon-wrapper i {
-        transform: translateY(-10px);
-        color: #3b82f6 !important;
-        opacity: 0.4 !important;
-    }
-</style>
-
-<script src="{{ url_for('.static', filename='js/sjva_ui14.js') }}"></script>
 <script type="text/javascript">
-    var package_name = "{{arg['package_name'] }}";
-    var sub = "{{arg['sub'] }}";
-    var current_data = null;
-
-    $(document).ready(function () {
-        // Force parent container to be fluid to allow full width
-        $("#main_container").removeClass("container").addClass("container-fluid");
-        
-        // Smooth Load Trigger
-        setTimeout(function() {
-            $('.content-cloak, #menu_module_div, #menu_page_div').addClass('visible');
-        }, 100);
-        
-        var socket = io.connect(window.location.href);
-        socket.on('on_start', (data) => {})
-        socket.on('start', function (data) {
-            on_start();
-        });
-        socket.on('list_refresh', function (data) {
-            on_start()
-        });
-        socket.on('status', function (data) {
-            on_status(data)
-        });
-
-        on_start();
-        var refreshIntervalId = setInterval(silentRefresh, 3000);
-    });
-
+    var PACKAGE_NAME = "{{ arg['package_name'] }}";
+    var MODULE_NAME = "{{ arg['module_name'] }}";
     var current_list_length = 0;
-    var refreshIntervalId = null;
 
-    function silentRefresh() {
-        $.ajax({
-            url: '/' + package_name + '/ajax/' + sub + '/entity_list',
-            type: "POST",
-            cache: false,
-            global: false,
-            data: {},
-            dataType: "json",
-            success: function (data) {
-                // 목록 길이 변경 시 전체 다시 그리기
-                if (data.length !== current_list_length) {
-                    current_list_length = data.length;
-                    make_download_list(data);
-                } else {
-                    // 진행률만 업데이트 (전체 다시 그리기 없이)
-                    for (var i = 0; i < data.length; i++) {
-                        var item = data[i];
-                        var progressBar = document.getElementById("progress_" + item.entity_id);
-                        if (progressBar) {
-                            progressBar.style.width = item.ffmpeg_percent + '%';
-                            var label = item.ffmpeg_status_kor;
-                            if (item.ffmpeg_percent != 0) label += " (" + item.ffmpeg_percent + "%)";
-                            if (item.current_speed) label += " " + item.current_speed;
-                            var labelEl = document.getElementById("progress_" + item.entity_id + "_label");
-                            if (labelEl) labelEl.innerHTML = label;
-                            
-                            // 상태 클래스 업데이트
-                            var statusClass = getStatusClass(item.ffmpeg_status_kor);
-                            $(progressBar).removeClass('status-waiting status-downloading status-completed status-failed').addClass(statusClass);
-                        }
-                    }
-                }
-                
-                var hasActive = false;
-                for (var i = 0; i < data.length; i++) {
-                    if (data[i].ffmpeg_status_kor === '다운로드중' || data[i].ffmpeg_status_kor === '대기중' || data[i].ffmpeg_status_kor === '추출중') {
-                        hasActive = true;
-                        break;
-                    }
-                }
-                
-                if (!hasActive && refreshIntervalId) {
-                    clearInterval(refreshIntervalId);
-                    refreshIntervalId = null;
-                }
-                if (hasActive && !refreshIntervalId) {
-                    refreshIntervalId = setInterval(silentRefresh, 2000);
-                }
+$(document).ready(function(){
+    $(".content-cloak").addClass("visible");
+    
+    var protocol = location.protocol;
+    var socketUrl = protocol + "//" + document.domain + ":" + location.port;
+    
+    // Queue 전용 소켓 시도
+    var queueSocket = null;
+    try {
+        queueSocket = io.connect(socketUrl + '/anime_downloader/linkkf/queue');
+    } catch (e) {
+        console.error('Queue socket error:', e);
+    }
+    
+    var frameworkSocket = null;
+    try {
+        frameworkSocket = io.connect(socketUrl + '/framework');
+        frameworkSocket.on('linkkf_status', function(data) {
+            status_html(data);
+        });
+    } catch (e) {
+        console.error('Framework socket error:', e);
+    }
+    
+    var socket = queueSocket;
+    if (socket) {
+        socket.on('status_change', function(data) { button_html(data); });
+        socket.on('status', function(data){ status_html(data); });
+        socket.on('last', function(data){ status_html(data); button_html(data); });
+    }
+
+    // GDM 전용 소켓 추가 핸들링 (전역 업데이트 수신용)
+    var gdmSocket = null;
+    try {
+        gdmSocket = io.connect(socketUrl + '/gommi_downloader_manager');
+        gdmSocket.on('status', function(data) {
+            // 이 모듈과 관련된 작업만 처리
+            if (data.caller_plugin === PACKAGE_NAME + '_' + MODULE_NAME) {
+                // GDM 데이터를 큐 형식으로 변환하여 UI 업데이트
+                // 수동 새로고침 없이 실시간 반영을 위해 renderList 호출 주기를 짧게 하거나 직접 UI 갱신
+                silentFetchList(function(newList) {
+                    renderList(newList);
+                });
             }
         });
+    } catch (e) {
+        console.error('GDM socket error:', e);
     }
 
-    function on_start() {
-        $.ajax({
-            url: '/' + package_name + '/ajax/' + sub + '/entity_list',
-            type: "POST",
-            cache: false,
-            data: {},
-            dataType: "json",
-            success: function (data) {
-                current_list_length = data.length;
-                make_download_list(data)
-            }
-        });
-    }
+    on_start();
+    refreshIntervalId = setInterval(autoRefreshList, 3000);
+});
 
-    function on_status(data) {
-        var entity_id = data.entity_id;
-        var percent = data.ffmpeg_percent;
-        var status_kor = data.ffmpeg_status_kor;
-        var speed = data.current_speed;
-        
-        var progressBar = document.getElementById("progress_" + entity_id);
-        if (progressBar != null) {
-            // Update percentage and label
-            progressBar.style.width = percent + '%';
-            var label = status_kor;
-            if (percent != 0) label += " (" + percent + "%)";
-            if (speed) label += " " + speed;
-            document.getElementById("progress_" + entity_id + "_label").innerHTML = label;
-            
-            // Real-time status class (color) update
-            var statusClass = getStatusClass(status_kor);
-            $(progressBar).removeClass('status-waiting status-downloading status-completed status-failed').addClass(statusClass);
-            
-            // Auto-refresh list if completed to show 'Watch' button or other actions
-            if (status_kor === '완료' || status_kor === 'completed') {
-                // Throttle refresh to avoid flickering if multiple complete
-                if (window.statusRefreshTimeout) clearTimeout(window.statusRefreshTimeout);
-                window.statusRefreshTimeout = setTimeout(on_start, 1000);
-            }
-        }
-    }
+var refreshIntervalId = null;
 
-    function getStatusClass(status) {
-        if (status === '다운로드중') return 'status-downloading';
-        if (status === '완료' || status === 'completed') return 'status-completed';
-        if (status === '실패' || status === 'FAILED') return 'status-failed';
-        return 'status-waiting';
-    }
+function silentFetchList(callback) {
+    $.ajax({
+        url: '/' + PACKAGE_NAME + '/ajax/' + MODULE_NAME + '/command',
+        type: 'POST',
+        cache: false,
+        global: false,
+        data: {command: 'list'},
+        dataType: 'json',
+        success: function(data) { if (callback) callback(data); }
+    });
+}
 
-    function make_download_list(data) {
-        document.getElementById('queue_count').textContent = data.length;
-        
-        if (data.length === 0) {
-            document.getElementById('download_list_div').style.display = 'none';
-            document.getElementById('empty_state').style.display = 'flex';
-            return;
+function autoRefreshList() {
+    silentFetchList(function(data) {
+        if (data.length !== current_list_length) {
+            current_list_length = data.length;
+            renderList(data);
         }
         
-        document.getElementById('download_list_div').style.display = 'flex';
-        document.getElementById('empty_state').style.display = 'none';
+        var hasActiveDownload = false;
+        if (data && data.length > 0) {
+            for (var j = 0; j < data.length; j++) {
+                if (data[j].status_str === 'DOWNLOADING' || data[j].status_str === 'WAITING' || data[j].status_str === 'STARTED') {
+                    hasActiveDownload = true;
+                    break;
+                }
+            }
+        }
         
+        if (!hasActiveDownload && refreshIntervalId) {
+            clearInterval(refreshIntervalId);
+            refreshIntervalId = null;
+        }
+        if (hasActiveDownload && !refreshIntervalId) {
+            refreshIntervalId = setInterval(autoRefreshList, 3000);
+        }
+    });
+}
+
+function on_start() {
+    silentFetchList(function(data) {
+        current_list_length = data.length;
+        renderList(data);
+    });
+}
+
+function renderList(data) {
+    $("#list").html('');
+    if (!data || data.length == 0) {
+        $("#list").html("<tr><td colspan='10' style='text-align:center; padding: 40px; color: #6ee7b7;'>다운로드 대기 중인 작업이 없습니다.</td></tr>");
+    } else {
         var str = '';
-        for (var i in data) {
-            var item = data[i];
-            var statusClass = getStatusClass(item.ffmpeg_status_kor);
-            var label = item.ffmpeg_status_kor;
-            if (item.ffmpeg_percent != 0) {
-                label += ' (' + item.ffmpeg_percent + '%)';
-            }
-            
-            str += '<div class="queue-item">';
-            str += '<div class="item-number">#' + item.entity_id + '</div>';
-            str += '<div class="item-info">';
-            str += '<div class="item-filename">' + (item.filename || '파일명 없음') + '</div>';
-            str += '<div class="item-meta">';
-            str += '<span class="item-time"><i class="fa fa-clock-o"></i> ' + item.created_time + '</span>';
-            str += '</div>';
-            str += '</div>';
-            str += '<div class="progress-container">';
-            str += '<div class="progress-wrapper">';
-            str += '<div id="progress_' + item.entity_id + '" class="progress-bar ' + statusClass + '" style="width: ' + item.ffmpeg_percent + '%;"></div>';
-            str += '<span id="progress_' + item.entity_id + '_label" class="progress-label">' + label + '</span>';
-            str += '</div>';
-            str += '</div>';
-            str += '<div class="item-actions">';
-            str += '<button class="cancel-btn" data-id="' + item.entity_id + '" onclick="cancelItem(' + item.entity_id + ')"><i class="fa fa-times"></i> 취소</button>';
-            str += '</div>';
-            str += '</div>';
+        for(var i in data) {
+            str += make_item(data[i]);
         }
-        document.getElementById("download_list_div").innerHTML = str;
+        $("#list").html(str);
     }
+}
 
-    function cancelItem(entity_id) {
-        queue_command({'command': 'cancel', 'entity_id': entity_id});
-    }
-
-    $("body").on('click', '#reset_btn', function (e) {
-        e.preventDefault();
-        if (!confirm('정말 큐를 초기화하시겠습니까?')) return;
-        queue_command({'command': 'reset', 'entity_id': -1});
+$("body").on('click', '#stop_btn', function(e){
+    e.stopPropagation(); e.preventDefault();
+    globalSendCommand('stop', $(this).data('idx'), null, null, function(ret){
+        refresh_item(ret.data);
     });
+});
 
-    $("body").on('click', '#delete_completed_btn', function (e) {
-        e.preventDefault();
-        queue_command({'command': 'delete_completed', 'entity_id': -1});
-    });
-
-    function queue_command(data) {
-        $.ajax({
-            url: '/' + package_name + '/ajax/' + sub + '/queue_command',
-            type: "POST",
-            cache: false,
-            data: data,
-            dataType: "json",
-            success: function (ret) {
-                if (ret.ret == 'notify') {
-                    $.notify('<strong>' + ret.log + '</strong>', {type: 'warning'});
-                }
-                on_start();
-            }
+$("body").on('click', '#reset_btn', function(e){
+    e.preventDefault();
+    globalConfirmModal('초기화 하시겠습니까?', function(){
+        globalSendCommand('reset', null, null, null, function(ret){
+            autoRefreshList();
         });
-    }
-
-    $("body").on('click', '#go_ffmpeg_btn', function (e) {
-        e.preventDefault();
-        $(location).attr('href', '/ffmpeg')
     });
-</script>
+});
 
+$("body").on('click', '#delete_completed_btn', function(e){
+    e.preventDefault();
+    globalSendCommand('delete_completed', null, null, null, function(ret){
+        autoRefreshList();
+    });
+});
+
+$("body").on('click', '#delete_btn', function(e){
+    e.stopPropagation(); e.preventDefault();
+    let idx = $(this).data('idx');
+    globalSendCommand('remove', idx, null, null, function(ret){
+        autoRefreshList();
+    });
+});
+
+function refresh_item(data) {
+    $('#tr1_'+data.idx).html(make_item1(data));
+    $('#collapse_'+data.idx).html(make_item2(data));
+}
+
+function make_item(data) {
+    var str = '<tr id="tr1_'+data.idx+'" style="cursor: pointer;" data-toggle="collapse" data-target="#collapse_'+ data.idx + '" aria-expanded="false" >';
+    str += make_item1(data);
+    str += '</tr>';
+    str += '<tr class="collapse tableRowHoverOff" id="collapse_' + data.idx + '">';
+    str += make_item2(data);
+    str += '</tr>';
+    return str;
+}
+
+function make_item1(data) {
+    var str = '<td style="text-align:center;">'+ data.idx + '</td>';
+    str += '<td style="text-align:center;"><span class="badge badge-info">'+ data.callback_id + '</span></td>';
+    str += '<td style="text-align:center; font-size: 12px; color: #6ee7b7;">'+ data.start_time + '</td>';
+    str += '<td style="font-weight: 600;">'+ data.filename + '</td>';
+    
+    var status_class = 'status-wait';
+    if (data.status_str === 'DOWNLOADING') status_class = 'status-downloading';
+    else if (data.status_str === 'COMPLETED') status_class = 'status-completed';
+    else if (data.status_str === 'STOP') status_class = 'status-fail';
+
+    str += '<td id="status_'+data.idx+'" style="text-align:center;"><span class="badge-status ' + status_class + '">'+ data.status_kor + '</span></td>';
+    
+    var visi = (parseInt(data.percent) > 0) ? 'visible' : 'hidden';
+    str += '<td><div class="progress custom-progress"><div id="progress_'+data.idx+'" class="progress-bar" style="visibility: '+visi+'; width:'+data.percent+'%">'+data.percent +'%</div></div></td>';
+    
+    str += '<td style="text-align:center;">'+ data.duration_str + '</td>';
+    str += '<td id="current_pf_count_'+data.idx+'" style="text-align:center; color: #f87171;">'+ data.current_pf_count + '</td>';
+    str += '<td style="text-align:center; font-size: 13px;"><div id="current_speed_'+data.idx+'">'+ data.current_speed + '</div><div id="download_time_'+data.idx+'" style="font-size: 11px; opacity: 0.6;">'+ data.download_time + '</div></td>';
+    
+    str += '<td id="button_'+data.idx+'" style="text-align:center; padding: 10px 4px !important;">';
+    str += '<div class="action-btn-group">';
+    if (data.status_str == 'DOWNLOADING' || data.status_str == 'WAITING') {
+        str += '<button id="stop_btn" class="action-btn-mini btn-danger" data-idx="'+data.idx+'" title="중지"><i class="fa fa-stop"></i></button>';
+    } else {
+        str += '<button id="delete_btn" class="action-btn-mini btn-warning" data-idx="'+data.idx+'" title="삭제"><i class="fa fa-times"></i></button>';
+    }
+    str += '</div>';
+    str += '</td>';
+    return str;
+}
+
+function make_item2(data) {
+    var str = '<td colspan="10" style="background: rgba(0,0,0,0.2); padding: 15px !important;">';
+    str += '<div id="detail_'+data.idx+'" class="queue-detail-container">';
+    str += get_detail(data);
+    str += '</div>';
+    str += '</td>';
+    return str;
+}
+
+function get_detail(data) {
+    var str = '<div class="detail-grid">';
+    str += '<div class="detail-item"><span class="label">파일 경로</span><span class="value">' + data.save_fullpath + '</span></div>';
+    str += '<div class="detail-item"><span class="label">URL</span><span class="value text-truncate">' + data.url + '</span></div>';
+    str += '<div class="detail-item"><span class="label">진행 상황</span><span class="value">' + data.percent+ '% (' + data.current_duration + ' / ' + data.duration + ')</span></div>';
+    str += '<div class="detail-item"><span class="label">비트레이트</span><span class="value">' + data.current_bitrate + '</span></div>';
+    str += '<div class="detail-item"><span class="label">허용 에러(PF)</span><span class="value">' + data.max_pf_count + '</span></div>';
+    if (data.status_str == 'COMPLETED') {
+        str += '<div class="detail-item"><span class="label">파일 크기</span><span class="value">' + data.filesize_str + '</span></div>';
+        str += '<div class="detail-item"><span class="label">최종 속도</span><span class="value">' + (data.download_speed || 'N/A') + '</span></div>';
+    }
+    str += '</div>';
+    return str;
+}
+
+function button_html(data) {
+    var str = '<div class="action-btn-group">';
+    if (data.status_str == 'DOWNLOADING' || data.status_str == 'WAITING') {
+        str += '<button id="stop_btn" class="action-btn-mini btn-danger" data-idx="'+data.idx+'" title="중지"><i class="fa fa-stop"></i></button>';
+    } else {
+        str += '<button id="delete_btn" class="action-btn-mini btn-warning" data-idx="'+data.idx+'" title="삭제"><i class="fa fa-times"></i></button>';
+    }
+    str += '</div>';
+    $("#button_" + data.idx).html(str);
+}
+
+function status_html(data) {
+    var progress = document.getElementById("progress_" + data.idx);
+    if (!progress) return;
+    
+    progress.style.width = data.percent+ '%';
+    progress.innerHTML = data.percent+ '%';
+    progress.style.visibility = 'visible';
+    
+    var statusEl = document.getElementById("status_" + data.idx);
+    if (statusEl) {
+        var status_class = 'status-wait';
+        if (data.status_str === 'DOWNLOADING') status_class = 'status-downloading';
+        else if (data.status_str === 'COMPLETED') status_class = 'status-completed';
+        else if (data.status_str === 'STOP') status_class = 'status-fail';
+        statusEl.innerHTML = '<span class="badge-status ' + status_class + '">'+ data.status_kor + '</span>';
+    }
+    
+    var pfEl = document.getElementById("current_pf_count_" + data.idx);
+    if (pfEl) pfEl.innerHTML = data.current_pf_count;
+    
+    var speedEl = document.getElementById("current_speed_" + data.idx);
+    if (speedEl) speedEl.innerHTML = data.current_speed;
+    
+    var timeEl = document.getElementById("download_time_" + data.idx);
+    if (timeEl) timeEl.innerHTML = data.download_time;
+    
+    var detailEl = document.getElementById("detail_" + data.idx);
+    if (detailEl) detailEl.innerHTML = get_detail(data);
+}
 </script>
 
 {% endblock %}
+
