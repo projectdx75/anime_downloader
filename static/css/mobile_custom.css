@@ -54,111 +54,95 @@
     font-weight: 600 !important;
 }
 
-/* Common Mobile Responsive Fixes */
+/* Common Mobile Responsive Fixes - Comprehensive Normalization */
 @media (max-width: 768px) {
-    body { 
-        padding-top: 5px !important; 
-        overflow-x: hidden !important;
-    }
-
-    /* Compact Navbar */
-    .navbar {
-        padding-top: 0.25rem !important;
-        padding-bottom: 0.25rem !important;
-    }
-    
-    /* Global Navigation Pills Fix & Premium Styling */
-    ul.nav.nav-pills.bg-light {
-        background-color: rgba(30, 41, 59, 0.6) !important;
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 10px !important;
-        padding: 4px !important;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2) !important;
-        display: flex !important; /* Changed from inline-flex to prevent horizontal stretching */
-        flex-wrap: nowrap !important; /* Force scrollable row */
-        overflow-x: auto !important;
-        -webkit-overflow-scrolling: touch;
-        width: 100% !important; /* Max width constraint */
-        max-width: 100% !important;
+    *, ::before, ::after {
         box-sizing: border-box !important;
-        margin-top: 2px !important;
-    }
-
-    /* Override for the fallback above to be tighter */
-    ul.nav.nav-pills.bg-light {
-        margin-top: 4px !important;
-    }
-
-    /* Tighten spacing between 2nd and 3rd level menus */
-    #menu_module_div ul.nav.nav-pills.bg-light {
-        margin-bottom: 2px !important;
     }
     
-    #menu_page_div ul.nav.nav-pills.bg-light {
-        margin-top: -4px !important;
-        margin-bottom: 12px !important;
-    }
-
-    ul.nav.nav-pills .nav-item {
-        margin: 0 2px;
-    }
-
-    ul.nav.nav-pills .nav-link {
-        border-radius: 6px !important;
-        padding: 6px 12px !important;
-        color: #94a3b8 !important; /* Muted text */
-        font-weight: 600;
-        transition: all 0.3s ease;
-        white-space: nowrap !important; /* Necessary for scrollable items */
-        font-size: 12px !important;
-    }
-
-    ul.nav.nav-pills .nav-link:hover {
-        background-color: rgba(255, 255, 255, 0.1);
-        color: #fff !important;
-        transform: translateY(-1px);
-    }
-
-    ul.nav.nav-pills .nav-link.active {
-        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
-        color: #fff !important;
-        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
-    }
-    
-    /* Layout Expansion on Mobile - Critical Fix for Horizontal Shift */
-    html, body {
+    html, body { 
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
         overflow-x: hidden !important;
-        width: 100vw !important;
-        position: relative;
+        position: relative !important;
+        -webkit-text-size-adjust: 100%;
+        touch-action: manipulation;
     }
 
+    /* Layout Expansion on Mobile - Critical Fix for Horizontal Shift */
     .container, .container-fluid, #main_container {
         width: 100% !important; 
         max-width: 100% !important;
-        padding-left: 5px !important; 
-        padding-right: 5px !important;
+        min-width: 0 !important;
+        padding-left: 6px !important; 
+        padding-right: 6px !important;
         margin-left: 0 !important; 
         margin-right: 0 !important;
         box-sizing: border-box !important;
-        overflow-x: hidden !important; /* Prevent internal bleed from stretching body */
+        overflow-x: hidden !important;
     }
 
     .row {
         margin-left: 0 !important;
         margin-right: 0 !important;
         width: 100% !important;
+        display: flex;
+        flex-wrap: wrap;
     }
 
     [class*="col-"] {
-        padding-left: 5px !important;
-        padding-right: 5px !important;
+        padding-left: 4px !important;
+        padding-right: 4px !important;
+        min-width: 0 !important;
+    }
+
+    /* Compact Navbar Fix */
+    .navbar {
+        width: 100% !important;
+        max-width: 100% !important;
+        padding-top: 0.25rem !important;
+        padding-bottom: 0.25rem !important;
+        margin: 0 !important;
     }
     
-    form {
+    /* Global Navigation Pills Fix */
+    ul.nav.nav-pills.bg-light {
+        background-color: rgba(30, 41, 59, 0.6) !important;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px !important;
+        padding: 4px !important;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2) !important;
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch;
         width: 100% !important;
-        margin: 0 !important;
+        max-width: 100% !important;
         box-sizing: border-box !important;
+        margin-top: 2px !important;
+        justify-content: flex-start !important; /* Critical for scrollable access */
+    }
+
+    ul.nav.nav-pills .nav-item {
+        flex: 0 0 auto !important;
+    }
+
+    ul.nav.nav-pills .nav-link {
+        border-radius: 6px !important;
+        padding: 6px 12px !important;
+        color: #94a3b8 !important;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        white-space: nowrap !important;
+        font-size: 11px !important;
+    }
+
+    ul.nav.nav-pills .nav-link.active {
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+        color: #fff !important;
     }
     
     /* Card/Table Container Fix */
@@ -166,7 +150,7 @@
         width: 100% !important;
         margin-left: 0 !important;
         margin-right: 0 !important;
-        border-radius: 12px !important;
+        border-radius: 8px !important;
     }
 }
 

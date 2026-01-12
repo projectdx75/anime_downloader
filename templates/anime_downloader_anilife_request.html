@@ -606,8 +606,14 @@ body {
     .episode-list-container {
         margin-top: 20px;
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
         gap: 10px;
+    }
+    
+    @media (max-width: 600px) {
+        .episode-list-container {
+            grid-template-columns: 1fr !important;
+        }
     }
     
     /* 에피소드 카드 */

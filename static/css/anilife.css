@@ -14,6 +14,12 @@ body {
     color: #e0e7ff !important;
 }
 
+@media (max-width: 768px) {
+    body {
+        background-attachment: scroll !important; /* Fixed background causes shift on some mobile browsers */
+    }
+}
+
 /* Common Layout Wrapper - Responsive */
 .anilife-common-wrapper {
     max-width: 100%;
