@@ -107,7 +107,27 @@
         margin: 0 !important;
     }
     
-    /* Global Navigation Pills Fix */
+    /* Scroll Hint Container Fix */
+    #menu_module_div, #menu_page_div {
+        position: relative;
+        width: 100% !important;
+        overflow: hidden;
+    }
+
+    /* Gradient Hint to indicate more items (Scroll Hint) */
+    #menu_module_div::after, #menu_page_div::after {
+        content: '';
+        position: absolute;
+        top: 4px; bottom: 4px; right: 0;
+        width: 40px;
+        background: linear-gradient(to right, transparent, rgba(30, 41, 59, 0.9));
+        pointer-events: none;
+        z-index: 10;
+        border-top-right-radius: 8px;
+        border-bottom-right-radius: 8px;
+    }
+
+    /* Navigation Pills Styling */
     ul.nav.nav-pills.bg-light {
         background-color: rgba(30, 41, 59, 0.6) !important;
         backdrop-filter: blur(10px);
@@ -123,7 +143,17 @@
         max-width: 100% !important;
         box-sizing: border-box !important;
         margin-top: 2px !important;
-        justify-content: flex-start !important; /* Critical for scrollable access */
+        justify-content: flex-start !important;
+        scrollbar-width: thin; /* Firefox */
+    }
+
+    /* Subtle scrollbar hint for mobile */
+    ul.nav.nav-pills.bg-light::-webkit-scrollbar {
+        height: 3px;
+    }
+    ul.nav.nav-pills.bg-light::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 10px;
     }
 
     ul.nav.nav-pills .nav-item {
@@ -132,7 +162,7 @@
 
     ul.nav.nav-pills .nav-link {
         border-radius: 6px !important;
-        padding: 6px 12px !important;
+        padding: 6px 14px !important;
         color: #94a3b8 !important;
         font-weight: 600;
         transition: all 0.3s ease;
