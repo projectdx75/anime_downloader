@@ -77,6 +77,96 @@
     /* Smooth Load */
     .content-cloak { opacity: 0; transition: opacity 0.5s ease-out; }
     .content-cloak.visible { opacity: 1; }
+
+    /* Mobile Friendly Card Layout - Revamped */
+    .mobile-queue-container { display: none; flex-direction: column; gap: 8px; padding: 2px; width: 100% !important; margin: 0 !important; }
+    
+    @media (max-width: 768px) {
+        .table-responsive-custom { display: none; }
+        .mobile-queue-container { display: flex; }
+        .queue-header-container { 
+            flex-direction: column; align-items: flex-start; gap: 8px; 
+            margin-top: 50px; padding: 10px 5px !important; margin-bottom: 10px;
+        }
+        .header-buttons { width: 100%; display: flex; gap: 8px; }
+        .queue-btn-top { flex: 1; justify-content: center; font-size: 11px !important; padding: 10px !important; }
+        .queue-meta { font-size: 10px; margin-top: 4px; }
+        
+        /* Force container padding reduction for mobile queue */
+        #main_container { padding-left: 2px !important; padding-right: 2px !important; }
+        
+        /* Fix navigation pills overflow */
+        #menu_module_div .nav-pills, #menu_page_div .nav-pills {
+            flex-wrap: nowrap !important;
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch;
+            white-space: nowrap !important;
+            display: flex !important;
+        }
+        #menu_module_div .nav-link, #menu_page_div .nav-link {
+            padding: 8px 12px !important;
+            font-size: 12px !important;
+        }
+        
+        /* Header buttons wrap and layout */
+        .queue-header-container { padding-top: 60px !important; }
+        .header-buttons { flex-wrap: wrap !important; gap: 6px !important; }
+        .queue-btn-top { 
+            flex: 1 1 45% !important; /* Allow two buttons per row if space exists, or wrap */
+            min-width: 120px;
+        }
+        
+        /* Ensure breadcrumb span doesn't force width */
+        #menu_module_div span.nav-link {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 200px;
+            white-space: nowrap;
+        }
+    }
+
+    .mobile-queue-card {
+        background: linear-gradient(135deg, rgba(6, 78, 59, 0.4) 0%, rgba(2, 44, 34, 0.6) 100%);
+        border: 1px solid rgba(16, 185, 129, 0.25);
+        border-radius: 10px;
+        padding: 12px 10px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        width: 100% !important;
+        box-sizing: border-box;
+    }
+    
+    .mobile-card-top { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 10px; }
+    .mobile-card-idx-badge { 
+        background: rgba(16, 185, 129, 0.2); color: #6ee7b7; font-size: 10px; 
+        padding: 2px 6px; border-radius: 4px; font-weight: 800; border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .mobile-card-filename { color: #ecfdf5; font-weight: 700; font-size: 13.5px; line-height: 1.4; word-break: break-all; flex: 1; }
+    
+    .mobile-card-progress-section { 
+        background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px; margin-bottom: 10px; 
+        border: 1px solid rgba(255,255,255,0.05);
+    }
+    .mobile-progress-label { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .mobile-status-text { font-size: 11px; font-weight: 800; text-transform: uppercase; }
+    .mobile-percent-text { font-size: 14px; font-weight: 900; color: #10b981; }
+    
+    .mobile-progress-bar-container { height: 8px; background: rgba(0,0,0,0.5); border-radius: 4px; overflow: hidden; margin-top: 2px; }
+    .mobile-progress-bar { background: linear-gradient(90deg, #10b981, #34d399); height: 100%; border-radius: 4px; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+    
+    .mobile-card-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
+    .mobile-stat-item { 
+        display: flex; align-items: center; gap: 5px; font-size: 11px; color: #94a3b8; 
+        background: rgba(0,0,0,0.15); padding: 5px 8px; border-radius: 6px;
+    }
+    .mobile-stat-item i { color: #10b981; width: 12px; text-align: center; }
+    
+    .mobile-card-actions { display: flex; gap: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.05); justify-content: flex-end; }
+    .mobile-action-btn { 
+        padding: 8px 15px; border-radius: 6px; border: none; font-size: 12px; font-weight: 700; 
+        display: flex; align-items: center; gap: 6px; transition: opacity 0.2s;
+    }
+    .mobile-action-btn.btn-stop { background: rgba(239, 68, 68, 0.25); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+    .mobile-action-btn.btn-delete { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
 </style>
 
 <div class="content-cloak">
@@ -112,6 +202,9 @@
             <tbody id="list"></tbody>
         </table>
     </div>
+
+    <!-- Mobile Card View -->
+    <div id="mobile_list" class="mobile-queue-container"></div>
 </div>
 
 <script type="text/javascript">
@@ -222,14 +315,20 @@ function on_start() {
 
 function renderList(data) {
     $("#list").html('');
+    $("#mobile_list").html('');
     if (!data || data.length == 0) {
+        let empty_msg = "<div style='text-align:center; padding: 40px; color: #6ee7b7;'>다운로드 대기 중인 작업이 없습니다.</div>";
         $("#list").html("<tr><td colspan='10' style='text-align:center; padding: 40px; color: #6ee7b7;'>다운로드 대기 중인 작업이 없습니다.</td></tr>");
+        $("#mobile_list").html(empty_msg);
     } else {
         var str = '';
+        var m_str = '';
         for(var i in data) {
             str += make_item(data[i]);
+            m_str += make_mobile_item(data[i]);
         }
         $("#list").html(str);
+        $("#mobile_list").html(m_str);
     }
 }
 
@@ -311,6 +410,52 @@ function make_item1(data) {
     return str;
 }
 
+function make_mobile_item(data) {
+    var status_class = 'status-wait';
+    if (data.status_str === 'DOWNLOADING') status_class = 'status-downloading';
+    else if (data.status_str === 'COMPLETED') status_class = 'status-completed';
+    else if (data.status_str === 'STOP') status_class = 'status-fail';
+
+    var str = '<div class="mobile-queue-card" id="mobile_card_'+data.idx+'">';
+    
+    // Top Section: Index and Filename
+    str += '  <div class="mobile-card-top">';
+    str += '    <div class="mobile-card-idx-badge">#' + data.idx + '</div>';
+    str += '    <div class="mobile-card-filename">' + data.filename + '</div>';
+    str += '  </div>';
+    
+    // Progress Section
+    str += '  <div class="mobile-card-progress-section">';
+    str += '    <div class="mobile-progress-label">';
+    str += '      <div class="mobile-status-text ' + status_class + '-text">' + data.status_kor + '</div>';
+    str += '      <div id="m_percent_' + data.idx + '" class="mobile-percent-text">' + data.percent + '%</div>';
+    str += '    </div>';
+    str += '    <div class="mobile-progress-bar-container">';
+    str += '      <div id="m_progress_bar_' + data.idx + '" class="mobile-progress-bar" style="width:' + data.percent + '%"></div>';
+    str += '    </div>';
+    str += '  </div>';
+
+    // Stats Section
+    str += '  <div class="mobile-card-stats">';
+    str += '    <div class="mobile-stat-item"><i class="fa fa-tachometer"></i><span id="m_speed_' + data.idx + '">' + data.current_speed + '</span></div>';
+    str += '    <div class="mobile-stat-item"><i class="fa fa-hourglass-half"></i><span id="m_time_' + data.idx + '">' + data.download_time + '</span></div>';
+    str += '    <div class="mobile-stat-item"><i class="fa fa-calendar-o"></i><span>' + data.start_time.split(' ')[1] + '</span></div>';
+    str += '    <div class="mobile-stat-item"><i class="fa fa-exclamation-circle"></i><span>PF: ' + data.current_pf_count + '</span></div>';
+    str += '  </div>';
+
+    // Action Section
+    str += '  <div class="mobile-card-actions" id="m_button_' + data.idx + '">';
+    if (data.status_str == 'DOWNLOADING' || data.status_str == 'WAITING') {
+        str += '<button id="stop_btn" class="mobile-action-btn btn-stop" data-idx="'+data.idx+'"><i class="fa fa-stop-circle"></i> 중지</button>';
+    } else {
+        str += '<button id="delete_btn" class="mobile-action-btn btn-delete" data-idx="'+data.idx+'"><i class="fa fa-trash"></i> 삭제</button>';
+    }
+    str += '  </div>';
+    
+    str += '</div>';
+    return str;
+}
+
 function make_item2(data) {
     var str = '<td colspan="10" style="background: rgba(0,0,0,0.2); padding: 15px !important;">';
     str += '<div id="detail_'+data.idx+'" class="queue-detail-container">';
@@ -374,6 +519,30 @@ function status_html(data) {
     
     var detailEl = document.getElementById("detail_" + data.idx);
     if (detailEl) detailEl.innerHTML = get_detail(data);
+
+    // Mobile UI Update
+    var mProgressBar = document.getElementById("m_progress_bar_" + data.idx);
+    if (mProgressBar) mProgressBar.style.width = data.percent + '%';
+    
+    var mPercent = document.getElementById("m_percent_" + data.idx);
+    if (mPercent) mPercent.innerHTML = data.percent + '%';
+
+    var mSpeed = document.getElementById("m_speed_" + data.idx);
+    if (mSpeed) mSpeed.innerHTML = data.current_speed;
+
+    var mTime = document.getElementById("m_time_" + data.idx);
+    if (mTime) mTime.innerHTML = data.download_time;
+
+    var mButton = document.getElementById("m_button_" + data.idx);
+    if (mButton) {
+        var btn_str = '';
+        if (data.status_str == 'DOWNLOADING' || data.status_str == 'WAITING') {
+            btn_str += '<button id="stop_btn" class="mobile-action-btn btn-stop" data-idx="'+data.idx+'"><i class="fa fa-stop-circle"></i> 중지</button>';
+        } else {
+            btn_str += '<button id="delete_btn" class="mobile-action-btn btn-delete" data-idx="'+data.idx+'"><i class="fa fa-trash"></i> 삭제</button>';
+        }
+        mButton.innerHTML = btn_str;
+    }
 }
 </script>
 

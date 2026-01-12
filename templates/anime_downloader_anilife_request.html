@@ -15,8 +15,8 @@ body {
 #main_container {
     width: 100% !important;
     max-width: 100% !important;
-    padding-left: 15px !important;
-    padding-right: 15px !important;
+    padding-left: 2px !important;   /* 15px -> 2px */
+    padding-right: 2px !important;  /* 15px -> 2px */
     margin-left: 0 !important;
     margin-right: 0 !important;
 }
@@ -40,7 +40,7 @@ body {
     </div>
     
     <form id="program_list">
-        <div class="card p-2 p-md-4 mb-2 mb-md-4 border-0" style="background: rgba(49, 46, 129, 0.6); backdrop-filter: blur(10px); box-shadow: 0 4px 20px rgba(139, 92, 246, 0.2); border-radius: 16px;">
+        <div class="card p-1 p-md-4 mb-2 mb-md-4 border-0" style="background: rgba(49, 46, 129, 0.6); backdrop-filter: blur(10px); box-shadow: 0 4px 20px rgba(139, 92, 246, 0.2); border-radius: 16px;">
             <div class="form-group mb-0">
                 <label for="code" class="text-white font-weight-bold mb-2" style="color: #c4b5fd !important;">
                     <i class="fa fa-search mr-2" style="color: #a78bfa;"></i>작품 Code
@@ -778,6 +778,24 @@ body {
         /* 상단 서브메뉴가 SJVA 메인 navbar에 가려지지 않도록 여백 추가 */
         ul.nav.nav-pills.bg-light {
             margin-top: 60px !important;
+            flex-wrap: nowrap !important;
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch;
+            display: flex !important;
+            width: 100% !important;
+            border-radius: 10px !important;
+        }
+        ul.nav.nav-pills .nav-link {
+            padding: 8px 12px !important;
+            font-size: 11px !important;
+            white-space: nowrap !important;
+        }
+        
+        /* Ensure breadcrumb span doesn't force width */
+        #menu_module_div span.nav-link {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 200px;
         }
         
         /* 입력창 크기 최적화 */
@@ -809,8 +827,8 @@ body {
         .row, form, #program_list, #program_auto_form, #episode_list {
             width: 100% !important;
             max-width: 100% !important;
-            padding-left: 10px !important;
-            padding-right: 10px !important;
+            padding-left: 4px !important;   /* 10px -> 4px */
+            padding-right: 4px !important;  /* 10px -> 4px */
             margin-left: 0 !important;
             margin-right: 0 !important;
             box-sizing: border-box !important;
@@ -868,8 +886,8 @@ body {
             align-items: center !important;
             width: 100% !important;
             max-width: 100% !important;
-            padding: 10px 12px !important;
-            gap: 10px !important;
+            padding: 8px 6px !important;   /* 좌우 패딩 대폭 축소 */
+            gap: 6px !important;          /* 요소 간 간격 축소 */
             margin: 0 !important;
             box-sizing: border-box !important;
         }

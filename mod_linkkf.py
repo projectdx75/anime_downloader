@@ -924,9 +924,9 @@ class LogicLinkkf(AnimeModuleBase):
             logger.info(f"Extracting video URL from: {playid_url}")
             
             # Step 1: playid 페이지에서 iframe src 추출 (cloudscraper 사용)
-            html_content = LogicLinkkf.get_html(playid_url)
+            html_content = LogicLinkkf.get_html(playid_url, timeout=15)
             if not html_content:
-                logger.error(f"Failed to fetch playid page: {playid_url}")
+                logger.error(f"Failed to fetch playid page (Timeout or Error): {playid_url}")
                 return None, None, None
                 
             soup = BeautifulSoup(html_content, "html.parser")
@@ -958,9 +958,9 @@ class LogicLinkkf(AnimeModuleBase):
                 logger.info(f"Found player iframe: {iframe_src}")
                 
                 # Step 2: iframe 페이지에서 m3u8 URL과 vtt URL 추출
-                iframe_content = LogicLinkkf.get_html(iframe_src)
+                iframe_content = LogicLinkkf.get_html(iframe_src, timeout=15)
                 if not iframe_content:
-                    logger.error(f"Failed to fetch iframe content: {iframe_src}")
+                    logger.error(f"Failed to fetch iframe content (Timeout or Error): {iframe_src}")
                     return None, iframe_src, None
                 
                 # m3u8 URL 패턴 찾기 (더 정밀하게)
@@ -1951,7 +1951,7 @@ class LogicLinkkf(AnimeModuleBase):
             # Prepare GDM options
             gdm_options = {
                 "url": entity.url,
-                "save_path": entity.savepath,
+                "save_path": os.path.normpath(entity.savepath),
                 "filename": entity.filename,
                 "source_type": gdm_source_type,
                 "caller_plugin": f"{P.package_name}_{self.name}",
@@ -1965,7 +1965,7 @@ class LogicLinkkf(AnimeModuleBase):
                     "source": "linkkf"
                 },
                 "headers": entity.headers,
-                "subtitles": entity.vtt,
+                "subtitles": getattr(entity, 'vtt', None),
                 "connections": download_threads,
             }
             
