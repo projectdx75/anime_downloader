@@ -92,20 +92,12 @@
         .queue-btn-top { flex: 1; justify-content: center; font-size: 11px !important; padding: 10px !important; }
         .queue-meta { font-size: 10px; margin-top: 4px; }
         
-        /* Force container padding reduction for mobile queue */
-        #main_container { padding-left: 2px !important; padding-right: 2px !important; }
-        
-        /* Fix navigation pills overflow */
-        #menu_module_div .nav-pills, #menu_page_div .nav-pills {
-            flex-wrap: nowrap !important;
-            overflow-x: auto !important;
-            -webkit-overflow-scrolling: touch;
+        /* Ensure breadcrumb span doesn't force width */
+        #menu_module_div span.nav-link {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 150px;
             white-space: nowrap !important;
-            display: flex !important;
-        }
-        #menu_module_div .nav-link, #menu_page_div .nav-link {
-            padding: 8px 12px !important;
-            font-size: 12px !important;
         }
         
         /* Header buttons wrap and layout */
@@ -116,13 +108,7 @@
             min-width: 120px;
         }
         
-        /* Ensure breadcrumb span doesn't force width */
-        #menu_module_div span.nav-link {
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 200px;
-            white-space: nowrap;
-        }
+        /* Ensure breadcrumb span doesn't force width - moved up */
     }
 
     .mobile-queue-card {

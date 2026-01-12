@@ -72,14 +72,17 @@
         background-color: rgba(30, 41, 59, 0.6) !important;
         backdrop-filter: blur(10px);
         border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 50rem !important; /* Pill shape container */
-        padding: 6px !important;
+        border-radius: 10px !important;
+        padding: 4px !important;
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2) !important;
-        display: inline-flex !important; /* Fit content */
-        flex-wrap: wrap; /* allow wrap on small screens */
-        justify-content: center;
-        width: auto !important; /* Prevent full width */
-        margin-top: 2px !important; /* Reduced for modularity */
+        display: flex !important; /* Changed from inline-flex to prevent horizontal stretching */
+        flex-wrap: nowrap !important; /* Force scrollable row */
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch;
+        width: 100% !important; /* Max width constraint */
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        margin-top: 2px !important;
     }
 
     /* Override for the fallback above to be tighter */
@@ -102,11 +105,13 @@
     }
 
     ul.nav.nav-pills .nav-link {
-        border-radius: 50rem !important;
-        padding: 6px 16px !important;
+        border-radius: 6px !important;
+        padding: 6px 12px !important;
         color: #94a3b8 !important; /* Muted text */
         font-weight: 600;
         transition: all 0.3s ease;
+        white-space: nowrap !important; /* Necessary for scrollable items */
+        font-size: 12px !important;
     }
 
     ul.nav.nav-pills .nav-link:hover {
@@ -121,14 +126,38 @@
         box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
     }
     
-    /* Layout Expansion on Mobile */
-    .container, .container-fluid, .row, form, #main_container {
+    /* Layout Expansion on Mobile - Critical Fix for Horizontal Shift */
+    html, body {
+        overflow-x: hidden !important;
+        width: 100vw !important;
+        position: relative;
+    }
+
+    .container, .container-fluid, #main_container {
         width: 100% !important; 
         max-width: 100% !important;
-        padding-left: 8px !important; 
-        padding-right: 8px !important;
+        padding-left: 5px !important; 
+        padding-right: 5px !important;
         margin-left: 0 !important; 
         margin-right: 0 !important;
+        box-sizing: border-box !important;
+        overflow-x: hidden !important; /* Prevent internal bleed from stretching body */
+    }
+
+    .row {
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        width: 100% !important;
+    }
+
+    [class*="col-"] {
+        padding-left: 5px !important;
+        padding-right: 5px !important;
+    }
+    
+    form {
+        width: 100% !important;
+        margin: 0 !important;
         box-sizing: border-box !important;
     }
     
