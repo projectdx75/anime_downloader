@@ -130,7 +130,7 @@ class ZendriverHandler(BaseHTTPRequestHandler):
                         fetch_with_browser(url, timeout, headers), loop
                     )
                     # 시놀로지 등 느린 환경을 위해 타임아웃 마진을 15초 -> 45초로 확장
-            result: Dict[str, Any] = future.result(timeout=timeout + 45)
+                    result: Dict[str, Any] = future.result(timeout=timeout + 45)
                     self._send_json(200, result)
                 else:
                     self._send_json(500, {"success": False, "error": "Event loop not ready"})
@@ -236,7 +236,9 @@ async def ensure_browser() -> Any:
                 # Note: zendriver supports direct CDP commands
                 
                 for exec_path in candidates:
-                    user_data_dir = os.path.join(tempfile.gettempdir(), f"zd_daemon_{uid}_{os.path.basename(exec_path).replace(' ', '_')}")
+                    # 프로세스별/시간별 고유한 프로필 디렉토리 생성 (SingletonLock 충돌 원천 차단)
+                    unique_id = f"{uid}_{int(time.time())}"
+                    user_data_dir = os.path.join(tempfile.gettempdir(), f"zd_daemon_{unique_id}_{os.path.basename(exec_path).replace(' ', '_')}")
                     
                     # 기존 락(Lock) 파일이나 깨진 프로필이 있으면 제거 (중요: 시놀로지 도커 SingletonLock 대응)
                     if os.path.exists(user_data_dir):
