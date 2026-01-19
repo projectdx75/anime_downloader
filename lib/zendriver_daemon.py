@@ -394,9 +394,15 @@ async def fetch_with_browser(url: str, timeout: int = 30, headers: Optional[Dict
                 })
                 log_debug(f"[ZendriverDaemon] Success in {total_elapsed:.2f}s (Nav: {nav_elapsed:.2f}s, Poll: {poll_elapsed:.2f}s, Length: {len(html_content)})")
             else:
-                result["error"] = f"Short response: {len(html_content) if html_content else 0} bytes"
+                length = len(html_content) if html_content else 0
+                result["error"] = f"Short response: {length} bytes"
                 result["elapsed"] = round(total_elapsed, 2)
-                log_debug(f"[ZendriverDaemon] Fetch failure: Short response ({len(html_content) if html_content else 0} bytes)")
+                log_debug(f"[ZendriverDaemon] Fetch failure: Short response ({length} bytes)")
+                
+                # 0바이트거나 너무 짧으면 브라우저/렌더러가 죽었을 가능성이 큼 -> 다음 번엔 강제 재시작
+                if length < 100:
+                    log_debug("[ZendriverDaemon] Response extremely short, forcing browser reset for next request")
+                    browser = None
             
             # 탭 정리: 닫지 말고 about:blank로 리셋 (최소 1개 탭 유지 필요)
             if page:
