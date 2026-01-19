@@ -17,20 +17,28 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread, Lock
 from typing import Any, Optional, Dict, List, Type, cast
 import zendriver as zd
+import datetime # Added for datetime.now()
+import logging # Added for logging setup
 
 # 터미널 및 파일로 로그 출력 설정
 LOG_FILE: str = "/tmp/zendriver_daemon.log"
 
-def log_debug(msg: str) -> None:
-    """타임스탬프와 함께 로그 출력 및 파일 저장"""
-    timestamp: str = time.strftime("%Y-%m-%d %H:%M:%S")
-    formatted_msg: str = f"[{timestamp}] {msg}"
-    print(formatted_msg, file=sys.stderr)
-    try:
-        with open(LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(formatted_msg + "\n")
-    except Exception:
-        pass
+# 로그 설정
+def log_debug(msg):
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log_msg = f"[{timestamp}] {msg}"
+    print(log_msg)
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(log_msg + "\n")
+
+# Zendriver 내부 로그 연동
+class ZendriverLogHandler(logging.Handler):
+    def emit(self, record):
+        log_debug(f"[ZendriverLib] {record.levelname}: {record.getMessage()}")
+
+zd_logger = logging.getLogger("zendriver")
+zd_logger.setLevel(logging.DEBUG)
+zd_logger.addHandler(ZendriverLogHandler())
 
 DAEMON_PORT: int = 19876
 browser: Optional[Any] = None
@@ -190,18 +198,15 @@ async def ensure_browser() -> Any:
                 import platform
                 uid = os.getuid() if hasattr(os, 'getuid') else 'win'
                 
-                log_debug(f"[ZendriverDaemon] Environment: Python {sys.version.split()[0]} on {platform.system()}")
+                log_debug(f"[ZendriverDaemon] Environment: Python {sys.version.split()[0]} on {platform.system()} (UID: {uid})")
                 
                 browser_args = [
                     "--no-sandbox", 
-                    "--disable-setuid-sandbox", 
-                    "--disable-dev-shm-usage", 
-                    "--disable-gpu", 
-                    "--no-first-run",
-                    "--no-service-autorun",
-                    "--password-store=basic",
-                    "--mute-audio",
-                    "--disable-notifications",
+                    "--disable-setuid-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu",
+                    "--disable-software-rasterizer",
+                    "--remote-allow-origins=*",
                     "--disable-background-networking",
                     "--disable-background-timer-throttling",
                     "--disable-backgrounding-occluded-windows",
@@ -236,12 +241,15 @@ async def ensure_browser() -> Any:
                     try:
                         log_debug(f"[ZendriverDaemon] Trying browser at: {exec_path}")
                         start_time_init = time.time()
+                        log_debug(f"[ZendriverDaemon] Launching browser: {exec_path} (Sandbox: False, Timeout: 1.0s, Tries: 30)")
                         browser = await zd.start(
                             headless=True, 
                             browser_executable_path=exec_path, 
                             sandbox=False,
                             user_data_dir=user_data_dir,
-                            browser_args=browser_args
+                            browser_args=browser_args,
+                            browser_connection_timeout=1.0,
+                            browser_connection_max_tries=30
                         )
                         log_debug(f"[ZendriverDaemon] Browser started successfully in {time.time() - start_time_init:.2f}s using: {exec_path}")
                         return browser
