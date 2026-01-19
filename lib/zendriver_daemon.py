@@ -242,6 +242,11 @@ async def ensure_browser() -> Any:
                         try:
                             import shutil
                             shutil.rmtree(user_data_dir, ignore_errors=True)
+                            
+                            # 리눅스에서는 rm -rf가 더 확실할 때가 있음
+                            if platform.system() == "Linux":
+                                os.system(f"rm -rf {user_data_dir}")
+                                
                             log_debug(f"[ZendriverDaemon] Cleaned up existing profile dir: {user_data_dir}")
                         except Exception as rm_e:
                             log_debug(f"[ZendriverDaemon] Failed to clean profile dir: {rm_e}")
