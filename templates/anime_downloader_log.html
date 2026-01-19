@@ -1,193 +1,159 @@
 {% extends "base.html" %}
 {% block content %}
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('.static', filename='css/mobile_custom.css') }}"/>
+
 <style>
-    /* Premium Dark Theme Variables */
-    :root {
-        --bg-color: #0f172a; /* Slate 900 */
-        --card-bg: #1e293b; /* Slate 800 */
-        --text-color: #f8fafc; /* Slate 50 */
-        --text-muted: #94a3b8; /* Slate 400 */
-        --accent-color: #3b82f6; /* Blue 500 */
-        --accent-hover: #2563eb; /* Blue 600 */
-        --terminal-bg: #000000;
-        --terminal-text: #4ade80; /* Green 400 */
-        --border-color: #334155; /* Slate 700 */
-    }
-
-    /* Global Override */
+    /* Match gds_dviewer Log Page Design */
     body {
-        background-color: var(--bg-color) !important;
-        background-image: radial-gradient(circle at top right, #1e293b 0%, transparent 60%), radial-gradient(circle at bottom left, #1e293b 0%, transparent 60%);
-        color: var(--text-color);
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-        /* overflow: hidden 제거 - 모바일 스크롤 허용 */
+        background: linear-gradient(145deg, #0f172a, #1e293b) !important;
+        color: #f8fafc;
+        font-family: 'Inter', -apple-system, sans-serif;
     }
 
-    /* Container & Typography */
-    .container-fluid {
-        padding: 8px; /* 최소 여백 */
-    }
-    
-    @media (max-width: 768px) {
-        body {
-            overflow-x: hidden !important;
-            overflow-y: auto !important; /* 세로 스크롤 허용 */
-        }
-        .container-fluid {
-            padding: 4px; /* 모바일 더 작은 여백 */
-        }
-        .tab-pane {
-            padding: 8px;
-        }
-        .dashboard-card {
-            margin-top: 8px;
-            border-radius: 6px;
-        }
-        /* 로그 테이블 뷰포트 기반 높이 */
-        textarea#log, textarea#add {
-            max-height: 60vh !important;
-            height: auto !important;
-            min-height: 300px !important;
-        }
-    }
-
-    h1, h2, h3, h4, h5, h6 {
-        color: var(--text-color);
-        font-weight: 700;
-        letter-spacing: -0.025em;
-    }
-
-    /* Main Card */
-    .dashboard-card {
-        background-color: var(--card-bg);
-        border: 1px solid var(--border-color);
+    .log-card {
+        background: linear-gradient(145deg, rgba(20, 30, 48, 0.95), rgba(36, 59, 85, 0.9));
+        border: 1px solid rgba(100, 150, 180, 0.25);
         border-radius: 12px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         overflow: hidden;
         margin-top: 20px;
     }
 
+    .log-card-header {
+        background: transparent;
+        border-bottom: 1px solid rgba(100, 150, 180, 0.2);
+        padding: 16px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .log-card-header h5 {
+        margin: 0;
+        color: #e2e8f0;
+        font-weight: 600;
+    }
+
+    .log-card-header h5 i {
+        color: #7dd3fc;
+        margin-right: 8px;
+    }
+
+    .btn-log {
+        background: linear-gradient(180deg, rgba(45, 55, 72, 0.95), rgba(35, 45, 60, 0.98));
+        border: 1px solid rgba(100, 150, 180, 0.25);
+        color: #7dd3fc;
+        padding: 6px 14px;
+        font-size: 12px;
+        cursor: pointer;
+        border-radius: 6px;
+        margin-left: 8px;
+    }
+
+    .btn-log:hover {
+        background: linear-gradient(180deg, rgba(55, 65, 82, 0.95), rgba(45, 55, 70, 0.98));
+        color: #fff;
+    }
+
+    .btn-log.danger {
+        background: rgba(239, 68, 68, 0.15);
+        border: 1px solid rgba(239, 68, 68, 0.4);
+        color: #fca5a5;
+    }
+
+    .btn-log.danger:hover {
+        background: rgba(239, 68, 68, 0.3);
+    }
+
+    .log-container {
+        height: calc(100vh - 200px);
+        min-height: 400px;
+        overflow-y: auto;
+        padding: 16px;
+        font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+        font-size: 12px;
+        line-height: 1.6;
+        background: rgba(0, 0, 0, 0.3);
+        color: #94a3b8;
+    }
+
+    .log-line-error { color: #f87171; }
+    .log-line-warning { color: #fbbf24; }
+    .log-line-info { color: #5eead4; }
+    .log-line-debug { color: #94a3b8; }
+
     /* Tabs Styling */
     .nav-tabs {
-        border-bottom: 1px solid var(--border-color);
-        background-color: rgba(0,0,0,0.2);
+        border-bottom: 1px solid rgba(100, 150, 180, 0.2);
+        background: rgba(0, 0, 0, 0.2);
         padding: 10px 10px 0 10px;
     }
 
     .nav-tabs .nav-link {
-        color: var(--text-muted) !important;
+        color: #94a3b8 !important;
         border: none !important;
         border-radius: 8px 8px 0 0 !important;
         padding: 10px 20px;
         font-weight: 500;
-        transition: all 0.2s ease;
         background: transparent;
     }
 
     .nav-tabs .nav-link:hover {
-        color: var(--text-color) !important;
-        background-color: rgba(255,255,255,0.05);
+        color: #e2e8f0 !important;
+        background: rgba(255, 255, 255, 0.05);
     }
 
     .nav-tabs .nav-link.active {
-        color: var(--accent-color) !important;
-        background-color: var(--card-bg) !important;
-        border-bottom: 2px solid var(--accent-color) !important;
+        color: #7dd3fc !important;
+        background: rgba(20, 30, 48, 0.95) !important;
+        border-bottom: 2px solid #7dd3fc !important;
     }
 
-    /* Content Area */
-    .tab-content {
-        padding: 0; /* Removing default padding to let terminal fill */
-    }
-
-    .tab-pane {
-        padding: 20px;
-    }
-
-    /* Terminal Styling */
-    textarea#log, textarea#add {
-        background-color: var(--terminal-bg) !important;
-        color: var(--terminal-text) !important;
-        border: 1px solid #333;
-        border-radius: 6px;
-        font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
-        font-size: 14px;
-        line-height: 1.5;
-        padding: 16px;
-        width: 100%;
-        box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.5);
-        resize: none; /* Disable manual resize */
-        overscroll-behavior: contain; /* 스크롤 체인 방지 */
-        transform: translateZ(0); /* GPU 가속화 */
-        will-change: scroll-position;
-    }
-
-    textarea#log:focus, textarea#add:focus {
-        outline: none;
-        border-color: var(--accent-color);
-        box-shadow: 0 0 0 1px var(--accent-color);
-    }
-
-    /* Controls Bar */
     .controls-bar {
         display: flex;
         align-items: center;
         justify-content: flex-end;
         padding: 12px 20px;
-        background-color: rgba(0,0,0,0.2);
-        border-top: 1px solid var(--border-color);
-    }
-
-    /* Toggle Switch */
-    .form-check-input {
-        background-color: #334155;
-        border-color: #475569;
-        cursor: pointer;
+        background: rgba(0, 0, 0, 0.2);
+        border-top: 1px solid rgba(100, 150, 180, 0.2);
+        gap: 12px;
     }
 
     .form-check-input:checked {
-        background-color: var(--accent-color);
-        border-color: var(--accent-color);
+        background-color: #7dd3fc;
+        border-color: #7dd3fc;
     }
 
     .form-check-label {
-        color: var(--text-muted);
+        color: #94a3b8;
         font-weight: 500;
-        margin-right: 12px;
-        user-select: none;
     }
 
-    /* Buttons */
-    .btn-action {
-        background-color: transparent;
-        border: 1px solid var(--border-color);
-        color: var(--text-color);
-        border-radius: 6px;
-        padding: 6px 16px;
-        font-size: 14px;
-        font-weight: 500;
-        transition: all 0.2s;
-        margin-left: 12px;
+    @media (max-width: 768px) {
+        .log-container {
+            height: calc(100vh - 180px);
+            min-height: 300px;
+            padding: 12px;
+        }
+        .log-card-header {
+            flex-direction: column;
+            gap: 12px;
+            align-items: flex-start;
+        }
     }
 
-    .btn-action:hover {
-        background-color: var(--accent-color);
-        border-color: var(--accent-color);
-        color: white;
+    /* Smooth Load */
+    .content-cloak {
+        opacity: 0;
+        transition: opacity 0.5s ease-out;
     }
-
+    .content-cloak.visible {
+        opacity: 1;
+    }
 </style>
 
-<div class="container-fluid content-cloak" id="main_container">
-    <!-- Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h2 class="mb-1">System Logs</h2>
-            <p class="text-muted mb-0" style="color: var(--text-muted);">Real-time application logs and history.</p>
-        </div>
-    </div>
-
-    <div class="dashboard-card">
+<div class="container-fluid content-cloak" id="main_container" style="max-width: 1400px;">
+    <div class="log-card">
         <nav>
             {{ macros.m_tab_head_start() }}
                 {{ macros.m_tab_head('old', 'History', true) }}
@@ -196,27 +162,20 @@
         </nav>
         
         <div class="tab-content" id="nav-tabContent">
-            <!-- Old Logs -->
+            <!-- History Logs -->
             {{ macros.m_tab_content_start('old', true) }}
-                <div>
-                    <textarea id="log" rows="30" disabled spellcheck="false"></textarea>
-                </div>
+                <div class="log-container" id="log-history"></div>
             {{ macros.m_tab_content_end() }}
             
-            <!-- New Logs -->
+            <!-- Real-time Logs -->
             {{ macros.m_tab_content_start('new', false) }}
-                <div>
-                    <textarea id="add" rows="30" disabled spellcheck="false"></textarea>
-                </div>
-                
+                <div class="log-container" id="log-realtime"></div>
                 <div class="controls-bar">
-                    <div class="d-flex align-items-center">
-                        <label class="form-check-label" for="auto_scroll">Auto Scroll</label>
-                        <div class="form-check form-switch mb-0">
-                            <input id="auto_scroll" name="auto_scroll" class="form-check-input" type="checkbox" checked>
-                        </div>
-                        <button id="clear" class="btn btn-action">Clear Console</button>
+                    <label class="form-check-label" for="auto_scroll">Auto Scroll</label>
+                    <div class="form-check form-switch mb-0">
+                        <input id="auto_scroll" name="auto_scroll" class="form-check-input" type="checkbox" checked>
                     </div>
+                    <button id="clear" class="btn-log">Clear</button>
                 </div>
             {{ macros.m_tab_content_end() }}
         </div>
@@ -224,90 +183,58 @@
 </div>
 
 <script type="text/javascript">
-$(document).ready(function() {
-  // Force fluid layout
-  $("#main_container").removeClass("container").addClass("container-fluid");
-  
-  $('#loading').show();
-  ResizeTextAreaLog()
-})
-
-function ResizeTextAreaLog() {
-  // Dynamic height calculation
-  ClientHeight = window.innerHeight;
-  // Adjust calculation based on new layout (header + padding + tabs + toolbars)
-  // Approx header: 80, padding: 80, tabs: 50, footer: 60 => ~270
-  var offset = 340; 
-  var newHeight = ClientHeight - offset;
-  if (newHeight < 400) newHeight = 400; // Min height
-
-  $("#log").height(newHeight);
-  $("#add").height(newHeight);
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.appendChild(document.createTextNode(text));
+    return div.innerHTML;
 }
 
-$(window).resize(function() {
-  ResizeTextAreaLog();
+function formatLogLine(line) {
+    let className = '';
+    if (line.includes('ERROR')) className = 'log-line-error';
+    else if (line.includes('WARNING')) className = 'log-line-warning';
+    else if (line.includes('INFO')) className = 'log-line-info';
+    else if (line.includes('DEBUG')) className = 'log-line-debug';
+    return '<div class="' + className + '">' + escapeHtml(line) + '</div>';
+}
+
+$(document).ready(function() {
+    $("#main_container").removeClass("container").addClass("container-fluid");
+    $('#loading').show();
+    setTimeout(function() {
+        $('.content-cloak').addClass('visible');
+    }, 100);
 });
 
 var protocol = window.location.protocol;
 var socket = io.connect(protocol + "//" + document.domain + ":" + location.port + "/log");
 
-socket.emit("start", {'package':'{{package}}'} );
-socket.on('on_start', function(data){
-  var logEl = document.getElementById("log");
-  logEl.innerHTML += data.data;
-  logEl.scrollTop = logEl.scrollHeight;
-  logEl.style.visibility = 'visible';
-  $('#loading').hide();
+socket.emit("start", {'package':'{{package}}'});
+
+socket.on('on_start', function(data) {
+    var container = document.getElementById("log-history");
+    var lines = data.data.split('\n');
+    var html = '';
+    lines.forEach(function(line) {
+        html += formatLogLine(line);
+    });
+    container.innerHTML = html || '<div class="text-muted text-center">로그가 비어 있습니다.</div>';
+    container.scrollTop = container.scrollHeight;
+    $('#loading').hide();
 });
 
-socket.on('add', function(data){
-  if (data.package == "{{package}}") {
-    var chk = $('#auto_scroll').is(":checked");
-    var addEl = document.getElementById("add");
-    addEl.innerHTML += data.data;
-    if (chk) addEl.scrollTop = addEl.scrollHeight;
-  }
+socket.on('add', function(data) {
+    if (data.package == "{{package}}") {
+        var chk = $('#auto_scroll').is(":checked");
+        var container = document.getElementById("log-realtime");
+        container.innerHTML += formatLogLine(data.data);
+        if (chk) container.scrollTop = container.scrollHeight;
+    }
 });
 
 $("#clear").click(function(e) {
-  e.preventDefault(); 
-  document.getElementById("add").innerHTML = '';
-});
-</script>    
-
-<style>
-    /* Smooth Load Transition */
-    .content-cloak, 
-    #menu_module_div, 
-    #menu_page_div {
-        opacity: 0;
-        transition: opacity 0.5s ease-out;
-    }
-    
-    /* Staggered Delays for Natural Top-Down Flow */
-    #menu_module_div.visible {
-        opacity: 1;
-        transition-delay: 0ms;
-    }
-
-    #menu_page_div.visible {
-        opacity: 1;
-        transition-delay: 150ms;
-    }
-
-    .content-cloak.visible {
-        opacity: 1;
-        transition-delay: 300ms;
-    }
-</style>
-
-<script type="text/javascript">
-$(document).ready(function(){
-  // Smooth Load Trigger
-  setTimeout(function() {
-      $('.content-cloak, #menu_module_div, #menu_page_div').addClass('visible');
-  }, 100);
+    e.preventDefault(); 
+    document.getElementById("log-realtime").innerHTML = '';
 });
 </script>
 {% endblock %}

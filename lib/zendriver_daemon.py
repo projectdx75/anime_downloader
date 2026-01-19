@@ -187,7 +187,10 @@ async def ensure_browser() -> Any:
 
                 # 사용자 데이터 디렉토리 설정 (Mac/Root 권한 이슈 대응)
                 import tempfile
+                import platform
                 uid = os.getuid() if hasattr(os, 'getuid') else 'win'
+                
+                log_debug(f"[ZendriverDaemon] Environment: Python {sys.version.split()[0]} on {platform.system()}")
                 
                 browser_args = [
                     "--no-sandbox", 
@@ -284,8 +287,28 @@ async def fetch_with_browser(url: str, timeout: int = 30, headers: Optional[Dict
             
             # 페이지 로드 시도
             try:
-                # 탭(페이지) 열기 (브라우저가 없으면 생성)
-                page = await browser.get("about:blank") # 새 탭 열기 대신 기존 탭 재활용 혹은 about:blank 이동
+                # zendriver/core/browser.py:304 에서 self.targets가 비어있을 때 StopIteration 발생 가능
+                # 이를 방지하기 위해 tabs가 생길 때까지 잠시 대기하거나 직접 생성 시도
+                
+                # 탭(페이지) 확보
+                page = None
+                for attempt in range(5):
+                    try:
+                        if browser.tabs:
+                            page = browser.tabs[0]
+                            log_debug(f"[ZendriverDaemon] Using existing tab (Attempt {attempt+1})")
+                            break
+                        else:
+                            log_debug(f"[ZendriverDaemon] No tabs found, trying browser.get('about:blank') (Attempt {attempt+1})")
+                            page = await browser.get("about:blank")
+                            break
+                    except (StopIteration, RuntimeError, Exception) as tab_e:
+                        log_debug(f"[ZendriverDaemon] Tab acquisition failed: {tab_e}. Retrying...")
+                        await asyncio.sleep(0.5)
+                
+                if not page:
+                    result["error"] = "Failed to acquire browser tab"
+                    return result
 
                 # 헤더 설정 (CDP 사용)
                 if headers:

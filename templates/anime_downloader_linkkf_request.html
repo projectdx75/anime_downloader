@@ -316,15 +316,12 @@
 
         $("body").on('click', '#check_download_btn', function (e) {
             e.preventDefault();
-            all = $('input[id^="checkbox_"]');
-            let data = [];
-            let idx;
-            for (let i in all) {
-                if (all[i].checked) {
-                    idx = parseInt(all[i].id.split('_')[1])
+            $('input[id^="checkbox_"]').each(function() {
+                if ($(this).prop('checked')) {
+                    idx = parseInt($(this).attr('id').split('_')[1])
                     data.push(current_data.episode[idx]);
                 }
-            }
+            });
             if (data.length == 0) {
                 $.notify('<strong>선택하세요.</strong>', {type: 'warning'});
                 return;
@@ -343,15 +340,12 @@
 
         $("body").on('click', '#down_subtitle_btn', function (e) {
             e.preventDefault();
-            all = $('input[id^="checkbox_"]');
-            let data = [];
-            let idx;
-            for (let i in all) {
-                if (all[i].checked) {
-                    idx = parseInt(all[i].id.split('_')[1])
+            $('input[id^="checkbox_"]').each(function() {
+                if ($(this).prop('checked')) {
+                    idx = parseInt($(this).attr('id').split('_')[1]);
                     data.push(current_data.episode[idx]);
                 }
-            }
+            });
             if (data.length == 0) {
                 $.notify('<strong>선택하세요.</strong>', {type: 'warning'});
                 return;
