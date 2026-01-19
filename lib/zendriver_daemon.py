@@ -239,7 +239,7 @@ async def ensure_browser() -> Any:
                         browser = await zd.start(
                             headless=True, 
                             browser_executable_path=exec_path, 
-                            no_sandbox=True,
+                            sandbox=False,
                             user_data_dir=user_data_dir,
                             browser_args=browser_args
                         )
