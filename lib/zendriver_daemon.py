@@ -236,6 +236,16 @@ async def ensure_browser() -> Any:
                 
                 for exec_path in candidates:
                     user_data_dir = os.path.join(tempfile.gettempdir(), f"zd_daemon_{uid}_{os.path.basename(exec_path).replace(' ', '_')}")
+                    
+                    # 기존 락(Lock) 파일이나 깨진 프로필이 있으면 제거 (중요: 시놀로지 도커 SingletonLock 대응)
+                    if os.path.exists(user_data_dir):
+                        try:
+                            import shutil
+                            shutil.rmtree(user_data_dir, ignore_errors=True)
+                            log_debug(f"[ZendriverDaemon] Cleaned up existing profile dir: {user_data_dir}")
+                        except Exception as rm_e:
+                            log_debug(f"[ZendriverDaemon] Failed to clean profile dir: {rm_e}")
+                            
                     os.makedirs(user_data_dir, exist_ok=True)
                     
                     try:
