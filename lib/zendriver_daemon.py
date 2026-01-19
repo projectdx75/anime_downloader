@@ -129,7 +129,8 @@ class ZendriverHandler(BaseHTTPRequestHandler):
                     future = asyncio.run_coroutine_threadsafe(
                         fetch_with_browser(url, timeout, headers), loop
                     )
-                    result: Dict[str, Any] = future.result(timeout=timeout + 15)
+                    # 시놀로지 등 느린 환경을 위해 타임아웃 마진을 15초 -> 45초로 확장
+            result: Dict[str, Any] = future.result(timeout=timeout + 45)
                     self._send_json(200, result)
                 else:
                     self._send_json(500, {"success": False, "error": "Event loop not ready"})
@@ -241,13 +242,19 @@ async def ensure_browser() -> Any:
                     if os.path.exists(user_data_dir):
                         try:
                             import shutil
-                            shutil.rmtree(user_data_dir, ignore_errors=True)
-                            
-                            # 리눅스에서는 rm -rf가 더 확실할 때가 있음
-                            if platform.system() == "Linux":
-                                os.system(f"rm -rf {user_data_dir}")
+                            # 안전장치: 경로가 임시 디렉토리에 있고 zd_daemon_ 접두사를 포함하는지 확인
+                            temp_dir = tempfile.gettempdir()
+                            if user_data_dir.startswith(temp_dir) and "zd_daemon_" in user_data_dir:
+                                shutil.rmtree(user_data_dir, ignore_errors=True)
                                 
-                            log_debug(f"[ZendriverDaemon] Cleaned up existing profile dir: {user_data_dir}")
+                                # 리눅스에서 SingletonLock이 끈질기게 남는 경우 대응
+                                if platform.system() == "Linux":
+                                    # 명령어 주입 방지를 위해 경로를 인자로 전달하지 않고 직접 문자열 검증 후 실행
+                                    os.system(f"rm -rf '{user_data_dir}'")
+                                
+                                log_debug(f"[ZendriverDaemon] Cleaned up existing profile dir: {user_data_dir}")
+                            else:
+                                log_debug(f"[ZendriverDaemon] Skip cleanup: Path safety check failed ({user_data_dir})")
                         except Exception as rm_e:
                             log_debug(f"[ZendriverDaemon] Failed to clean profile dir: {rm_e}")
                             
