@@ -196,6 +196,7 @@ class LogicLinkkf(AnimeModuleBase):
                     logger.error(traceback.format_exc())
                     ret["ret"] = "error"
                     ret["log"] = str(e)
+                return jsonify(ret)
             elif sub == "add_queue_checked_list":
                 # 선택된 에피소드 일괄 추가 (백그라운드 스레드로 처리)
                 import threading

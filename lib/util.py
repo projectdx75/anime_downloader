@@ -32,10 +32,8 @@ def download(url, file_name):
 def read_file(filename):
     try:
         import codecs
-        ifp = codecs.open(filename, 'r', encoding='utf8')
-        data = ifp.read()
-        ifp.close()
-        return data
+        with codecs.open(filename, 'r', encoding='utf8') as ifp:
+            return ifp.read()
     except Exception as exception:
         logger.error('Exception:%s', exception)
         logger.error(traceback.format_exc())
@@ -79,9 +77,8 @@ class Util(object):
     def write_file(data, filename):
         try:
             import codecs
-            ofp = codecs.open(filename, 'w', encoding='utf8')
-            ofp.write(data)
-            ofp.close()
+            with codecs.open(filename, 'w', encoding='utf8') as ofp:
+                ofp.write(data)
         except Exception as exception:
             logger.debug('Exception:%s', exception)
             logger.debug(traceback.format_exc())
