@@ -3,6 +3,32 @@
 <link rel="stylesheet" href="{{ url_for('.static', filename='css/mobile_custom.css') }}"/>
 <link rel="stylesheet" href="{{ url_for('.static', filename='css/' ~ arg['sub'] ~ '.css') }}"/>
 
+<script type="text/javascript">
+function globalConfirmModal(title, body, func) {
+  $("#confirm_title").html(title);
+  $("#confirm_body").html(body);
+  
+  // Remove previous handlers to prevent accumulation
+  $("body").off('click', '#confirm_button').on('click', '#confirm_button', function(e){
+    e.stopImmediatePropagation();
+    e.preventDefault();
+    if (typeof func === 'function') {
+      func();
+    }
+    $("body").off('click', '#confirm_button');
+    $("#confirm_modal").modal('hide');
+  });
+  
+  // Clean up listener when modal is closed (any way)
+  $("#confirm_modal").one('hidden.bs.modal', function () {
+    $("body").off('click', '#confirm_button');
+    $('#confirm_button').removeAttr('onclick');
+  });
+
+  $("#confirm_modal").modal();
+}
+</script>
+
 <style>
     .queue-header-container {
         display: flex; justify-content: space-between; align-items: flex-end;
@@ -236,7 +262,7 @@ function renderList(data) {
 $("body").on('click', '#stop_btn', function(e){
     e.stopPropagation(); e.preventDefault();
     globalSendCommand('stop', $(this).data('idx'), null, null, function(ret){
-        refresh_item(ret.data);
+        autoRefreshList();
     });
 });
 
@@ -265,6 +291,10 @@ $("body").on('click', '#delete_btn', function(e){
 });
 
 function refresh_item(data) {
+    if (!data || !data.idx) {
+        autoRefreshList();
+        return;
+    }
     $('#tr1_'+data.idx).html(make_item1(data));
     $('#collapse_'+data.idx).html(make_item2(data));
 }

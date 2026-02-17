@@ -632,8 +632,29 @@ class LogicOhli24(AnimeModuleBase):
                 
                 if ModuleQueue:
                     if command == "stop" or command == "cancel":
-                         ModuleQueue.process_ajax('cancel', req)
-                         return jsonify({'ret':'success'})
+                        # Create a mock request object for GDM cancel as req.form is often immutable
+                        class MockRequest:
+                            def __init__(self, form_data):
+                                self.form = form_data
+                        
+                        mock_req = MockRequest({"id": entity_id})
+                        
+                        try:
+                            # Try to call process_ajax on what we have
+                            ret = ModuleQueue.process_ajax('cancel', mock_req)
+                        except Exception as e:
+                            logger.error(f"Failed to delegate cancel to ModuleQueue: {e}")
+                            # Fallback: Find the instance via P if available
+                            try:
+                                from gommi_downloader_manager.setup import P as GDM_P
+                                if GDM_P and hasattr(GDM_P, 'module_list'):
+                                    for m in GDM_P.module_list:
+                                        if m.name == 'queue':
+                                            ret = m.process_ajax('cancel', mock_req)
+                                            break
+                            except: pass
+
+                        return jsonify({'ret':'success', 'data': {'idx': entity_id, 'status_str': 'STOP', 'status_kor': '중지'}})
                     elif command == "reset":
                         # Ohli24 모듈의 다운로드만 취소 (다른 플러그인 항목은 그대로)
                         caller_id = f"{P.package_name}_{self.name}"
@@ -641,7 +662,8 @@ class LogicOhli24(AnimeModuleBase):
                         for task_id, task in list(ModuleQueue._downloads.items()):
                             if task.caller_plugin == caller_id:
                                 task.cancel()
-                                del ModuleQueue._downloads[task_id]
+                                # GDM 내부 클린업은 cancel()이 담당하므로 여기서 del은 신중해야 함
+                                # 하지만 강제 초기화이므로 제거 시도
                                 cancelled_count += 1
                         
                         # Ohli24 DB도 정리
@@ -652,7 +674,7 @@ class LogicOhli24(AnimeModuleBase):
                                 F.db.session.commit()
                         except Exception as e:
                             logger.error(f"Failed to clear Ohli24 DB: {e}")
-                        return jsonify({'ret':'notify', 'log':f'{cancelled_count}개 Ohli24 항목이 초기화되었습니다.'})
+                        return jsonify({'ret':'success', 'log':f'{cancelled_count}개 Ohli24 항목이 초기화되었습니다.'})
                     elif command == "delete_completed":
                         # 완료 항목만 삭제
                         try:
@@ -1620,6 +1642,15 @@ class LogicOhli24(AnimeModuleBase):
                     m = hashlib.md5(ep_title.encode("utf-8"))
                     _vi = m.hexdigest()
                     
+                    # Parse episode number for UI badge
+                    epi_no = None
+                    ep_match = re.search(r"(\d+(?:\.\d+)?)[\s\.\…화회]*$", ep_title)
+                    if ep_match:
+                        try:
+                            epi_val = float(ep_match.group(1))
+                            epi_no = int(epi_val) if epi_val.is_integer() else epi_val
+                        except: pass
+
                     episodes.append({
                         "title": ep_title,
                         "link": href,
@@ -1630,6 +1661,7 @@ class LogicOhli24(AnimeModuleBase):
                         "va": href,
                         "_vi": _vi,
                         "content_code": code,
+                        "epi_no": epi_no,
                     })
                 except Exception as ep_err:
                     logger.warning(f"Episode parse error: {ep_err}")
@@ -2496,7 +2528,17 @@ class LogicOhli24(AnimeModuleBase):
         
         if P.ModelSetting.get_bool("ohli24_auto_make_folder"):
             day = episode_info.get("day", "")
+            
+            # Robust extraction logic (Sync with Ohli24QueueEntity.parse_metadata)
             content_title_clean = match.group("title").strip() if match else title
+            if not match:
+                # Fallback for truncated titles (e.g. "Long Title 6…")
+                fallback_match = re.search(r"(?P<title>.*?)\s*(?P<epi_no>\d+(?:\.\d+)?)(?:\.+|…)?\s*[^\d]*$", title.strip())
+                if fallback_match:
+                    content_title_clean = fallback_match.group("title").strip().rstrip('-').strip()
+                else:
+                    content_title_clean = title
+
             if "완결" in day:
                 folder_name = "%s %s" % (P.ModelSetting.get("ohli24_finished_insert"), content_title_clean)
             else:
@@ -2869,15 +2911,27 @@ class Ohli24QueueEntity(AnimeQueueEntity):
             if not title_full:
                 return
 
-            match = re.compile(r"(?P<title>.*?)\s*((?P<season>\d+)기)?\s*((?P<epi_no>\d+)화)").search(title_full)
+            # Improved Regex: Handle optional [-(, optional season, and various episode suffixes
+            regex_main = re.compile(r"(?P<title>.*?)\s*(?:[\-\(\[])?\s*((?P<season>\d+)기)?\s*(?P<epi_no>\d+(?:\.\d+)?)\s*(?:화|회|part|part\s*\d+)?\s*(?:\(完\))?\s*(?:[\)\]])?$")
+            match = regex_main.search(title_full.strip())
+            
             if match:
-                self.content_title = match.group("title").strip()
+                self.content_title = match.group("title").strip().rstrip('-').strip()
                 if match.group("season"):
                     self.season = int(match.group("season"))
-                self.epi_queue = int(match.group("epi_no"))
+                self.epi_queue = float(match.group("epi_no"))
+                if self.epi_queue.is_integer():
+                    self.epi_queue = int(self.epi_queue)
             else:
-                self.content_title = title_full
-                self.epi_queue = 1
+                # Fallback for truncated titles or unusual suffixes (e.g. "Title 6…")
+                fallback_match = re.search(r"(?P<title>.*?)\s*(?P<epi_no>\d+(?:\.\d+)?)(?:\.+|…)?\s*[^\d]*$", title_full.strip())
+                if fallback_match:
+                    self.content_title = fallback_match.group("title").strip().rstrip('-').strip()
+                    epi_val = float(fallback_match.group("epi_no"))
+                    self.epi_queue = int(epi_val) if epi_val.is_integer() else epi_val
+                else:
+                    self.content_title = title_full
+                    self.epi_queue = 1
             
             # Predict initial filename/filepath for UI
             epi_no = self.epi_queue

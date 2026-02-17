@@ -213,9 +213,14 @@
                 let epThumbSrc = data.episode[i].thumbnail || '';
                 let epTitle = data.episode[i].title || '';
                 
-                // 에피소드 번호 추출 (title에서 "N화" 패턴 찾기)
-                let epNumMatch = epTitle.match(/(\d+)화/);
-                let epNumText = epNumMatch ? epNumMatch[1] + '화' : (parseInt(i) + 1) + '화';
+                // 에피소드 번호 추출: 백엔드 epi_no 우선, 없으면 정규식, 마지막으로 인덱스
+                let epNumText = '';
+                if (data.episode[i].epi_no !== undefined && data.episode[i].epi_no !== null) {
+                    epNumText = data.episode[i].epi_no + '화';
+                } else {
+                    let epNumMatch = epTitle.match(/(\d+(?:\.\d+)?)[\s\.\…화회]*$/);
+                    epNumText = epNumMatch ? epNumMatch[1] + '화' : (parseInt(i) + 1) + '화';
+                }
                 
                 str += '<div class="episode-card">';
                 str += '<div class="episode-thumb">';
