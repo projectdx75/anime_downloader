@@ -16,6 +16,7 @@ import re
 import subprocess
 import sys
 import threading
+import time
 import traceback
 import urllib
 import unicodedata
@@ -2345,6 +2346,66 @@ class LogicOhli24(AnimeModuleBase):
         
         return response_data
 
+    @staticmethod
+    def _get_cache_page_type(url: str) -> str:
+        parsed = parse.urlparse(url)
+
+        if "/bbs/search.php" in parsed.path:
+            return "search"
+        if "/bbs/board.php" in parsed.path:
+            if "wr_id=" in parsed.query:
+                return "detail"
+            return "list"
+        if "/e/" in parsed.path or "/c/" in parsed.path:
+            return "detail"
+        return "generic"
+
+    @classmethod
+    def _is_valid_cached_html(cls, url: str, html_text: str) -> Tuple[bool, str]:
+        if not html_text:
+            return False, "empty"
+
+        html_text = html_text.strip()
+        if len(html_text) < 200:
+            return False, "too_short"
+
+        lowered = html_text.lower()
+        blocked_markers = [
+            "just a moment",
+            "access denied",
+            "captcha",
+            "attention required",
+            "enable javascript",
+            "cf-browser-verification",
+            "cloudflare",
+            "blocked",
+            "403 forbidden",
+            "error 403",
+            "error 404",
+            "error 500",
+            "too many requests",
+        ]
+        for marker in blocked_markers:
+            if marker in lowered:
+                return False, f"blocked:{marker}"
+
+        if "<html" not in lowered or "</html>" not in lowered:
+            return False, "not_html_document"
+
+        page_type = cls._get_cache_page_type(url)
+        markers_by_type = {
+            "list": ["list-row", "post-title", "img-item", "board-list", "list-wrap"],
+            "search": ["list-row", "post-title", "img-item", "search.php", "board-list"],
+            "detail": ["item-subject", 'itemprop="headline"', 'itemprop="image"', "view-wrap", "serial-movie-wrap"],
+            "generic": ["<body", "og:title", "viewport"],
+        }
+
+        matched = [marker for marker in markers_by_type.get(page_type, []) if marker in lowered]
+        min_markers = 1 if page_type in ("list", "search", "generic") else 2
+        if len(matched) < min_markers:
+            return False, f"missing_markers:{page_type}"
+
+        return True, f"valid:{page_type}"
 
     @staticmethod
     def get_html_cached(url: str, **kwargs) -> str:
@@ -2353,8 +2414,6 @@ class LogicOhli24(AnimeModuleBase):
         캐시 시간은 ohli24_cache_minutes 설정에 따름 (0=캐시 없음)
         다운로드 루틴은 이 함수를 사용하지 않음 (세션/헤더 필요)
         """
-        import hashlib
-        
         cache_minutes = int(P.ModelSetting.get("ohli24_cache_minutes") or 0)
         
         # 캐시 비활성화 시 바로 fetch
@@ -2377,11 +2436,17 @@ class LogicOhli24(AnimeModuleBase):
                 try:
                     with open(cache_file, 'r', encoding='utf-8') as f:
                         cached_html = f.read()
-                    if cached_html and len(cached_html) > 100:
-                        logger.debug(f"[Cache HIT] {url[:60]}... (age: {cache_age:.0f}s)")
+                    is_valid, reason = LogicOhli24._is_valid_cached_html(url, cached_html)
+                    if is_valid:
+                        logger.debug(f"[Cache HIT] {url[:60]}... (age: {cache_age:.0f}s, reason: {reason})")
                         return cached_html
-                    else:
-                        logger.debug(f"[Cache MISS] Cached content is empty or too short for {url[:60]}...")
+
+                    logger.warning(f"[Cache INVALID] {url[:60]}... (reason: {reason})")
+                    try:
+                        os.remove(cache_file)
+                        logger.debug(f"[Cache PURGE] Removed invalid cache for {url[:60]}...")
+                    except OSError as purge_error:
+                        logger.warning(f"[Cache PURGE ERROR] {purge_error}")
                 except Exception as e:
                     logger.warning(f"[Cache READ ERROR] {e}")
             else:
@@ -2393,13 +2458,16 @@ class LogicOhli24(AnimeModuleBase):
         html = LogicOhli24.get_html(url, **kwargs)
         
         # 캐시에 저장 (유효한 HTML만)
-        if html and len(html) > 100:
+        is_valid, reason = LogicOhli24._is_valid_cached_html(url, html)
+        if is_valid:
             try:
                 with open(cache_file, 'w', encoding='utf-8') as f:
                     f.write(html)
-                logger.debug(f"[Cache SAVE] {url[:60]}...")
+                logger.debug(f"[Cache SAVE] {url[:60]}... (reason: {reason})")
             except Exception as e:
                 logger.warning(f"[Cache WRITE ERROR] {e}")
+        elif html:
+            logger.warning(f"[Cache SKIP SAVE] {url[:60]}... (reason: {reason})")
         
         return html
 
