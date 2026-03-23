@@ -1824,21 +1824,25 @@ class LogicOhli24(AnimeModuleBase):
 
             for item in tmp_items:
                 entity = {}
-                entity["link"] = item.xpath(".//a/@href")[0]
+                entity["link"] = LogicOhli24._extract_first(item, [".//a/@href"])
+                if not entity["link"]:
+                    logger.warning("[Ohli24] Skipping list item without link")
+                    continue
                 entity["code"] = entity["link"].split("/")[-1]
-                entity["title"] = item.xpath(".//div[@class='post-title']/text()")[0].strip()
-                # logger.debug(item.xpath(".//div[@class='img-item']/img/@src")[0])
-                # logger.debug(item.xpath(".//div[@class='img-item']/img/@data-ezsrc")[0])
-                # entity["image_link"] = item.xpath(".//div[@class='img-item']/img/@src")[
-                #     0
-                # ].replace("..", P.ModelSetting.get("ohli24_url"))
+                entity["title"] = LogicOhli24._extract_text(item, ".//div[contains(@class, 'post-title')]//text()")
+                if not entity["title"]:
+                    logger.warning(f"[Ohli24] Skipping list item without title: {entity['link']}")
+                    continue
 
-                if len(item.xpath(".//div[@class='img-item']/img/@src")) > 0:
-                    entity["image_link"] = item.xpath(".//div[@class='img-item']/img/@src")[0].replace(
-                        "..", LogicOhli24.get_base_url()
-                    )
-                else:
-                    entity["image_link"] = item.xpath(".//div[@class='img-item']/img/@data-ezsrc")[0]
+                image_link = LogicOhli24._extract_first(
+                    item,
+                    [
+                        ".//div[contains(@class, 'img-item')]//img/@src",
+                        ".//div[contains(@class, 'img-item')]//img/@data-src",
+                        ".//div[contains(@class, 'img-item')]//img/@data-ezsrc",
+                    ],
+                )
+                entity["image_link"] = image_link.replace("..", LogicOhli24.get_base_url()) if image_link else ""
 
                 data["ret"] = "success"
                 data["anime_list"].append(entity)
@@ -1862,12 +1866,25 @@ class LogicOhli24(AnimeModuleBase):
 
             for item in tmp_items:
                 entity = {}
-                entity["link"] = item.xpath(".//a/@href")[0]
+                entity["link"] = LogicOhli24._extract_first(item, [".//a/@href"])
+                if not entity["link"]:
+                    logger.warning("[Ohli24] Skipping auto list item without link")
+                    continue
                 entity["code"] = entity["link"].split("/")[-1]
-                entity["title"] = item.xpath(".//div[@class='post-title']/text()")[0].strip()
-                entity["image_link"] = item.xpath(".//div[@class='img-item']/img/@src")[0].replace(
-                    "..", LogicOhli24.get_base_url()
+                entity["title"] = LogicOhli24._extract_text(item, ".//div[contains(@class, 'post-title')]//text()")
+                if not entity["title"]:
+                    logger.warning(f"[Ohli24] Skipping auto list item without title: {entity['link']}")
+                    continue
+
+                image_link = LogicOhli24._extract_first(
+                    item,
+                    [
+                        ".//div[contains(@class, 'img-item')]//img/@src",
+                        ".//div[contains(@class, 'img-item')]//img/@data-src",
+                        ".//div[contains(@class, 'img-item')]//img/@data-ezsrc",
+                    ],
                 )
+                entity["image_link"] = image_link.replace("..", LogicOhli24.get_base_url()) if image_link else ""
                 data["ret"] = "success"
                 data["anime_list"].append(entity)
 
@@ -1901,21 +1918,26 @@ class LogicOhli24(AnimeModuleBase):
             # Clean up nested mess
             for item in tmp_items:
                 entity = {}
-                entity["link"] = item.xpath(".//a/@href")[0]
-                # entity["code"] = entity["link"].split("/")[-1]
+                entity["link"] = LogicOhli24._extract_first(item, [".//a/@href"])
+                if not entity["link"]:
+                    logger.warning("[Ohli24] Skipping search item without link")
+                    continue
                 entity["wr_id"] = entity["link"].split("=")[-1]
-                # logger.debug(item.xpath(".//div[@class='post-title']/text()").join())
-                entity["title"] = "".join(item.xpath(".//div[@class='post-title']/text()")).strip()
+                entity["title"] = LogicOhli24._extract_text(item, ".//div[contains(@class, 'post-title')]//text()")
+                if not entity["title"]:
+                    logger.warning(f"[Ohli24] Skipping search item without title: {entity['link']}")
+                    continue
                 
                 # Use multiple image attributes for lazy-loading support
-                img_attributes = [".//div[@class='img-item']/img/@src", ".//div[@class='img-item']/img/@data-src", ".//div[@class='img-item']/img/@data-ezsrc"]
-                original_img = ""
-                for attr in img_attributes:
-                    matches = item.xpath(attr)
-                    if matches and matches[0].strip():
-                        original_img = matches[0].replace("..", LogicOhli24.get_base_url())
-                        break
-                
+                original_img = LogicOhli24._extract_first(
+                    item,
+                    [
+                        ".//div[contains(@class, 'img-item')]//img/@src",
+                        ".//div[contains(@class, 'img-item')]//img/@data-src",
+                        ".//div[contains(@class, 'img-item')]//img/@data-ezsrc",
+                    ],
+                )
+                original_img = original_img.replace("..", LogicOhli24.get_base_url()) if original_img else ""
                 if not original_img:
                     original_img = "https://via.placeholder.com/200x300?text=No+Image"
                 
@@ -1926,7 +1948,13 @@ class LogicOhli24(AnimeModuleBase):
                     urllib.parse.quote(original_img)
                 )
 
-                entity["code"] = item.xpath(".//div[@class='img-item']/img/@alt")[0]
+                entity["code"] = LogicOhli24._extract_first(
+                    item,
+                    [
+                        ".//div[contains(@class, 'img-item')]//img/@alt",
+                        ".//a/@data-wr_id",
+                    ],
+                ) or entity["wr_id"]
 
                 data["ret"] = "success"
                 data["anime_list"].append(entity)
@@ -2405,7 +2433,39 @@ class LogicOhli24(AnimeModuleBase):
         if len(matched) < min_markers:
             return False, f"missing_markers:{page_type}"
 
+        if page_type in ("list", "search"):
+            try:
+                tree = html.fromstring(html_text)
+                rows = tree.xpath('//div[@class="list-row"]')
+                if rows:
+                    valid_rows = 0
+                    for row in rows:
+                        hrefs = row.xpath(".//a/@href")
+                        title_text = "".join(row.xpath(".//div[contains(@class, 'post-title')]//text()")).strip()
+                        if hrefs and title_text:
+                            valid_rows += 1
+                            break
+                    if valid_rows == 0:
+                        return False, f"invalid_rows:{page_type}"
+            except Exception:
+                return False, f"parse_error:{page_type}"
+
         return True, f"valid:{page_type}"
+
+    @staticmethod
+    def _extract_text(node, expression: str) -> str:
+        values = node.xpath(expression)
+        return "".join(value.strip() for value in values if isinstance(value, str) and value.strip()).strip()
+
+    @staticmethod
+    def _extract_first(node, expressions: List[str]) -> str:
+        for expression in expressions:
+            values = node.xpath(expression)
+            if values:
+                value = values[0].strip()
+                if value:
+                    return value
+        return ""
 
     @staticmethod
     def get_html_cached(url: str, **kwargs) -> str:
