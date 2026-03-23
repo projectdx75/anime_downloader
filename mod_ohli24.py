@@ -206,7 +206,7 @@ class LogicOhli24(AnimeModuleBase):
         # 자동 설치 시도
         try:
             logger.info("[Zendriver] Not found, installing via pip...")
-            cmd = [sys.executable, "-m", "pip", "install", "zendriver", "-q"]
+            cmd = [sys.executable, "-m", "pip", "install", "zendriver==0.15.3", "-q"]
             result = sp.run(cmd, capture_output=True, text=True, timeout=120)
             
             if result.returncode == 0:

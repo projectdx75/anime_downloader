@@ -65,7 +65,7 @@ async def fetch_html(url: str, timeout: int = 60, browser_path: str = None) -> d
     try:
         import zendriver as zd
     except ImportError as e:
-        return {"success": False, "error": f"Zendriver not installed: {e}. Run: pip install zendriver", "html": ""}
+        return {"success": False, "error": f"Zendriver not installed: {e}. Run: pip install zendriver==0.15.3", "html": ""}
     
     result = {"success": False, "html": "", "elapsed": 0}
     start_time = asyncio.get_event_loop().time()
