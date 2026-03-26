@@ -628,11 +628,13 @@ class LogicOhli24(AnimeModuleBase):
             elif sub == "queue_list":
                 return jsonify([])
             elif sub == "queue_command":
-                command = req.form["command"]
-                entity_id = req.form["entity_id"]
+                command = req.form.get("command", "")
+                entity_id = req.form.get("entity_id", "")
                 
                 if ModuleQueue:
                     if command == "stop" or command == "cancel":
+                        if not entity_id:
+                            return jsonify({'ret': 'error', 'msg': 'entity_id required'})
                         # Create a mock request object for GDM cancel as req.form is often immutable
                         class MockRequest:
                             def __init__(self, form_data):
@@ -666,6 +668,13 @@ class LogicOhli24(AnimeModuleBase):
                                 # GDM 내부 클린업은 cancel()이 담당하므로 여기서 del은 신중해야 함
                                 # 하지만 강제 초기화이므로 제거 시도
                                 cancelled_count += 1
+
+                        # 자체 큐/메모리 리스트도 함께 초기화해서 UI 잔상을 남기지 않음
+                        if self.queue:
+                            try:
+                                self.queue.command("reset", 0)
+                            except Exception as e:
+                                logger.error(f"Failed to reset Ohli24 runtime queue: {e}")
                         
                         # Ohli24 DB도 정리
                         try:
@@ -688,7 +697,7 @@ class LogicOhli24(AnimeModuleBase):
                         return jsonify({'ret':'success', 'log':'완료 항목이 삭제되었습니다.'})
                 
                 if self.queue:
-                    ret = self.queue.command(command, int(entity_id))
+                    ret = self.queue.command(command, int(entity_id) if str(entity_id).isdigit() else 0)
                     return jsonify(ret)
                 return jsonify({'ret':'error', 'msg':'Queue not initialized'})
             elif sub == "add_queue_checked_list":
