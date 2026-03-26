@@ -150,11 +150,12 @@ $(document).ready(function(){
     
     var protocol = location.protocol;
     var socketUrl = protocol + "//" + document.domain + ":" + location.port;
+    var frameworkStatusEvent = MODULE_NAME + '_status';
     
     // Queue 전용 소켓 시도
     var queueSocket = null;
     try {
-        queueSocket = io.connect(socketUrl + '/anime_downloader/linkkf/queue');
+        queueSocket = io.connect(socketUrl + '/' + PACKAGE_NAME + '/' + MODULE_NAME + '/queue');
     } catch (e) {
         console.error('Queue socket error:', e);
     }
@@ -162,7 +163,7 @@ $(document).ready(function(){
     var frameworkSocket = null;
     try {
         frameworkSocket = io.connect(socketUrl + '/framework');
-        frameworkSocket.on('linkkf_status', function(data) {
+        frameworkSocket.on(frameworkStatusEvent, function(data) {
             status_html(data);
         });
     } catch (e) {
@@ -180,12 +181,16 @@ $(document).ready(function(){
     var gdmSocket = null;
     try {
         gdmSocket = io.connect(socketUrl + '/gommi_downloader_manager');
-        gdmSocket.on('status', function(data) {
+        gdmSocket.on('download_status', function(data) {
             // 이 모듈과 관련된 작업만 처리
             if (data.caller_plugin === PACKAGE_NAME + '_' + MODULE_NAME) {
-                // GDM 데이터를 큐 형식으로 변환하여 UI 업데이트
-                // 수동 새로고침 없이 실시간 반영을 위해 renderList 호출 주기를 짧게 하거나 직접 UI 갱신
+                if (document.getElementById("progress_" + data.callback_id)) {
+                    status_html(convertGdmStatus(data));
+                    button_html(convertGdmStatus(data));
+                    return;
+                }
                 silentFetchList(function(newList) {
+                    current_list_length = newList.length;
                     renderList(newList);
                 });
             }
@@ -214,8 +219,9 @@ function silentFetchList(callback) {
 
 function autoRefreshList() {
     silentFetchList(function(data) {
-        if (data.length !== current_list_length) {
-            current_list_length = data.length;
+        var shouldRender = data.length !== current_list_length || hasRenderableChanges(data);
+        current_list_length = data.length;
+        if (shouldRender) {
             renderList(data);
         }
         
@@ -244,6 +250,34 @@ function on_start() {
         current_list_length = data.length;
         renderList(data);
     });
+}
+
+function convertGdmStatus(data) {
+    return {
+        idx: data.callback_id,
+        percent: data.progress,
+        status_str: data.status_str,
+        status_kor: data.status_kor,
+        current_pf_count: data.current_pf_count || 0,
+        current_speed: data.speed || '',
+        download_time: data.eta || ''
+    };
+}
+
+function hasRenderableChanges(data) {
+    if (!data || data.length === 0) return false;
+    for (var i = 0; i < data.length; i++) {
+        var item = data[i];
+        var progressEl = document.getElementById("progress_" + item.idx);
+        if (!progressEl) return true;
+        var currentPercent = parseInt(progressEl.style.width || progressEl.textContent || '0', 10);
+        if (currentPercent !== parseInt(item.percent || 0, 10)) return true;
+        var speedEl = document.getElementById("current_speed_" + item.idx);
+        if (speedEl && speedEl.textContent !== String(item.current_speed || '')) return true;
+        var statusEl = document.getElementById("status_" + item.idx);
+        if (statusEl && statusEl.textContent.indexOf(item.status_kor) === -1) return true;
+    }
+    return false;
 }
 
 function renderList(data) {
@@ -408,4 +442,3 @@ function status_html(data) {
 </script>
 
 {% endblock %}
-
