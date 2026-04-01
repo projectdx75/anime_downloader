@@ -44,8 +44,8 @@
                     <div class="input-group input-group-lg">
                         <input type="text" id="code" name="code" class="form-control border-0" placeholder="URL 또는 제목을 입력하세요 (예: 녹을 먹는 비스코)" style="background: rgba(0,0,0,0.4); color: #fff; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);">
                         <div class="input-group-append">
-                            <button id="analysis_btn" class="btn btn-primary px-4 font-weight-bold" style="box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);">분석</button>
-                            <button id="go_ohli24_btn" class="btn btn-outline-light px-3">Go OHLI24</button>
+                            <button type="button" id="analysis_btn" class="btn btn-primary px-4 font-weight-bold ohli24-primary-action" style="box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);">분석</button>
+                            <a id="go_ohli24_btn" class="btn btn-outline-light px-3 ohli24-secondary-action d-inline-flex align-items-center" href="{{ arg['ohli24_url'] or 'https://ani.ohli24.com' }}" target="_blank" rel="noopener noreferrer">Go</a>
                         </div>
                     </div>
                     <div class="d-flex align-items-center mt-2 text-muted small">
@@ -77,6 +77,39 @@
         const params = new Proxy(new URLSearchParams(window.location.search), {
             get: (searchParams, prop) => searchParams.get(prop),
         })
+
+        function resolveGoTargetUrl(rawValue) {
+            const baseUrl = (ohli24_url && ohli24_url.trim()) ? ohli24_url.trim().replace(/\/$/, '') : 'https://ani.ohli24.com';
+            const raw = (rawValue || '').trim();
+
+            if (!raw) {
+                return baseUrl;
+            }
+
+            if (/^https?:\/\//i.test(raw)) {
+                return raw;
+            }
+
+            if (raw.startsWith('/c/') || raw.startsWith('/e/')) {
+                return baseUrl + raw;
+            }
+
+            if (raw.includes('/c/')) {
+                return baseUrl + '/c/' + raw.split('/c/')[1];
+            }
+
+            if (raw.includes('/e/')) {
+                return baseUrl + '/e/' + raw.split('/e/')[1];
+            }
+
+            // 분석 결과의 code 값 또는 수동 입력 code는 작품 상세(/c/)로 연결
+            return baseUrl + '/c/' + raw;
+        }
+
+        function updateGoButtonHref(rawValue) {
+            const targetUrl = resolveGoTargetUrl(rawValue);
+            $('#go_ohli24_btn').attr('href', targetUrl);
+        }
 
         const loader = document.getElementById("preloader");
 
@@ -137,6 +170,7 @@
 
         function make_program(data) {
             current_data = data;
+            updateGoButtonHref(data.code || $('#code').val() || params.code);
             // // console.log(data);
             
             let str = "";
@@ -192,14 +226,14 @@
             
             // Standard Actions
             if (data.first_exist_filepath) {
-                str += `<button type="button" class="btn btn-success btn-sm mr-2 btn-watch" data-path="${data.first_exist_filepath.replace(/\\/g, '\\\\')}"><i class="fa fa-play"></i> 보기</button>`;
+                str += `<button type="button" class="btn btn-success btn-sm mr-2 btn-watch ohli24-watch-action" data-path="${data.first_exist_filepath.replace(/\\/g, '\\\\')}"><i class="fa fa-play"></i> 보기</button>`;
             }
-            str += `<button id="check_download_btn" class="btn btn-primary btn-sm"><i class="fa fa-download"></i> 선택 다운로드</button>`;
-            str += `<button id="all_check_on_btn" class="btn btn-outline-light btn-sm">전체 선택</button>`;
-            str += `<button id="all_check_off_btn" class="btn btn-outline-secondary btn-sm">해제</button>`;
+            str += `<button id="check_download_btn" class="btn btn-primary btn-sm ohli24-primary-action"><i class="fa fa-download"></i> 선택 다운로드</button>`;
+            str += `<button id="all_check_on_btn" class="btn btn-outline-light btn-sm ohli24-secondary-action">전체 선택</button>`;
+            str += `<button id="all_check_off_btn" class="btn btn-outline-secondary btn-sm ohli24-muted-action">해제</button>`;
             
             // Scheduling (Heart)
-            str += `<button id="add_whitelist" class="btn btn-outline-danger btn-sm" style="min-width: 120px;"><i class="bi bi-heart"></i> 스케쥴링 추가</button>`;
+            str += `<button id="add_whitelist" class="btn btn-outline-danger btn-sm ohli24-danger-action" style="min-width: 120px;"><i class="bi bi-heart"></i> 스케쥴링 추가</button>`;
             
             str += `</div>`; // End Action Toolbar
             
@@ -255,6 +289,7 @@
         }
 
         $(function () {
+            updateGoButtonHref(params.code || $('#code').val());
             // // console.log(params.wr_id)
             // // console.log(findGetParameter('wr_id'))
             // // console.log(params.code)
@@ -332,6 +367,7 @@
                         if (ret.ret === 'success' && ret.data != null) {
                             // console.log(ret.code)
                             // // console.log(ret.data)
+                            updateGoButtonHref((ret.data && ret.data.code) || code);
                             make_program(ret.data)
                         } else {
                             $.notify('<strong>분석 실패</strong><br>' + ret.log, {type: 'warning'});
@@ -372,11 +408,6 @@
                     }
                 }
             });
-        });
-
-        $("body").on('click', '#go_ohli24_btn', function (e) {
-            e.preventDefault();
-            window.open("{{arg['ohli24_url']}}", "_blank");
         });
 
         $("body").on('click', '#all_check_on_btn', function (e) {
@@ -718,8 +749,8 @@
             .row, form, #program_list, #program_auto_form, #episode_list {
                 width: 100% !important;
                 max-width: 100% !important;
-                padding-left: 4px !important;
-                padding-right: 4px !important;
+                padding-left: 2px !important;
+                padding-right: 2px !important;
                 margin-left: 0 !important;
                 margin-right: 0 !important;
                 box-sizing: border-box !important;
@@ -773,10 +804,10 @@
             
             /* ===== 상단 정보 카드 ===== */
             .glass-card {
-                width: calc(100% - 10px) !important;
+                width: calc(100% - 4px) !important;
                 max-width: 100% !important;
-                padding: 10px !important;
-                margin: 5px !important;
+                padding: 8px !important;
+                margin: 2px !important;
                 border-radius: 12px !important;
                 box-sizing: border-box !important;
             }

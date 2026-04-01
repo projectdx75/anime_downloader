@@ -6,9 +6,9 @@
 <div id="anilife_setting_wrapper" class="container-fluid mt-4 mx-auto content-cloak" style="max-width: 100%;">
   
   <div class="glass-card p-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 anilife-setting-header">
         <h2 class="text-white font-weight-bold"><i class="bi bi-gear-fill mr-2"></i>Anilife 설정</h2>
-        <div>
+        <div class="anilife-setting-actions">
             <button type="button" class="btn btn-outline-info btn-sm mr-2" id="btn-self-update" title="최신 버전으로 업데이트">
                 <i class="bi bi-arrow-repeat"></i> 업데이트
             </button>
@@ -417,6 +417,68 @@
         cursor: pointer;
         display: flex; align-items: center; justify-content: center;
         font-size: 0.75rem;
+    }
+
+    @media (max-width: 768px) {
+        .anilife-setting-header {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 12px;
+        }
+
+        .anilife-setting-actions {
+            display: flex;
+            flex-wrap: wrap;
+            width: 100%;
+            gap: 8px;
+        }
+
+        .anilife-setting-actions .btn,
+        .anilife-setting-actions #globalSettingSaveBtn {
+            margin-right: 0 !important;
+        }
+
+        .anilife-setting-actions > div {
+            display: inline-flex;
+        }
+
+        #anilife_auto_make_folder_div {
+            border-left: none !important;
+            margin-left: 0 !important;
+            padding-left: 0 !important;
+        }
+
+        #anilife_setting_wrapper .tab-pane {
+            border-left: none !important;
+            border-right: none !important;
+            border-bottom: none !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+        }
+
+        /* 이 페이지에서는 모바일 스크롤 힌트/세로 라인 제거 */
+        #menu_module_div::after,
+        #menu_page_div::after {
+            display: none !important;
+            content: none !important;
+            background: none !important;
+        }
+
+        #menu_module_div,
+        #menu_page_div,
+        #anilife_setting_wrapper,
+        #anilife_setting_wrapper .glass-card {
+            border-left: none !important;
+            border-right: none !important;
+            box-shadow: none !important;
+        }
+
+        #anilife_setting_wrapper .row,
+        #anilife_setting_wrapper .col-sm-9,
+        #anilife_setting_wrapper .col-sm-3 {
+            border-left: none !important;
+            border-right: none !important;
+        }
     }
     .tag-chip .tag-remove:hover { background: rgba(239, 68, 68, 0.9); }
     .tag-chip .tag-index {

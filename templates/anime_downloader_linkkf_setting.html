@@ -6,9 +6,9 @@
 <div id="linkkf_setting_wrapper" class="container-fluid mt-4 mx-auto content-cloak" style="max-width: 100%; padding-left: 5px; padding-right: 5px;">
   
   <div class="glass-card p-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 linkkf-setting-header">
         <h2 class="text-white font-weight-bold"><i class="bi bi-gear-fill mr-2"></i>Linkkf 설정</h2>
-        <div>
+        <div class="linkkf-setting-actions">
             <button type="button" class="btn btn-outline-info btn-sm mr-2" id="btn-self-update" title="최신 버전으로 업데이트">
                 <i class="bi bi-arrow-repeat"></i> 업데이트
             </button>
@@ -217,6 +217,44 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
 
 <style>
+    @media (max-width: 768px) {
+        .linkkf-setting-header {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 12px;
+        }
+
+        .linkkf-setting-actions {
+            display: flex;
+            flex-wrap: wrap;
+            width: 100%;
+            gap: 8px;
+        }
+
+        .linkkf-setting-actions .btn,
+        .linkkf-setting-actions #globalSettingSaveBtn {
+            margin-right: 0 !important;
+        }
+
+        .linkkf-setting-actions > div {
+            display: inline-flex;
+        }
+
+        #linkkf_auto_make_folder_div {
+            border-left: none !important;
+            margin-left: 0 !important;
+            padding-left: 0 !important;
+        }
+
+        #linkkf_setting_wrapper .tab-pane {
+            border-left: none !important;
+            border-right: none !important;
+            border-bottom: none !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+        }
+    }
+
     /* Global Background */
     body {
         font-family: 'NamumSquareNeo', system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Noto Sans, Liberation Sans, Arial, sans-serif;
