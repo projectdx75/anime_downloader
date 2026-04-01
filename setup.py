@@ -112,6 +112,9 @@ setting = {
 
 from plugin import *
 import os
+import importlib
+import subprocess
+import sys
 import traceback
 from flask import render_template
 
@@ -144,18 +147,44 @@ DEFINE_DEV = True
 
 P = create_plugin_instance(setting)
 
-# curl_cffi 자동 설치 루틴
-try:
-    import curl_cffi
-except ImportError:
+REQUIRED_PACKAGES = [
+    {"import_name": "bs4", "package_name": "beautifulsoup4"},
+    {"import_name": "requests_cache", "package_name": "requests-cache"},
+    {"import_name": "cloudscraper", "package_name": "cloudscraper"},
+    {"import_name": "PIL", "package_name": "Pillow"},
+    {"import_name": "lxml", "package_name": "lxml"},
+    {"import_name": "aiohttp", "package_name": "aiohttp"},
+    {"import_name": "jsbeautifier", "package_name": "jsbeautifier"},
+    {"import_name": "curl_cffi", "package_name": "curl-cffi"},
+    {"import_name": "loguru", "package_name": "loguru"},
+    {"import_name": "zendriver", "package_name": "zendriver==0.15.3"},
+]
+
+
+def ensure_dependencies():
+    missing_packages = []
+    for dependency in REQUIRED_PACKAGES:
+        try:
+            importlib.import_module(dependency["import_name"])
+        except ImportError:
+            missing_packages.append(dependency)
+
+    if not missing_packages:
+        return
+
+    package_names = [dependency["package_name"] for dependency in missing_packages]
+    P.logger.warning(f"Missing plugin dependencies detected: {package_names}")
+
     try:
-        import subprocess
-        import sys
-        P.logger.info("curl_cffi not found. Attempting to install...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "curl-cffi"])
-        P.logger.info("curl_cffi installed successfully.")
+        subprocess.check_call([sys.executable, "-m", "pip", "install"] + package_names)
+        P.logger.info(f"Plugin dependencies installed successfully: {package_names}")
     except Exception as e:
-        P.logger.error(f"Failed to install curl_cffi: {e}")
+        P.logger.error(f"Failed to install plugin dependencies: {package_names}")
+        P.logger.error(f"Install error: {e}")
+        raise
+
+
+ensure_dependencies()
 
 try:
     if DEFINE_DEV:
@@ -180,4 +209,3 @@ try:
 except Exception as e:
     P.logger.error(f'Exception: {str(e)}')
     P.logger.error(traceback.format_exc())
-

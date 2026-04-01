@@ -23,21 +23,6 @@ from lxml import html
 from urllib import parse
 import urllib
 
-packages = [
-    "beautifulsoup4",
-    "requests-cache",
-    "cloudscraper",
-    "selenium_stealth",
-    "webdriver_manager",
-]
-for package in packages:
-    try:
-        import package
-
-    except ImportError:
-        # main(["install", package])
-        os.system(f"pip install {package}")
-
 from bs4 import BeautifulSoup
 import cloudscraper
 

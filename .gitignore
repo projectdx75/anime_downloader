@@ -134,6 +134,8 @@ dmypy.json
 config.yaml
 lib2/
 .vscode/
+.agents/
+.agent/
 memo.txt
 *.zip
 flaskfarm.sh
@@ -151,6 +153,8 @@ lib/support/site/wavve.py
 lib/support/site/seezn.py
 lib/support/site/kakaotv.py
 *.bat
+docs/
+error_logs/
 output/
 *.mkv
 
@@ -164,3 +168,4 @@ bin/
 debug_*.py
 check_top_api.py
 d_ohli24.py
+dev_scratch/
