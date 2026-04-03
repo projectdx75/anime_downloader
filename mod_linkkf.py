@@ -83,6 +83,53 @@ class LogicLinkkf(AnimeModuleBase):
         "like Gecko) Chrome/96.0.4664.110 Whale/3.12.129.46 Safari/537.36"
     }
 
+    @staticmethod
+    def _normalize_listing_item(item, rank=None):
+        postid = str(item.get("postid") or item.get("code") or "")
+        postname = item.get("postname") or item.get("title") or item.get("name") or ""
+        postthum = item.get("postthum") or item.get("image_link") or ""
+        postnote = item.get("postnote") or item.get("chapter") or item.get("postnoti") or item.get("seasontype") or ""
+
+        normalized = {
+            "postid": postid,
+            "postname": postname,
+            "postthum": postthum,
+            "postnote": postnote,
+        }
+        if rank is not None:
+            normalized["rank"] = rank
+        return normalized
+
+    @staticmethod
+    def _build_listing_payload(items, page=1, total_page=1, extra=None):
+        normalized_items = []
+        for item in (items or []):
+            normalized_items.append(
+                LogicLinkkf._normalize_listing_item(item, rank=item.get("rank") if isinstance(item, dict) else None)
+            )
+
+        payload = {
+            "ret": "success",
+            "page": page,
+            "total_page": total_page,
+            "episode_count": len(normalized_items),
+            "count": len(normalized_items),
+            "data": normalized_items,
+            "episode": [
+                {
+                    "code": item["postid"],
+                    "title": item["postname"],
+                    "image_link": item["postthum"],
+                    "link": f"https://linkkf.live/{item['postid']}" if item["postid"] else "",
+                    "chapter": item["postnote"],
+                }
+                for item in normalized_items
+            ],
+        }
+        if extra:
+            payload.update(extra)
+        return payload
+
     def __init__(self, P):
         super(LogicLinkkf, self).__init__(P, setup_default=self.db_default, name=name, first_menu='setting', scheduler_desc="linkkf 자동 다운로드")
         # self.queue = None  # 인스턴스 레벨 초기화 제거 (클래스 레벨 사용)
@@ -140,8 +187,9 @@ class LogicLinkkf(AnimeModuleBase):
                 data = []
                 cate = request.form["type"]
                 page = request.form["page"]
+                top_type = request.form.get("top_type", "month")
 
-                data = self.get_anime_info(cate, page)
+                data = self.get_anime_info(cate, page, top_type=top_type)
                 # self.current_data = data
                 return jsonify(
                     {"ret": "success", "cate": cate, "page": page, "data": data}
@@ -1353,7 +1401,7 @@ class LogicLinkkf(AnimeModuleBase):
 
         return html_data
 
-    def get_anime_info(self, cate, page):
+    def get_anime_info(self, cate, page, top_type="month"):
         try:
             items_xpath = '//div[@class="ext-json-item"]'
             title_xpath = ""
@@ -1365,12 +1413,8 @@ class LogicLinkkf(AnimeModuleBase):
                 items_xpath = None # JSON fetching
                 title_xpath = None
             elif cate == "movie":
-                # url = f"{P.ModelSetting.get('linkkf_url')}/ani/page/{page}"
-                # items_xpath = '//div[@class="myui-vodlist__box"]'
-                # title_xpath = './/a[@class="text-fff"]//text()'
-                
-                # API Spec: categorytagid=5061 (Movie)
-                url = "https://linkkf.5imgdarr.top/api/singlefilter.php?categorytagid=5061&page={}&limit=20".format(page)
+                # API Spec: season type movie
+                url = "https://linkkf.5imgdarr.top/api/singlefilter.php?postseasontypetagid=5061&page={}&limit=20".format(page)
                 items_xpath = None
                 title_xpath = None
 
@@ -1381,8 +1425,9 @@ class LogicLinkkf(AnimeModuleBase):
                 items_xpath = None
                 title_xpath = None
             elif cate == "top_view":
-                # API Spec: type=month|week|day, page=1
-                url = "https://linkkf.5imgdarr.top/api/apiview.php?type=month&page={}".format(page)
+                # API Spec: type=day|week|month|all
+                normalized_top_type = top_type if top_type in ["day", "week", "month", "all"] else "month"
+                url = "https://linkkf.5imgdarr.top/api/apiview.php?type={}&limit=100".format(normalized_top_type)
                 items_xpath = None # JSON fetching
                 title_xpath = None
             else:
@@ -1397,6 +1442,8 @@ class LogicLinkkf(AnimeModuleBase):
                 self.referer = "https://linkkf.live"
 
             data = {"ret": "success", "page": page}
+            if cate == "top_view":
+                data["top_type"] = top_type if top_type in ["day", "week", "month", "all"] else "month"
             response_data = LogicLinkkf.get_html(url, timeout=10)
             
             # JSON 응답 처리 (Top View 포함)
@@ -1417,29 +1464,57 @@ class LogicLinkkf(AnimeModuleBase):
                 
                 # top_view 처리는 별도 로직 (구조가 다름)
                 if cate == "top_view":
-                    items = json_data if isinstance(json_data, list) else []
-                    data["episode_count"] = len(items)
-                    data["total_page"] = 100 # API limits unclear, defaulting to enough
-                    data["episode"] = []
-                    
-                    for item in items:
-                        entity = {}
-                        # API: postid, postname, postthum, postdate, ...
-                        entity["code"] = str(item.get("postid"))
-                        entity["title"] = item.get("postname")
-                        entity["image_link"] = item.get("postthum")
-                        entity["link"] = f"https://linkkf.live/{entity['code']}"
-                        entity["chapter"] = "Top" # Rank or simple tag
-                        
-                        data["episode"].append(entity)
-                    return data
+                    if isinstance(json_data, dict):
+                        items = json_data.get("data", []) if isinstance(json_data.get("data", []), list) else []
+                        top_type_value = json_data.get("type", data.get("top_type", top_type))
+                    elif isinstance(json_data, list):
+                        items = json_data
+                        top_type_value = data.get("top_type", top_type)
+                    else:
+                        items = []
+                        top_type_value = data.get("top_type", top_type)
+
+                    normalized_items = []
+
+                    for index, item in enumerate(items, start=1):
+                        note_text = ""
+                        if top_type_value == "day":
+                            note_text = f"일간 {item.get('day_views', 0):,}"
+                        elif top_type_value == "week":
+                            note_text = f"주간 {item.get('week_views', 0):,}"
+                        elif top_type_value == "month":
+                            note_text = f"월간 {item.get('month_views', 0):,}"
+                        elif top_type_value == "all":
+                            note_text = f"누적 {item.get('total_views', 0):,}"
+
+                        normalized_items.append({
+                            "postid": str(item.get("postid", "")),
+                            "postname": item.get("postname", ""),
+                            "postthum": item.get("postthum", ""),
+                            "postnote": note_text or item.get("postnote") or f"TOP {index}",
+                            "rank": index,
+                        })
+                    return self._build_listing_payload(
+                        normalized_items,
+                        page=page,
+                        total_page=1,
+                        extra={"top_type": top_type_value, "type": top_type_value},
+                    )
                 
                 # 기존 JSON 처리 (ing 등)
                 if isinstance(json_data, dict):
+                    if "data" in json_data and isinstance(json_data["data"], list):
+                        total_page = json_data.get("pagination", {}).get("total_pages", json_data.get("total_page", 1)) if isinstance(json_data.get("pagination"), dict) else json_data.get("total_page", 1)
+                        return self._build_listing_payload(
+                            json_data["data"],
+                            page=page,
+                            total_page=total_page,
+                            extra={k: v for k, v in json_data.items() if k not in ["data", "episode", "episode_count", "count", "ret", "page", "total_page"]},
+                        )
                     return json_data
                 else:
-                    data["episode"] = json_data if isinstance(json_data, list) else []
-                    return data
+                    normalized_items = json_data if isinstance(json_data, list) else []
+                    return self._build_listing_payload(normalized_items, page=page, total_page=1)
             except (json.JSONDecodeError, ValueError):
                 pass
 
@@ -1455,26 +1530,24 @@ class LogicLinkkf(AnimeModuleBase):
                 data["total_page"] = tree.xpath('//div[@id="wp_page"]//text()')[-1]
             else:
                 data["total_page"] = 0
-            data["episode_count"] = len(tmp_items)
-            data["episode"] = []
+            normalized_items = []
 
             for item in tmp_items:
                 entity = dict()
                 entity["link"] = item.xpath(".//a/@href")[0]
-                entity["code"] = re.search(r"[0-9]+", entity["link"]).group()
-                entity["title"] = item.xpath(title_xpath)[0].strip()
-                entity["image_link"] = item.xpath("./a/@data-original")[0]
-                entity["chapter"] = (
+                entity["postid"] = re.search(r"[0-9]+", entity["link"]).group()
+                entity["postname"] = item.xpath(title_xpath)[0].strip()
+                entity["postthum"] = item.xpath("./a/@data-original")[0]
+                entity["postnote"] = (
                     item.xpath("./a/span//text()")[0].strip()
                     if len(item.xpath("./a/span//text()")) > 0
                     else ""
                 )
-                # logger.info('entity:::', entity['title'])
-                data["episode"].append(entity)
+                normalized_items.append(entity)
 
             # logger.debug(data)
 
-            return data
+            return self._build_listing_payload(normalized_items, page=page, total_page=data["total_page"])
         except Exception as e:
             P.logger.error("Exception:%s", e)
             P.logger.error(traceback.format_exc())
@@ -1508,24 +1581,28 @@ class LogicLinkkf(AnimeModuleBase):
                 data["total_page"] = pagination.get("total_pages", 0)
                 data["episode_count"] = pagination.get("total_results", 0)
                 
+                normalized_items = []
                 for item in items:
                     entity = {}
-                    entity["code"] = str(item.get("postid"))
-                    entity["title"] = item.get("name")
+                    entity["postid"] = str(item.get("postid"))
+                    entity["postname"] = item.get("name")
                     
                     thumb = item.get("thumb")
                     if thumb:
                          if thumb.startswith("http"):
-                             entity["image_link"] = thumb
+                             entity["postthum"] = thumb
                          else:
-                             entity["image_link"] = f"https://rez1.ims1.top/350x/{thumb}"
+                             entity["postthum"] = f"https://rez1.ims1.top/350x/{thumb}"
                     else:
-                        entity["image_link"] = ""
+                        entity["postthum"] = ""
                         
-                    entity["chapter"] = item.get("postnoti") or item.get("seasontype") or ""
-                    entity["link"] = f"https://linkkf.live/{entity['code']}"
-                    
-                    data["episode"].append(entity)
+                    entity["postnote"] = item.get("postnoti") or item.get("seasontype") or ""
+                    normalized_items.append(entity)
+                return self._build_listing_payload(
+                    normalized_items,
+                    page=page,
+                    total_page=pagination.get("total_pages", 0),
+                )
             else:
                  data["total_page"] = 0
                  data["episode_count"] = 0
@@ -1753,14 +1830,13 @@ class LogicLinkkf(AnimeModuleBase):
             data = dict()
             data = {"ret": "success", "page": page}
 
-            data["episode_count"] = len(tmp_items)
-            data["episode"] = []
+            normalized_items = []
 
             for item in tmp_items:
                 entity = dict()
                 entity["link"] = item.xpath(".//a/@href")[0]
-                entity["code"] = re.search(r"[0-9]+", entity["link"]).group()
-                entity["title"] = item.xpath(title_xpath)[0].strip()
+                entity["postid"] = re.search(r"[0-9]+", entity["link"]).group()
+                entity["postname"] = item.xpath(title_xpath)[0].strip()
                 if len(item.xpath("./a/@style")) > 0:
                     print(
                         re.search(
@@ -1770,18 +1846,17 @@ class LogicLinkkf(AnimeModuleBase):
                     )
 
                 if item.xpath(".//a/@data-original"):
-                    entity["image_link"] = item.xpath(".//a/@data-original")[0]
+                    entity["postthum"] = item.xpath(".//a/@data-original")[0]
 
                 else:
-                    entity["image_link"] = ""
+                    entity["postthum"] = ""
                 # entity["image_link"] = item.xpath("./a/@data-original")[0]
-                entity["chapter"] = (
+                entity["postnote"] = (
                     item.xpath("./a/span//text()")[0]
                     if len(item.xpath("./a/span//text()")) > 0
                     else ""
                 )
-                # logger.info('entity:::', entity['title'])
-                data["episode"].append(entity)
+                normalized_items.append(entity)
 
             # json_file_path = os.path.join(download_path, "airing_list.json")
             # logger.debug("json_file_path:: %s", json_file_path)
@@ -1789,7 +1864,7 @@ class LogicLinkkf(AnimeModuleBase):
             # with open(json_file_path, "w") as outfile:
             #     json.dump(data, outfile)
 
-            return data
+            return self._build_listing_payload(normalized_items, page=page, total_page=1)
 
         except Exception as e:
             logger.error("Exception:%s", e)

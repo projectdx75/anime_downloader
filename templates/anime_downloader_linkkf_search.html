@@ -52,6 +52,12 @@
       </button>
       <button id="top_view" type="button" class="btn btn-elegant-top">Top</button>
     </div>
+    <div id="top_type_filters" class="btn-group mt-2 mb-2" role="group" aria-label="Top Type Filters" style="display:none;">
+      <button id="top_type_day" type="button" class="btn btn-outline-warning">일간 톱</button>
+      <button id="top_type_week" type="button" class="btn btn-outline-info">주간 톱</button>
+      <button id="top_type_month" type="button" class="btn btn-outline-light">월간 톱</button>
+      <button id="top_type_all" type="button" class="btn btn-outline-secondary">전체</button>
+    </div>
     <form id="airing_list_form">
       <div id="airing_list"></div>
     </form>
@@ -94,6 +100,7 @@
   let next_page = Number
   let current_cate = ''
   let current_query = ''
+  let current_top_type = 'month'
 
   const loader = document.getElementById("preloader");
 
@@ -165,6 +172,7 @@
           case 'top_view':
               url = '/' + package_name + '/ajax/' + sub + '/anime_list'
               current_cate = 'top_view'
+              data.top_type = current_top_type
               break
           default:
               break;
@@ -181,19 +189,12 @@
               // // console.log('ret::>', ret)
 
               if (current_screen_movie_data !== '') {
-                  if (type === "ing") {
-                      //make_airing_list(ret.data, page)
-                      make_screen_movie_list(ret.data, page);
-                      observer.observe();
-                  } else if (type === "fin") {
-                      make_screen_movie_list(ret.data, page)
-                      observer.observe();
-                  } else if (type === "theater") {
-                      make_screen_movie_list(ret.data, page)
-                      observer.observe();
+                  if (type === 'top_view') {
+                      make_top_view_list(ret.data, page)
                   } else {
                       make_screen_movie_list(ret.data, page)
                   }
+                  observer.observe();
                   div_visible = true
                   // // console.log(div_visible)
               }
@@ -324,6 +325,18 @@
       let tmp = "";
       let new_anime = true;
       let new_style = ''
+      const items = Array.isArray(data?.data)
+          ? data.data
+          : Array.isArray(data?.anime_list)
+              ? data.anime_list
+              : Array.isArray(data?.episode)
+                  ? data.episode.map((item, index) => ({
+                      postid: item.code || '',
+                      postname: item.title || '',
+                      postthum: item.image_link || '',
+                      postnote: item.chapter || `ITEM ${index + 1}`,
+                  }))
+                  : [];
       // // console.log('page a: ', page)
       // // console.log(data)
       // // console.log(data.data)
@@ -343,10 +356,10 @@
           "</button>";
       str += "</div>";
       str += '<div id="inner_screen_movie" class="row infinite-scroll">';
-      for (let i in data.data) {
+      for (let i in items) {
         // // console.log(i)
         // // console.log(data.data[i])
-          if (data.data[i].postid === data.latest_anime_code) {
+          if (items[i].postid === data.latest_anime_code) {
               new_anime = false
           }
 
@@ -364,28 +377,28 @@
           //   '<img class="card-img-top lazyload" src="./static/img_loader_x200.svg" data-original="' + data.episode[i].image_link + '" />';
           tmp +=
               `<img class="card-img-top lazy" src="{{ url_for('.static', filename='img_loader_x200.svg') }}" data-lazy-src="` +
-              data.data[i].postthum +
+              items[i].postthum +
               `" style="cursor: pointer" onclick="location.href='./request?code=` +
-              data.data[i].postid +
+              items[i].postid +
               `'"/>`;
-          if (current_cate === "ing") {
+          if (items[i].postnote) {
               tmp +=
                   '<span class="badge badge-danger badge-on-image">' +
-                  data.data[i].postnote +
+                  items[i].postnote +
                   "</span>";
           }
           // tmp += '<div class="card-body '+ new_anime ? 'new-anime' : '' +'">';
           tmp += '<div class="card-body">';
-          tmp += '<h5 class="card-title">' + data.data[i].postname + "</h5>";
+          tmp += '<h5 class="card-title">' + items[i].postname + "</h5>";
           tmp += '<div class="d-flex justify-content-between align-items-center mb-2">';
-          tmp += '<span class="card-text mb-0">' + data.data[i].postid + '</span>';
-          tmp += '<button id="add_whitelist" name="add_whitelist" class="btn btn-sm btn-favorite" data-code="' + data.data[i].postid + '"><i class="bi bi-heart-fill"></i></button>';
+          tmp += '<span class="card-text mb-0">' + items[i].postid + '</span>';
+          tmp += '<button id="add_whitelist" name="add_whitelist" class="btn btn-sm btn-favorite" data-code="' + items[i].postid + '"><i class="bi bi-heart-fill"></i></button>';
           tmp += '</div>';
           tmp +=
               '<a href="./request?code=' +
-              data.data[i].postid +
+              items[i].postid +
               '" class="btn btn-primary cut-text">' +
-              data.data[i].postname +
+              items[i].postname +
               "</a>";
           tmp += "</div>";
           tmp += "</div>";
@@ -412,6 +425,61 @@
       });
   }
 
+  function make_top_view_list(data, page) {
+      let str = "";
+      let tmp = "";
+      const items = Array.isArray(data?.data)
+          ? data.data
+          : Array.isArray(data?.episode)
+              ? data.episode.map((item, index) => ({
+                  postid: item.code || '',
+                  postname: item.title || '',
+                  postthum: item.image_link || '',
+                  postnote: item.chapter || '',
+                  rank: index + 1,
+              }))
+              : [];
+
+      str += "<div id='page_caption' style='padding-bottom: 3px'>";
+      str += '<button type="button" class="btn btn-info">Top <span class="badge bg-warning">' + current_top_type + "</span></button>";
+      str += "</div>";
+      str += '<div id="inner_top_view" class="top-view-list">';
+
+      items.forEach((item, index) => {
+          const rank = item.rank || (index + 1);
+          const note = item.postnote || '';
+          tmp += '<div class="card top-rank-card mb-3">';
+          tmp += '<div class="row g-0 align-items-center">';
+          tmp += '<div class="col-2 col-md-1 text-center">';
+          tmp += '<div class="top-rank-badge">#' + rank + '</div>';
+          tmp += '</div>';
+          tmp += '<div class="col-4 col-md-3">';
+          tmp += '<img class="card-img-top top-rank-thumb" src="' + (item.postthum || '') + '" style="cursor: pointer" onclick="location.href=\'./request?code=' + item.postid + '\'"/>';
+          tmp += '</div>';
+          tmp += '<div class="col-6 col-md-8">';
+          tmp += '<div class="card-body">';
+          tmp += '<h5 class="card-title">' + (item.postname || '') + '</h5>';
+          tmp += '<div class="d-flex align-items-center gap-2 mb-2">';
+          tmp += '<span class="badge badge-danger">' + note + '</span>';
+          tmp += '<span class="card-text mb-0">' + (item.postid || '') + '</span>';
+          tmp += '</div>';
+          tmp += '<div class="d-flex justify-content-between align-items-center">';
+          tmp += '<a href="./request?code=' + item.postid + '" class="btn btn-primary cut-text">상세 보기</a>';
+          tmp += '<button id="add_whitelist" name="add_whitelist" class="btn btn-sm btn-favorite" data-code="' + item.postid + '"><i class="bi bi-heart-fill"></i></button>';
+          tmp += '</div>';
+          tmp += '</div>';
+          tmp += '</div>';
+          tmp += '</div>';
+          tmp += '</div>';
+          str += tmp;
+          tmp = '';
+      });
+
+      str += "</div>";
+      str += m_hr_black();
+      document.getElementById("screen_movie_list").innerHTML = str;
+  }
+
   $(document).ready(function () {
 
       // if ( "{{arg['anilife_current_code']}}" !== "" ) {
@@ -427,6 +495,7 @@
       })
 
       get_anime_list("ing", 1)
+      updateTopTypeFilters();
 
 
       const observer = lozad('.lozad', {
@@ -482,31 +551,71 @@
 
           // spinner_loading.style.display = "block";
               current_cate = "ing";
+              updateTopTypeFilters();
               get_anime_list("ing", 1);
               break;
           case "movie":
               // // console.log("movie")
               current_cate = "movie";
+              updateTopTypeFilters();
               get_anime_list("movie", 1);
               break;
           case "complete_anilist":
               // // console.log("complete")
               current_cate = "complete";
+              updateTopTypeFilters();
               get_anime_list("complete", 1);
               break;
           case "top_view":
               // // console.log("top_view")
               current_cate = "top_view";
+              updateTopTypeFilters();
               get_anime_list("top_view", 1);
               break;
           default:
               // // console.log("default")
               spinner_loading.style.display = "block";
               current_cate = "ing";
+              updateTopTypeFilters();
               get_anime_list(1, "ing");
               break;
 
       }
+  });
+
+  function updateTopTypeFilters() {
+      const filterWrap = document.getElementById('top_type_filters');
+      if (!filterWrap) return;
+      filterWrap.style.display = current_cate === 'top_view' ? 'inline-flex' : 'none';
+
+      const mapping = {
+          day: 'top_type_day',
+          week: 'top_type_week',
+          month: 'top_type_month',
+          all: 'top_type_all'
+      };
+      Object.entries(mapping).forEach(([key, id]) => {
+          const button = document.getElementById(id);
+          if (!button) return;
+          const isActive = current_top_type === key;
+          button.classList.toggle('active', isActive);
+          button.style.opacity = isActive ? '1' : '0.72';
+      });
+  }
+
+  $("#top_type_filters").on("click", function (e) {
+      const targetId = e.target.id;
+      const mapping = {
+          top_type_day: 'day',
+          top_type_week: 'week',
+          top_type_month: 'month',
+          top_type_all: 'all'
+      };
+      if (!mapping[targetId]) return;
+      current_top_type = mapping[targetId];
+      current_cate = 'top_view';
+      updateTopTypeFilters();
+      get_anime_list('top_view', 1);
   });
 
   /*

@@ -176,38 +176,38 @@
             let str = "";
             
             // 1. Info Card (Top)
-            str += `<div class='glass-card p-4 mb-4'>`;
-            str += `<div class="row">`;
+            str += `<div class='glass-card p-4 mb-4 request-hero-card request-theme-ohli24'>`;
+            str += `<div class="row request-main-grid">`;
             
             // Poster
-            str += `<div class="col-md-3 text-center mb-3 mb-md-0">`;
+            str += `<div class="col-md-3 text-center mb-3 mb-md-0 request-poster-col">`;
             if (data.image) {
                 str += `<img src="${data.image}" class="img-fluid rounded shadow-lg" style="max-height: 350px; width: auto;">`;
             }
             str += `</div>`;
             
             // Details
-            str += `<div class="col-md-9">`;
-            str += `<h2 class="font-weight-bold text-white mb-2">${data.title || ''}</h2>`;
+            str += `<div class="col-md-9 request-info-col">`;
+            str += `<h2 class="font-weight-bold text-white mb-2 request-title">${data.title || ''}</h2>`;
             
             // Subtitle / Original Title
              const des = data.des || {};
             if (des._otit) {
-                 str += `<h5 class="text-muted mb-3">${des._otit}</h5>`;
+                 str += `<h5 class="text-muted mb-3 request-subtitle">${des._otit}</h5>`;
             }
 
             // Tags (Genre, etc.)
-            str += `<div class="mb-4">`;
-             if (des._tag) str += `<span class="badge badge-info mr-2" style="padding: 6px 12px; font-size:0.9em; white-space: normal; line-height: 1.4; text-align: left; display: inline-block;">${des._tag}</span>`;
-             if (des._grade) str += `<span class="badge badge-secondary mr-2" style="padding: 6px 12px; font-size:0.9em;">${des._grade}</span>`;
-             if (data.date || data.day) str += `<span class="badge badge-dark mr-2" style="padding: 6px 12px; font-size:0.9em;">${data.date || ''} (${data.day || ''})</span>`;
+            str += `<div class="mb-4 request-season-wrap">`;
+             if (des._tag) str += `<span class="badge badge-info mr-2 request-season-badge request-tag-badge">${des._tag}</span>`;
+             if (des._grade) str += `<span class="badge badge-secondary mr-2 request-season-badge request-grade-badge">${des._grade}</span>`;
+             if (data.date || data.day) str += `<span class="badge badge-dark mr-2 request-season-badge request-date-badge">${data.date || ''} (${data.day || ''})</span>`;
             str += `</div>`;
             
             // Table for details (Grid)
-            str += `<div class="row mb-4" style="font-size: 0.95em; color: #ccc;">`;
+            str += `<div class="row mb-4 request-meta-grid">`;
              // Helper to add detail item
              const addDetail = (label, val) => {
-                 if(val) str += `<div class="col-md-6 mb-2"><span class="font-weight-bold text-info mr-2">${label}:</span> <span class="text-light">${val}</span></div>`;
+                 if(val) str += `<div class="col-md-6 mb-2 request-meta-item"><span class="font-weight-bold text-info mr-2 request-meta-label">${label}:</span> <span class="text-light request-meta-value">${val}</span></div>`;
              };
              
              addDetail("감독", des._dir);
@@ -217,23 +217,23 @@
              addDetail("상영시간", des._show_time);
              
              if (data.ser_description) {
-                  str += `<div class="col-12 mt-3"><span class="font-weight-bold text-info mr-2">줄거리:</span> <p class="text-light mt-1" style="line-height:1.6;">${data.ser_description}</p></div>`;
+                  str += `<div class="col-12 mt-3 request-meta-item request-meta-item-story"><span class="font-weight-bold text-info mr-2 request-meta-label">줄거리:</span> <p class="text-light mt-1 request-meta-story">${data.ser_description}</p></div>`;
              }
             str += `</div>`; // End detail row
             
             // Actions Toolbar
-            str += `<div class="d-flex flex-wrap align-items-center mobile-action-buttons rounded" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); padding: 10px; gap: 8px;">`;
+            str += `<div class="request-toolbar request-toolbar-main request-toolbar-ohli24">`;
             
             // Standard Actions
             if (data.first_exist_filepath) {
-                str += `<button type="button" class="btn btn-success btn-sm mr-2 btn-watch ohli24-watch-action" data-path="${data.first_exist_filepath.replace(/\\/g, '\\\\')}"><i class="fa fa-play"></i> 보기</button>`;
+                str += `<button type="button" class="btn btn-success btn-sm mr-2 btn-watch ohli24-watch-action request-action-btn request-action-play" data-path="${data.first_exist_filepath.replace(/\\/g, '\\\\')}"><i class="fa fa-play"></i><span>보기</span></button>`;
             }
-            str += `<button id="check_download_btn" class="btn btn-primary btn-sm ohli24-primary-action"><i class="fa fa-download"></i> 선택 다운로드</button>`;
-            str += `<button id="all_check_on_btn" class="btn btn-outline-light btn-sm ohli24-secondary-action">전체 선택</button>`;
-            str += `<button id="all_check_off_btn" class="btn btn-outline-secondary btn-sm ohli24-muted-action">해제</button>`;
+            str += `<button id="check_download_btn" class="btn btn-primary btn-sm ohli24-primary-action request-action-btn request-action-primary"><i class="fa fa-download"></i><span>선택 다운로드</span></button>`;
+            str += `<button id="all_check_on_btn" class="btn btn-outline-light btn-sm ohli24-secondary-action request-action-btn request-action-secondary"><span>전체 선택</span></button>`;
+            str += `<button id="all_check_off_btn" class="btn btn-outline-secondary btn-sm ohli24-muted-action request-action-btn request-action-muted"><span>해제</span></button>`;
             
             // Scheduling (Heart)
-            str += `<button id="add_whitelist" class="btn btn-outline-danger btn-sm ohli24-danger-action" style="min-width: 120px;"><i class="bi bi-heart"></i> 스케쥴링 추가</button>`;
+            str += `<button id="add_whitelist" class="btn btn-outline-danger btn-sm ohli24-danger-action request-action-btn request-action-danger" style="min-width: 120px;"><i class="bi bi-heart"></i><span>스케쥴링 추가</span></button>`;
             
             str += `</div>`; // End Action Toolbar
             
@@ -264,11 +264,13 @@
                 str += '<span class="episode-num">' + epNumText + '</span>';
                 str += '</div>';
                 str += '<div class="episode-info">';
+                str += '<div class="episode-texts">';
                 str += '<div class="episode-info-row">';
                 str += '<div class="episode-title">' + epTitle + '</div>';
                 if (data.episode[i].date) {
                     str += '<div class="episode-date">' + data.episode[i].date + '</div>';
                 }
+                str += '</div>';
                 str += '</div>';
                 str += '<div class="episode-actions">';
                 str += '<input id="checkbox_' + i + '" name="checkbox_' + i + '" type="checkbox" checked data-toggle="toggle" data-on="선택" data-off="-" data-onstyle="success" data-offstyle="secondary" data-size="small">';
@@ -1665,4 +1667,219 @@ $('#btn-toggle-playlist').click(function() {
     container.slideToggle(300);
 });
 </script>
+<style>
+    .ohli24-request-page {
+        --request-card-bg: linear-gradient(180deg, rgba(23, 37, 84, 0.92) 0%, rgba(15, 23, 42, 0.92) 100%);
+        --request-toolbar-bg: rgba(15, 23, 42, 0.72);
+        --request-toolbar-border: rgba(96, 165, 250, 0.18);
+        --request-primary-bg: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        --request-primary-border: rgba(96, 165, 250, 0.45);
+        --request-accent-text: #bfdbfe;
+        --request-muted-text: rgba(191, 219, 254, 0.78);
+    }
+
+    .ohli24-request-page .glass-card {
+        overflow: hidden;
+    }
+
+    .ohli24-request-page .request-hero-card {
+        background: var(--request-card-bg);
+        border: 1px solid rgba(96, 165, 250, 0.14);
+        border-radius: 24px;
+        box-shadow: 0 18px 48px rgba(15, 23, 42, 0.32);
+    }
+
+    .ohli24-request-page .request-title {
+        line-height: 1.08;
+        letter-spacing: -0.03em;
+    }
+
+    .ohli24-request-page .request-subtitle {
+        color: var(--request-muted-text) !important;
+    }
+
+    .ohli24-request-page .request-season-wrap {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .ohli24-request-page .request-season-badge {
+        display: inline-flex;
+        align-items: center;
+        white-space: normal;
+        line-height: 1.35;
+        border-radius: 999px;
+        padding: 7px 13px !important;
+        font-size: 0.88rem !important;
+    }
+
+    .ohli24-request-page .request-tag-badge {
+        background: rgba(14, 165, 233, 0.22) !important;
+        color: #e0f2fe !important;
+        border: 1px solid rgba(125, 211, 252, 0.18);
+    }
+
+    .ohli24-request-page .request-grade-badge,
+    .ohli24-request-page .request-date-badge {
+        background: rgba(51, 65, 85, 0.72) !important;
+        color: #e2e8f0 !important;
+        border: 1px solid rgba(148, 163, 184, 0.14);
+    }
+
+    .ohli24-request-page .request-meta-grid {
+        font-size: 0.95em;
+        color: #cbd5e1;
+    }
+
+    .ohli24-request-page .request-meta-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+    }
+
+    .ohli24-request-page .request-meta-item-story {
+        display: block;
+    }
+
+    .ohli24-request-page .request-meta-label {
+        color: var(--request-accent-text) !important;
+        white-space: nowrap;
+    }
+
+    .ohli24-request-page .request-meta-story {
+        margin: 8px 0 0;
+        line-height: 1.7;
+    }
+
+    .ohli24-request-page .request-toolbar {
+        display: grid;
+        gap: 10px;
+        padding: 12px;
+        border-radius: 16px;
+        background: var(--request-toolbar-bg);
+        border: 1px solid var(--request-toolbar-border);
+    }
+
+    .ohli24-request-page .request-toolbar-main {
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    }
+
+    .ohli24-request-page .request-action-btn {
+        min-height: 46px;
+        border-radius: 12px !important;
+        font-weight: 700 !important;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 14px !important;
+    }
+
+    .ohli24-request-page .request-action-primary {
+        background: var(--request-primary-bg) !important;
+        border: 1px solid var(--request-primary-border) !important;
+        box-shadow: 0 8px 20px rgba(37, 99, 235, 0.28);
+    }
+
+    .ohli24-request-page .request-action-play {
+        box-shadow: 0 8px 20px rgba(34, 197, 94, 0.2);
+    }
+
+    .ohli24-request-page .request-action-secondary {
+        background: rgba(255, 255, 255, 0.05) !important;
+        border: 1px solid rgba(191, 219, 254, 0.18) !important;
+        color: #eff6ff !important;
+    }
+
+    .ohli24-request-page .request-action-muted {
+        background: rgba(51, 65, 85, 0.52) !important;
+        border: 1px solid rgba(148, 163, 184, 0.16) !important;
+        color: #cbd5e1 !important;
+    }
+
+    .ohli24-request-page .request-action-danger {
+        background: rgba(127, 29, 29, 0.22) !important;
+        border: 1px solid rgba(248, 113, 113, 0.34) !important;
+        color: #fecaca !important;
+    }
+
+    .ohli24-request-page .episode-texts {
+        min-width: 0;
+        flex: 1;
+    }
+
+    @media (max-width: 768px) {
+        .ohli24-request-page {
+            padding-left: 4px !important;
+            padding-right: 4px !important;
+            margin-top: 10px !important;
+        }
+
+        .ohli24-request-page .glass-card,
+        .ohli24-request-page .request-hero-card {
+            padding: 14px !important;
+            margin-bottom: 12px !important;
+            border-radius: 18px !important;
+        }
+
+        .ohli24-request-page .input-group {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: 8px;
+        }
+
+        .ohli24-request-page .input-group-append {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 88px;
+            gap: 8px;
+        }
+
+        .ohli24-request-page .request-title {
+            font-size: 1.9rem !important;
+            margin-bottom: 10px !important;
+        }
+
+        .ohli24-request-page .request-meta-item {
+            margin-bottom: 8px;
+        }
+
+        .ohli24-request-page .request-toolbar-main {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .ohli24-request-page .request-action-btn {
+            min-height: 44px !important;
+            font-size: 12px !important;
+            padding: 0 10px !important;
+        }
+
+        .ohli24-request-page .request-action-btn span {
+            white-space: nowrap;
+        }
+
+        .ohli24-request-page .episode-card {
+            padding: 12px !important;
+        }
+
+        .ohli24-request-page .episode-info {
+            gap: 10px !important;
+        }
+
+        .ohli24-request-page .episode-actions {
+            min-width: 106px;
+            justify-content: flex-end;
+        }
+    }
+
+    @media (max-width: 430px) {
+        .ohli24-request-page .request-toolbar-main {
+            grid-template-columns: minmax(0, 1fr);
+        }
+
+        .ohli24-request-page .request-title {
+            font-size: 1.7rem !important;
+        }
+    }
+</style>
 {% endblock %}

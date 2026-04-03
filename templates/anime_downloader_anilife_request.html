@@ -18,7 +18,7 @@ body {
 }
 </style>
 
-<div id="yommi_wrapper" class="container-fluid mt-2 mt-md-4 mx-auto anilife-common-wrapper content-cloak">
+<div id="yommi_wrapper" class="container-fluid mt-2 mt-md-4 mx-auto anilife-common-wrapper anilife-request-page content-cloak">
     <div id="preloader" class="loader">
         <div class="loader-inner">
             <div class="loader-line-wrap"><div class="loader-line"></div></div>
@@ -210,18 +210,17 @@ body {
             // 첫 번째 br 태그 제거 (첫 줄에는 필요없음)
             formattedDes = formattedDes.replace(/^<br>/, '');
             
-            tmp += '<div class="series-info-box d-flex flex-column flex-md-row animate__animated animate__fadeIn">';
+            tmp += '<div class="series-info-box request-hero-card d-flex flex-column flex-md-row animate__animated animate__fadeIn">';
             if (posterHtml) {
                 tmp += posterHtml;
             }
             tmp += '<div class="series-info-side ml-md-4">' + formattedDes + '</div>';
             tmp += '</div>';
             
-            // Integrated Actions Toolbar (Linkkf Style)
-            tmp += '<div class="d-flex flex-wrap align-items-center gap-2 p-3 mt-3 rounded" style="background: rgba(30, 27, 75, 0.4); border: 1px solid rgba(167, 139, 250, 0.1);">';
-            tmp += '<button id="check_download_btn" class="action-btn action-btn-primary mr-2" style="padding: 8px 16px; font-size: 0.9em;"><i class="fa fa-download"></i> 선택 다운로드</button>';
-            tmp += '<button id="all_check_on_btn" class="action-btn action-btn-secondary mr-2" style="padding: 8px 16px; font-size: 0.9em;"><i class="fa fa-check-square-o"></i> 전체 선택</button>';
-            tmp += '<button id="all_check_off_btn" class="action-btn action-btn-outline mr-3" style="padding: 8px 16px; font-size: 0.9em;"><i class="fa fa-square-o"></i> 해제</button>';
+            tmp += '<div class="request-toolbar request-toolbar-main request-toolbar-anilife">';
+            tmp += '<button id="check_download_btn" class="action-btn action-btn-primary request-action-btn request-action-primary"><i class="fa fa-download"></i><span>선택 다운로드</span></button>';
+            tmp += '<button id="all_check_on_btn" class="action-btn action-btn-secondary request-action-btn request-action-secondary"><i class="fa fa-check-square-o"></i><span>전체 선택</span></button>';
+            tmp += '<button id="all_check_off_btn" class="action-btn action-btn-outline request-action-btn request-action-muted"><i class="fa fa-square-o"></i><span>해제</span></button>';
             tmp += '</div>';
         }
 
@@ -244,10 +243,12 @@ body {
             str += '<span class="episode-num">' + data.episode[i].ep_num + '화</span>';
             str += '</div>';
             str += '<div class="episode-info">';
+            str += '<div class="episode-texts">';
             str += '<div class="episode-title">' + data.episode[i].title + '</div>';
             if (data.episode[i].date) {
                 str += '<div class="episode-date">' + data.episode[i].date + '</div>';
             }
+            str += '</div>';
             str += '<div class="episode-actions">';
             str += '<input id="checkbox_' + i + '" name="checkbox_' + i + '" type="checkbox" checked data-toggle="toggle" data-on="선택" data-off="-" data-onstyle="success" data-offstyle="secondary" data-size="small">';
             str += m_button('add_queue_btn', '다운로드', [{'key': 'idx', 'value': i}]);
@@ -1305,6 +1306,249 @@ $(document).ready(function(){
   }, 100);
 });
 </script>
+</style>
+
+<style>
+    .anilife-request-page {
+        --request-card-bg: linear-gradient(180deg, rgba(67, 56, 202, 0.36) 0%, rgba(49, 46, 129, 0.58) 100%);
+        --request-toolbar-bg: rgba(30, 27, 75, 0.46);
+        --request-toolbar-border: rgba(167, 139, 250, 0.16);
+        --request-primary-bg: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+        --request-primary-border: rgba(196, 181, 253, 0.3);
+    }
+
+    .anilife-request-page .card {
+        overflow: hidden;
+    }
+
+    .anilife-request-page .request-hero-card {
+        border-radius: 20px;
+        background: var(--request-card-bg);
+        border: 1px solid rgba(167, 139, 250, 0.14);
+        box-shadow: 0 18px 48px rgba(30, 27, 75, 0.28);
+    }
+
+    .anilife-request-page .request-toolbar {
+        display: grid;
+        gap: 10px;
+        padding: 12px;
+        border-radius: 16px;
+        background: var(--request-toolbar-bg);
+        border: 1px solid var(--request-toolbar-border);
+        margin-top: 14px;
+    }
+
+    .anilife-request-page .request-toolbar-main {
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    }
+
+    .anilife-request-page .request-action-btn {
+        min-height: 46px;
+        border-radius: 12px !important;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 14px !important;
+        font-weight: 700 !important;
+        white-space: nowrap;
+    }
+
+    .anilife-request-page .request-action-primary {
+        background: var(--request-primary-bg) !important;
+        border: 1px solid var(--request-primary-border) !important;
+        box-shadow: 0 8px 20px rgba(124, 58, 237, 0.24);
+    }
+
+    .anilife-request-page .request-action-secondary {
+        background: rgba(167, 139, 250, 0.18) !important;
+        border: 1px solid rgba(167, 139, 250, 0.24) !important;
+        color: #ddd6fe !important;
+    }
+
+    .anilife-request-page .request-action-muted {
+        background: rgba(99, 102, 241, 0.08) !important;
+        border: 1px solid rgba(167, 139, 250, 0.18) !important;
+        color: #c4b5fd !important;
+    }
+
+    .anilife-request-page .episode-texts {
+        min-width: 0;
+        flex: 1;
+    }
+
+    #preloader.loader {
+        display: grid;
+        place-items: center;
+        padding: 0;
+        background: radial-gradient(circle at center, rgba(49, 46, 129, 0.28) 0%, rgba(2, 6, 23, 0.78) 100%);
+        opacity: 1;
+    }
+
+    #preloader.loader .loader-inner {
+        position: relative;
+        inset: auto;
+        left: auto;
+        right: auto;
+        top: auto;
+        bottom: auto;
+        margin: 0;
+        width: 100px;
+        height: 60px;
+    }
+
+    @media (max-width: 768px) {
+        #main_container,
+        #main_container.container,
+        #main_container.container-fluid,
+        #yommi_wrapper.anilife-request-page.container-fluid,
+        #yommi_wrapper.anilife-request-page,
+        #yommi_wrapper.anilife-request-page #program_list,
+        #yommi_wrapper.anilife-request-page #program_auto_form,
+        #yommi_wrapper.anilife-request-page #episode_list {
+            width: 100% !important;
+            max-width: 100% !important;
+            padding-left: 2px !important;
+            padding-right: 2px !important;
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+        }
+
+        #yommi_wrapper.anilife-request-page .row,
+        #yommi_wrapper.anilife-request-page [class*="col-"] {
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+        }
+
+        .anilife-request-page {
+            padding-left: 2px !important;
+            padding-right: 2px !important;
+            padding-bottom: 8px !important;
+        }
+
+        .anilife-request-page .card {
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+        }
+
+        .anilife-request-page #program_list .card,
+        .anilife-request-page .request-hero-card {
+            padding: 12px !important;
+            border-radius: 18px !important;
+            margin-left: 2px !important;
+            margin-right: 2px !important;
+            margin-bottom: 10px !important;
+        }
+
+        .anilife-request-page .input-group {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: 8px;
+        }
+
+        .anilife-request-page #code {
+            width: 100% !important;
+            min-height: 46px;
+            border-radius: 12px !important;
+            padding: 10px 14px !important;
+        }
+
+        .anilife-request-page .input-group-append {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 88px;
+            gap: 8px;
+            width: 100%;
+        }
+
+        .anilife-request-page #analysis_btn,
+        .anilife-request-page #go_anilife_btn {
+            min-height: 44px;
+            border-radius: 12px !important;
+        }
+
+        .anilife-request-page .series-info-box {
+            padding: 12px !important;
+            gap: 12px !important;
+            border-radius: 16px !important;
+        }
+
+        .anilife-request-page .series-poster-side {
+            width: 48%;
+            min-width: 0;
+            max-width: 180px;
+        }
+
+        .anilife-request-page .series-info-side {
+            margin-left: 0 !important;
+            line-height: 1.9;
+        }
+
+        .anilife-request-page .request-toolbar-main {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px !important;
+        }
+
+        .anilife-request-page #check_download_btn {
+            grid-column: 1 / -1;
+        }
+
+        .anilife-request-page .request-action-btn {
+            min-height: 42px !important;
+            font-size: 12px !important;
+            padding: 0 10px !important;
+        }
+
+        .anilife-request-page .request-toolbar {
+            padding: 10px !important;
+            border-radius: 14px !important;
+            margin-top: 12px !important;
+        }
+
+        .anilife-request-page .episode-list-container {
+            gap: 8px !important;
+            margin: 12px 0 0 !important;
+        }
+
+        .anilife-request-page .episode-card {
+            padding: 10px !important;
+            margin-left: 2px !important;
+            margin-right: 2px !important;
+            border-radius: 14px !important;
+        }
+
+        .anilife-request-page .episode-info {
+            gap: 8px !important;
+        }
+    }
+
+    @media (max-width: 430px) {
+        .anilife-request-page #program_list .card,
+        .anilife-request-page .request-hero-card,
+        .anilife-request-page .episode-card {
+            margin-left: 2px !important;
+            margin-right: 2px !important;
+        }
+
+        .anilife-request-page #program_list .card,
+        .anilife-request-page .request-hero-card {
+            padding: 11px !important;
+        }
+
+        .anilife-request-page .request-toolbar-main {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .anilife-request-page #check_download_btn {
+            grid-column: 1 / -1;
+        }
+
+        .anilife-request-page .episode-list-container {
+            gap: 6px !important;
+            margin-top: 12px !important;
+        }
+    }
 </style>
 
 {% endblock %}

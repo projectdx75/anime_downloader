@@ -2,7 +2,7 @@
 <link rel="stylesheet" href="{{ url_for('.static', filename='css/mobile_custom.css') }}"/>
 <link rel="stylesheet" href="{{ url_for('.static', filename='css/' ~ arg['sub'] ~ '.css') }}"/>
 
- <div id="anime_downloader_wrapper" class="content-cloak" style="max-width: 100%;">
+ <div id="anime_downloader_wrapper" class="content-cloak linkkf-request-page" style="max-width: 100%;">
     <div id="preloader">
         <div class='demo'>
             <!--        <div class="loader-inner">-->
@@ -48,7 +48,7 @@
     <script type="text/javascript">
         const package_name = "{{arg['package_name'] }}";
         const sub = "{{arg['sub'] }}";
-        const ohli24_url = "{{arg['ohli24_url']}}";
+        const linkkf_url = "{{arg['linkkf_url']}}";
         var current_data = null;
 
         const params = new Proxy(new URLSearchParams(window.location.search), {
@@ -83,6 +83,25 @@
             return result;
         }
 
+        function resolveLinkkfTargetUrl(rawValue) {
+            const baseUrl = (linkkf_url && linkkf_url.trim()) ? linkkf_url.trim().replace(/\/$/, '') : 'https://linkkf.live';
+            const raw = (rawValue || '').trim();
+
+            if (!raw) {
+                return baseUrl;
+            }
+
+            if (/^https?:\/\//i.test(raw)) {
+                return raw;
+            }
+
+            return baseUrl + '/' + raw.replace(/^\/+|\/+$/g, '') + '/';
+        }
+
+        function updateGoButtonHref(rawValue) {
+            $('#go_linkkf_btn').attr('data-href', resolveLinkkfTargetUrl(rawValue));
+        }
+
         function analyze(wr_id, bo_table) {
             // e.preventDefault();
             const code = document.getElementById("code").value
@@ -107,63 +126,68 @@
 
         function make_program(data) {
             current_data = data;
+            updateGoButtonHref(data.code || $('#code').val() || params.code || "{{arg['linkkf_current_code']}}");
             
             let str = "";
             
             // 1. Info Card (Top)
-            str += `<div class='card p-4 mb-4 border-light' style="background: rgba(30,30,40,0.6); backdrop-filter: blur(10px);">`;
-            str += `<div class="row">`;
+            str += `<div class='card p-4 mb-4 border-light request-hero-card'>`;
+            str += `<div class="row request-main-grid">`;
             
             // Poster
-            str += `<div class="col-md-3 text-center mb-3 mb-md-0">`;
+            str += `<div class="col-md-3 text-center mb-3 mb-md-0 request-poster-col">`;
             if (data.poster_url) {
                 str += `<img src="${data.poster_url}" class="img-fluid rounded shadow-lg" style="max-height: 350px; width: auto;">`;
             }
             str += `</div>`;
             
             // Details
-            str += `<div class="col-md-9">`;
-            str += `<h2 class="font-weight-bold text-white mb-2">${data.title}</h2>`;
-            str += `<div class="mb-4">`;
-            str += `<span class="badge badge-primary mr-2" style="font-size: 1em; padding: 6px 12px;">Season ${data.season}</span>`;
+            str += `<div class="col-md-9 request-info-col">`;
+            str += `<h2 class="font-weight-bold text-white mb-2 request-title">${data.title}</h2>`;
+            str += `<div class="mb-4 request-season-wrap">`;
+            str += `<span class="badge badge-primary mr-2 request-season-badge">Season ${data.season}</span>`;
             str += `</div>`;
             
             // Table for details
-            str += `<div class="row mb-4" style="font-size: 0.95em; color: #ccc;">`;
+            str += `<div class="row mb-4 request-meta-grid" style="font-size: 0.95em; color: #ccc;">`;
             if(data.detail) {
                  for(let i in data.detail) {
                      const key = Object.keys(data.detail[i])[0];
                      const value = data.detail[i][key];
-                     str += `<div class="col-md-6 mb-2"><span class="font-weight-bold text-info mr-2">${key}:</span> <span class="text-light">${value}</span></div>`;
+                     str += `<div class="col-md-6 mb-2 request-meta-item"><span class="font-weight-bold text-info mr-2 request-meta-label">${key}:</span> <span class="text-light request-meta-value">${value}</span></div>`;
                  }
             }
             str += `</div>`; // End detail row
             
             // Actions Toolbar
-            str += `<div class="d-flex flex-wrap align-items-center gap-2 p-3 rounded" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05);">`;
+            str += `<div class="request-toolbar request-toolbar-main">`;
             
             // Standard Actions
             if (data.first_exist_filepath) {
-                str += `<button class="btn btn-success btn-sm mr-2" onclick="play_video('${data.first_exist_filepath.replace(/\\/g, '\\\\')}', '${data.first_exist_filename}')"><i class="fa fa-play"></i> 재생</button>`;
+                str += `<button class="btn btn-success btn-sm request-action-btn request-action-play" data-short-label="재생" onclick="play_video('${data.first_exist_filepath.replace(/\\/g, '\\\\')}', '${data.first_exist_filename}')"><i class="fa fa-play"></i><span>재생</span></button>`;
             }
-            str += `<button id="check_download_btn" class="btn btn-primary btn-sm mr-2"><i class="fa fa-download"></i> 선택 다운로드</button>`;
-            str += `<button id="all_check_on_btn" class="btn btn-outline-light btn-sm mr-1">전체 선택</button>`;
-            str += `<button id="all_check_off_btn" class="btn btn-outline-secondary btn-sm mr-3">해제</button>`;
-            str += `<button id="down_subtitle_btn" class="btn btn-outline-warning btn-sm mr-3">자막만 다운로드</button>`;
+            str += `<button id="check_download_btn" class="btn btn-primary btn-sm request-action-btn request-action-primary" data-short-label="선택DL"><i class="fa fa-download"></i><span>선택 다운로드</span></button>`;
+            str += `<button id="all_check_on_btn" class="btn btn-outline-light btn-sm request-action-btn request-action-secondary" data-short-label="전체"><span>전체 선택</span></button>`;
+            str += `<button id="all_check_off_btn" class="btn btn-outline-secondary btn-sm request-action-btn request-action-muted" data-short-label="해제"><span>해제</span></button>`;
+            str += `<button id="down_subtitle_btn" class="btn btn-outline-warning btn-sm request-action-btn request-action-subtitle" data-short-label="자막"><span>자막만 다운로드</span></button>`;
             
             // Scheduling (Heart)
-            str += `<button id="add_whitelist" class="btn btn-outline-danger btn-sm mr-3" style="min-width: 120px;"><i class="bi bi-heart"></i> 스케쥴링 추가</button>`;
+            str += `<button id="add_whitelist" class="btn btn-outline-danger btn-sm request-action-btn request-action-danger" data-short-label="스케쥴"><i class="bi bi-heart"></i><span>스케쥴링 추가</span></button>`;
             
             str += `</div>`; // End Action Toolbar Main
             
             // Edit Tools (Secondary Toolbar)
-             str += `<div class="d-flex flex-wrap align-items-center gap-2 mt-2 p-2 rounded" style="">`;
-            str += `<span class="text-muted small mr-2">저장 옵션:</span>`;
-            str += `<input id="new_title" class="form-control form-control-sm mr-1" style="width:200px; background:#222; border:1px solid #444; color:#ddd;" value="${data.title}">`;
-            str += `<button id="apply_new_title_btn" class="btn btn-dark btn-sm mr-3">폴더명 변경</button>`;
-             str += `<input id="new_season" class="form-control form-control-sm mr-1" style="width:60px; background:#222; border:1px solid #444; color:#ddd;" value="${data.season}">`;
-            str += `<button id="apply_new_season_btn" class="btn btn-dark btn-sm mr-2">시즌 변경</button>`;
-            str += `<button id="search_tvdb_btn" class="btn btn-dark btn-sm">TVDB 확인</button>`;
+             str += `<div class="request-toolbar request-toolbar-secondary">`;
+            str += `<span class="text-muted small request-toolbar-label">저장 옵션</span>`;
+            str += `<div class="request-inline-field request-inline-title">`;
+            str += `<input id="new_title" class="form-control form-control-sm request-inline-input" value="${data.title}">`;
+            str += `<button id="apply_new_title_btn" class="btn btn-dark btn-sm request-inline-btn">폴더명 변경</button>`;
+            str += `</div>`;
+            str += `<div class="request-inline-field request-inline-season">`;
+            str += `<input id="new_season" class="form-control form-control-sm request-inline-input request-inline-input-small" value="${data.season}">`;
+            str += `<button id="apply_new_season_btn" class="btn btn-dark btn-sm request-inline-btn">시즌 변경</button>`;
+            str += `</div>`;
+            str += `<button id="search_tvdb_btn" class="btn btn-dark btn-sm request-inline-btn request-inline-btn-tvdb">TVDB 확인</button>`;
             str += `</div>`;
             
             
@@ -179,8 +203,10 @@
                 str += '<span class="episode-num">' + data.episode[i].ep_num + '화</span>';
                 str += '</div>';
                 str += '<div class="episode-info">';
+                str += '<div class="episode-texts">';
                 str += '<div class="episode-title">' + data.episode[i].title + '</div>';
                 str += '<div class="episode-filename" title="' + data.episode[i].filename + '">' + data.episode[i].filename + '</div>';
+                str += '</div>';
                 str += '<div class="episode-actions">';
                 str += '<input id="checkbox_' + i + '" name="checkbox_' + i + '" type="checkbox" checked data-toggle="toggle" data-on="선택" data-off="-" data-onstyle="success" data-offstyle="secondary" data-size="small">';
                 str += m_button("add_queue_btn", "다운로드", [{key: "idx", value: i}]);
@@ -200,6 +226,7 @@
             const currentCode = "{{arg['linkkf_current_code']}}";
             
             const targetCode = urlCode || currentCode;
+            updateGoButtonHref(targetCode);
             
             if (targetCode) {
                 document.getElementById("code").value = targetCode;
@@ -224,6 +251,7 @@
             e.preventDefault();
             e.stopPropagation()
             const code = document.getElementById("code").value
+            updateGoButtonHref(code);
             // console.log(code)
             $.ajax({
                 url: '/' + package_name + '/ajax/' + sub + '/analysis',
@@ -271,9 +299,9 @@
             });
         });
 
-        $("body").on('click', '#go_ohli24_btn', function (e) {
+        $("body").on('click', '#go_linkkf_btn', function (e) {
             e.preventDefault();
-            window.open("{{arg['ohli24_url']}}", "_blank");
+            window.open($(this).attr('data-href') || resolveLinkkfTargetUrl($('#code').val() || params.code), "_blank", "noopener,noreferrer");
         });
 
         $("body").on('click', '#all_check_on_btn', function (e) {
@@ -619,6 +647,152 @@
             backdrop-filter: blur(12px);
         }
 
+        .request-hero-card {
+            border-radius: 22px;
+        }
+
+        .request-title {
+            line-height: 1.08;
+            letter-spacing: -0.03em;
+        }
+
+        .request-season-badge {
+            font-size: 0.95rem !important;
+            padding: 8px 14px !important;
+            border-radius: 999px;
+            background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%) !important;
+        }
+
+        .request-meta-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
+        }
+
+        .request-toolbar {
+            display: grid;
+            gap: 10px;
+            padding: 12px;
+            border-radius: 16px;
+            background: rgba(2, 44, 34, 0.52);
+            border: 1px solid rgba(110, 231, 183, 0.12);
+        }
+
+        .request-toolbar + .request-toolbar {
+            margin-top: 10px;
+        }
+
+        .request-toolbar-main {
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        }
+
+        .request-action-btn {
+            min-height: 46px;
+            border-radius: 12px !important;
+            font-weight: 700 !important;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 0 14px !important;
+            letter-spacing: -0.01em;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+        }
+
+        .request-action-btn::after {
+            content: none;
+        }
+
+        .request-action-primary {
+            background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%) !important;
+            border: 1px solid rgba(251, 191, 36, 0.5) !important;
+            box-shadow: 0 8px 20px rgba(234, 88, 12, 0.25);
+        }
+
+        .request-action-play {
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%) !important;
+            border: 1px solid rgba(134, 239, 172, 0.4) !important;
+            box-shadow: 0 8px 20px rgba(34, 197, 94, 0.2);
+        }
+
+        .request-action-secondary {
+            background: rgba(255, 255, 255, 0.05) !important;
+            border: 1px solid rgba(209, 250, 229, 0.16) !important;
+            color: #ecfdf5 !important;
+        }
+
+        .request-action-muted {
+            background: rgba(148, 163, 184, 0.1) !important;
+            border: 1px solid rgba(148, 163, 184, 0.2) !important;
+            color: #cbd5e1 !important;
+        }
+
+        .request-action-subtitle {
+            background: rgba(245, 158, 11, 0.08) !important;
+            border: 1px solid rgba(251, 191, 36, 0.3) !important;
+            color: #fde68a !important;
+        }
+
+        .request-action-danger {
+            background: rgba(127, 29, 29, 0.22) !important;
+            border: 1px solid rgba(248, 113, 113, 0.38) !important;
+            color: #fecaca !important;
+        }
+
+        .request-toolbar-secondary {
+            grid-template-columns: minmax(0, 1fr);
+            align-items: center;
+        }
+
+        .request-toolbar-label {
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: rgba(209, 250, 229, 0.6) !important;
+        }
+
+        .request-inline-field {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .request-inline-input {
+            width: 100% !important;
+            min-width: 0;
+            background: rgba(15, 23, 42, 0.72) !important;
+            border: 1px solid rgba(148, 163, 184, 0.24) !important;
+            color: #e2e8f0 !important;
+            border-radius: 12px !important;
+            min-height: 42px;
+            padding: 10px 12px !important;
+        }
+
+        .request-inline-input-small {
+            max-width: 72px;
+        }
+
+        .request-inline-btn {
+            min-height: 42px;
+            border-radius: 12px !important;
+            padding: 0 14px !important;
+            background: rgba(255, 255, 255, 0.05) !important;
+            border: 1px solid rgba(148, 163, 184, 0.2) !important;
+            color: #e2e8f0 !important;
+            font-weight: 700 !important;
+        }
+
+        .request-inline-btn-tvdb {
+            justify-self: start;
+        }
+
+        .episode-texts {
+            min-width: 0;
+            flex: 1;
+        }
+
         .card.border-light {
             border-radius: 20px;
             border: 1px solid rgba(16, 185, 129, 0.2) !important;
@@ -736,8 +910,8 @@
             .row, form, #program_list, #program_auto_form, #episode_list {
                 width: 100% !important;
                 max-width: 100% !important;
-                padding-left: 10px !important;
-                padding-right: 10px !important;
+                padding-left: 2px !important;
+                padding-right: 2px !important;
                 margin-left: 0 !important;
                 margin-right: 0 !important;
                 box-sizing: border-box !important;
@@ -761,12 +935,47 @@
             
             /* 상단 정보 카드 */
             .card.p-lg-5, .card.border-light {
-                width: calc(100% - 20px) !important;
+                width: calc(100% - 4px) !important;
                 max-width: 100% !important;
-                padding: 15px !important;
-                margin: 10px !important;
+                padding: 10px !important;
+                margin: 2px !important;
                 border-radius: 12px !important;
                 box-sizing: border-box !important;
+            }
+
+            #anime_downloader_wrapper {
+                padding: 0 !important;
+            }
+
+            .search-input-container {
+                padding: 10px !important;
+                border-radius: 14px !important;
+                margin: 0 2px 12px !important;
+            }
+
+            .search-input-wrapper {
+                gap: 8px !important;
+            }
+
+            .custom-input {
+                min-width: 0 !important;
+                width: 100% !important;
+                height: 46px !important;
+                padding: 10px 14px !important;
+            }
+
+            .search-buttons {
+                width: 100%;
+                display: grid !important;
+                grid-template-columns: 1fr 88px;
+                gap: 8px !important;
+            }
+
+            .custom-btn {
+                width: 100%;
+                height: 46px !important;
+                padding: 0 12px !important;
+                font-size: 13px !important;
             }
             
             .card.p-lg-5 > .row {
@@ -780,17 +989,115 @@
             .card.p-lg-5 > .row > [class*="col-"]:first-child {
                 flex: 0 0 100% !important;
                 max-width: 100% !important;
-                text-align: center !important;
-                margin-bottom: 15px !important;
+                text-align: left !important;
+                margin-bottom: 10px !important;
                 padding: 0 !important;
             }
             
             .card.p-lg-5 > .row > [class*="col-"]:first-child img {
-                width: 70% !important;
-                max-width: 220px !important;
+                width: 52% !important;
+                max-width: 180px !important;
                 height: auto !important;
                 border-radius: 10px !important;
                 box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4) !important;
+            }
+
+            .request-title {
+                font-size: 19px !important;
+                line-height: 1.14 !important;
+                margin-bottom: 10px !important;
+            }
+
+            .request-season-wrap {
+                margin-bottom: 14px !important;
+            }
+
+            .request-season-badge {
+                font-size: 0.84rem !important;
+                padding: 6px 11px !important;
+            }
+
+            .request-meta-grid {
+                margin-bottom: 10px !important;
+            }
+
+            .request-meta-item {
+                flex-direction: row !important;
+                gap: 4px !important;
+                padding: 0 !important;
+                margin-bottom: 8px !important;
+            }
+
+            .request-meta-label {
+                min-width: 44px;
+                font-size: 12px !important;
+            }
+
+            .request-meta-value {
+                font-size: 12px !important;
+                line-height: 1.45 !important;
+                word-break: break-word !important;
+            }
+
+            .request-toolbar {
+                padding: 8px !important;
+                border-radius: 13px !important;
+                gap: 6px !important;
+            }
+
+            .request-toolbar-main {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+
+            .request-action-btn {
+                min-height: 38px !important;
+                padding: 0 7px !important;
+                font-size: 11px !important;
+                gap: 4px !important;
+            }
+
+            .request-action-btn i {
+                font-size: 11px !important;
+            }
+
+            .request-action-btn span {
+                display: none !important;
+            }
+
+            .request-action-btn::after {
+                content: attr(data-short-label);
+                white-space: nowrap;
+                line-height: 1;
+            }
+
+            .request-action-play {
+                grid-column: span 1;
+            }
+
+            .request-toolbar-label {
+                display: none !important;
+            }
+
+            .request-inline-field {
+                grid-template-columns: minmax(0, 1fr);
+            }
+
+            .request-inline-btn,
+            .request-inline-btn-tvdb {
+                width: 100%;
+                justify-self: stretch;
+                min-height: 40px;
+                font-size: 12px !important;
+            }
+
+            .request-inline-input {
+                min-height: 40px;
+                font-size: 12px !important;
+                padding: 9px 11px !important;
+            }
+
+            .request-inline-input-small {
+                max-width: none;
             }
             
             /* 정보 테이블 각 행 - 카드 스타일 */
@@ -863,63 +1170,85 @@
             
             .episode-card {
                 display: flex !important;
-                align-items: center !important;
+                align-items: flex-start !important;
                 width: 100% !important;
                 max-width: 100% !important;
-                padding: 10px 12px !important;
-                gap: 10px !important;
+                padding: 10px 8px !important;
+                gap: 8px !important;
                 margin: 0 !important;
                 box-sizing: border-box !important;
+                border-radius: 14px !important;
             }
             
             .episode-thumb {
-                width: 40px !important;
-                min-width: 40px !important;
-                height: 40px !important;
+                width: 42px !important;
+                min-width: 42px !important;
+                height: 42px !important;
                 flex-shrink: 0 !important;
             }
             
             .episode-info {
                 flex: 1 !important;
                 min-width: 0 !important;
-                flex-direction: row !important;
-                align-items: center !important;
-                justify-content: space-between !important;
+                flex-direction: column !important;
+                align-items: stretch !important;
+                justify-content: flex-start !important;
+                gap: 8px !important;
             }
             
             .episode-title {
-                font-size: 12px !important;
+                font-size: 13px !important;
                 flex: 1 !important;
                 min-width: 0 !important;
+                margin-bottom: 3px !important;
             }
             
             .episode-filename {
                 font-size: 10px !important;
                 color: #64748b !important;
-                flex-shrink: 0 !important;
-                max-width: 35% !important;
-                margin-left: 8px !important;
+                max-width: 100% !important;
+                margin-left: 0 !important;
+                white-space: nowrap !important;
             }
             
             .episode-actions {
-                display: flex !important;
-                flex-wrap: wrap !important;
-                gap: 6px !important;
-                margin-top: 5px !important;
+                display: grid !important;
+                grid-template-columns: 92px 1fr !important;
+                align-items: center !important;
+                gap: 8px !important;
+                margin-top: 2px !important;
             }
             
             .episode-actions .btn {
-                font-size: 10px !important;
-                padding: 4px 10px !important;
+                font-size: 11px !important;
+                padding: 6px 10px !important;
+                min-height: 34px !important;
             }
             
             .episode-actions .toggle {
-                transform: scale(0.85) !important;
+                transform: scale(0.82) !important;
+                transform-origin: left center !important;
             }
         }
         
         /* 더 작은 화면 (400px 이하) */
         @media (max-width: 400px) {
+            .search-input-container {
+                margin-left: 1px !important;
+                margin-right: 1px !important;
+                padding: 9px !important;
+            }
+
+            .card.p-lg-5, .card.border-light {
+                width: calc(100% - 2px) !important;
+                margin: 1px !important;
+                padding: 9px !important;
+            }
+
+            .request-toolbar-main {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+
             .episode-thumb {
                 width: 35px !important;
                 min-width: 35px !important;
@@ -935,12 +1264,16 @@
             }
             
             .episode-filename {
-                max-width: 30% !important;
+                max-width: 100% !important;
             }
             
+            .episode-actions {
+                grid-template-columns: 84px 1fr !important;
+            }
+
             .episode-actions .btn {
-                font-size: 9px !important;
-                padding: 3px 8px !important;
+                font-size: 10px !important;
+                padding: 5px 8px !important;
             }
         }
 
