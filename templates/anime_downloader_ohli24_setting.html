@@ -95,6 +95,20 @@
           <div id="tag_chips_container" class="tag-chips-wrapper mb-2">
             <!-- 태그들이 여기에 동적으로 추가됨 -->
           </div>
+          <div class="tag-manager-toolbar mb-2">
+            <div class="input-group input-group-sm tag-search-group">
+              <div class="input-group-prepend">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+              </div>
+              <input type="text" id="tag_filter_input" class="form-control" placeholder="등록된 작품 코드/제목 검색">
+            </div>
+            <div class="tag-manager-actions">
+              <span id="tag_selection_summary" class="tag-selection-summary">총 0개</span>
+              <button type="button" class="btn btn-sm btn-outline-info" id="select_visible_tags_btn">보이는 항목 선택</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="clear_tag_selection_btn">선택 해제</button>
+              <button type="button" class="btn btn-sm btn-outline-danger" id="remove_selected_tags_btn" disabled>선택 삭제</button>
+            </div>
+          </div>
           
           <!-- 새 태그 입력 -->
           <div class="input-group input-group-sm">
@@ -206,6 +220,19 @@
         color: #60a5fa !important;
         background: rgba(30, 41, 59, 0.8) !important;
         border-bottom: 2px solid #60a5fa !important;
+    }
+
+    #ohli24_setting_wrapper .tab-content,
+    #ohli24_setting_wrapper .tab-pane {
+        border-left: none !important;
+        border-right: none !important;
+        border-bottom: none !important;
+        box-shadow: none !important;
+    }
+
+    #ohli24_setting_wrapper .tab-pane {
+        padding-left: 0 !important;
+        padding-right: 0 !important;
     }
 
     /* Form Controls */
@@ -380,6 +407,14 @@
         transform: translateY(-2px);
         box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
     }
+    .tag-chip.tag-chip-selected {
+        background: linear-gradient(135deg, rgba(249, 115, 22, 0.45) 0%, rgba(234, 88, 12, 0.65) 100%);
+        border-color: rgba(251, 146, 60, 0.75);
+        box-shadow: 0 0 0 2px rgba(251, 146, 60, 0.2);
+    }
+    .tag-chip.tag-chip-hidden {
+        display: none;
+    }
     
     .tag-chip.dragging {
         opacity: 0.5;
@@ -421,6 +456,28 @@
         border-radius: 50%;
         font-size: 0.7rem;
         color: #94a3b8;
+    }
+    .tag-manager-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+    .tag-search-group {
+        flex: 1 1 280px;
+        min-width: 220px;
+    }
+    .tag-manager-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .tag-selection-summary {
+        color: #93c5fd;
+        font-size: 0.85rem;
+        font-weight: 600;
     }
 </style>
 
@@ -707,6 +764,8 @@ $(document).ready(function() {
 // ======================================
 // Tag Chips 기능
 // ======================================
+var selectedTagValues = new Set();
+var lastSelectedVisibleIndex = null;
 
 function initTagChips() {
   var hiddenField = $('#ohli24_auto_code_list');
@@ -721,6 +780,8 @@ function initTagChips() {
     });
   }
   updateTagIndices();
+  filterTagChips();
+  updateSelectionSummary();
 }
 
 function addTagChip(text, index) {
@@ -749,18 +810,88 @@ function updateTagIndices() {
     $(this).find('.tag-index').text(index + 1);
   });
 }
+function getVisibleTagChips() {
+  return $('#tag_chips_container .tag-chip').filter(function() {
+    return !$(this).hasClass('tag-chip-hidden');
+  });
+}
+function updateSelectionSummary() {
+  var totalCount = $('#tag_chips_container .tag-chip').length;
+  var visibleCount = getVisibleTagChips().length;
+  var selectedCount = $('#tag_chips_container .tag-chip.tag-chip-selected').length;
+  $('#tag_selection_summary').text('총 ' + totalCount + '개 · 표시 ' + visibleCount + '개 · 선택 ' + selectedCount + '개');
+  $('#remove_selected_tags_btn').prop('disabled', selectedCount === 0);
+  $('#clear_tag_selection_btn').prop('disabled', selectedCount === 0);
+  $('#select_visible_tags_btn').prop('disabled', visibleCount === 0);
+}
+function syncSelectedClasses() {
+  $('#tag_chips_container .tag-chip').each(function() {
+    var selected = selectedTagValues.has(String($(this).data('value')));
+    $(this).toggleClass('tag-chip-selected', selected);
+  });
+  updateSelectionSummary();
+}
+function filterTagChips() {
+  var keyword = ($('#tag_filter_input').val() || '').trim().toLowerCase();
+  $('#tag_chips_container .tag-chip').each(function() {
+    var value = String($(this).data('value') || '').toLowerCase();
+    $(this).toggleClass('tag-chip-hidden', keyword !== '' && value.indexOf(keyword) === -1);
+  });
+  updateSelectionSummary();
+}
+function selectVisibleTags() {
+  getVisibleTagChips().each(function() {
+    selectedTagValues.add(String($(this).data('value')));
+  });
+  syncSelectedClasses();
+}
+function clearTagSelection() {
+  selectedTagValues.clear();
+  lastSelectedVisibleIndex = null;
+  syncSelectedClasses();
+}
+function removeSelectedTags() {
+  var chips = $('#tag_chips_container .tag-chip.tag-chip-selected');
+  if (chips.length === 0) {
+    $.notify('선택된 작품이 없습니다.', {type: 'warning'});
+    return;
+  }
+  $('#deleteSelectedCount').text(chips.length);
+  $('#deleteSelectedModal').data('targetChips', chips).modal('show');
+}
 
 // 태그 삭제
 $('#tag_chips_container').on('click', '.tag-remove', function(e) {
   e.stopPropagation();
   var chip = $(this).closest('.tag-chip');
   var text = chip.data('value');
+  selectedTagValues.delete(String(text));
   chip.fadeOut(200, function() {
     $(this).remove();
     updateHiddenField();
     updateTagIndices();
+    filterTagChips();
   });
   $.notify('"' + text + '" 삭제됨', {type: 'info'});
+});
+$('#tag_chips_container').on('click', '.tag-chip', function(e) {
+  if ($(e.target).closest('.tag-remove').length) return;
+  var visibleChips = getVisibleTagChips().toArray();
+  var currentIndex = visibleChips.indexOf(this);
+  var value = String($(this).data('value'));
+  if (e.shiftKey && lastSelectedVisibleIndex !== null && currentIndex !== -1) {
+    var start = Math.min(lastSelectedVisibleIndex, currentIndex);
+    var end = Math.max(lastSelectedVisibleIndex, currentIndex);
+    for (var i = start; i <= end; i++) {
+      selectedTagValues.add(String($(visibleChips[i]).data('value')));
+    }
+  } else if (selectedTagValues.has(value)) {
+    selectedTagValues.delete(value);
+  } else {
+    selectedTagValues.add(value);
+  }
+  lastSelectedVisibleIndex = currentIndex;
+  syncSelectedClasses();
 });
 
 // 새 태그 추가 (버튼)
@@ -773,6 +904,35 @@ $('#new_tag_input').on('keypress', function(e) {
   if (e.which === 13) {
     e.preventDefault();
     addNewTag();
+  }
+});
+$('#tag_filter_input').on('input', function() {
+  filterTagChips();
+});
+$('#select_visible_tags_btn').on('click', function() {
+  selectVisibleTags();
+});
+$('#clear_tag_selection_btn').on('click', function() {
+  clearTagSelection();
+});
+$('#remove_selected_tags_btn').on('click', function() {
+  removeSelectedTags();
+});
+$('#confirmDeleteSelectedBtn').on('click', function() {
+  var $modal = $('#deleteSelectedModal');
+  var chips = $modal.data('targetChips');
+  var count = chips && chips.length ? chips.length : 0;
+  if (chips && chips.length) {
+    chips.remove();
+  }
+  selectedTagValues.clear();
+  lastSelectedVisibleIndex = null;
+  updateHiddenField();
+  updateTagIndices();
+  filterTagChips();
+  $modal.modal('hide').removeData('targetChips');
+  if (count > 0) {
+    $.notify(count + '개 작품 삭제됨', {type: 'info'});
   }
 });
 
@@ -803,6 +963,7 @@ function addNewTag() {
   addTagChip(text, count);
   updateHiddenField();
   input.val('');
+  filterTagChips();
   $.notify('"' + text + '" 추가됨', {type: 'success'});
 }
 
@@ -820,6 +981,7 @@ $('#tag_chips_container').on('dragend', '.tag-chip', function(e) {
   draggedChip = null;
   updateHiddenField();
   updateTagIndices();
+  filterTagChips();
 });
 
 $('#tag_chips_container').on('dragover', function(e) {
@@ -914,6 +1076,32 @@ $(document).on('click', '#confirmUpdateBtn', function() {
                     <button type="button" class="btn" data-dismiss="modal" style="width: 120px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #94a3b8; border-radius: 10px; padding: 12px 24px; font-weight: 600;">취소</button>
                     <button type="button" id="confirmUpdateBtn" class="btn" style="width: 140px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); border: none; color: white; border-radius: 10px; padding: 12px 24px; font-weight: 600; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);">
                         <i class="bi bi-download"></i> 업데이트
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Selected Tags Modal -->
+<div class="modal fade" id="deleteSelectedModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content animate__animated animate__zoomIn" style="background: linear-gradient(145deg, #1e293b 0%, #0f172a 100%); border: 1px solid rgba(239, 68, 68, 0.28); border-radius: 20px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.55);">
+            <div class="modal-body text-center" style="padding: 40px 30px;">
+                <div style="width: 82px; height: 82px; margin: 0 auto 22px; border-radius: 50%; background: radial-gradient(circle at 30% 30%, rgba(248, 113, 113, 0.35), rgba(127, 29, 29, 0.18)); display: flex; align-items: center; justify-content: center; box-shadow: 0 12px 30px rgba(239, 68, 68, 0.22);">
+                    <i class="bi bi-trash3-fill" style="font-size: 2rem; color: #fca5a5;"></i>
+                </div>
+                <h4 class="text-white mb-2" style="font-weight: 700;">선택 항목 삭제</h4>
+                <p class="mb-1" style="color: #cbd5e1; line-height: 1.7;">
+                    선택한 <strong id="deleteSelectedCount" style="color: #fca5a5;">0</strong>개 작품을 자동등록 목록에서 삭제합니다.
+                </p>
+                <p class="mb-4" style="color: #94a3b8; font-size: 0.95rem;">
+                    이 작업은 현재 설정 목록에서 바로 제거됩니다.
+                </p>
+                <div class="d-flex justify-content-center" style="gap: 12px;">
+                    <button type="button" class="btn" data-dismiss="modal" style="width: 120px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #94a3b8; border-radius: 10px; padding: 12px 24px; font-weight: 600;">취소</button>
+                    <button type="button" id="confirmDeleteSelectedBtn" class="btn" style="width: 140px; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); border: none; color: white; border-radius: 10px; padding: 12px 24px; font-weight: 700; box-shadow: 0 4px 15px rgba(239, 68, 68, 0.38);">
+                        <i class="bi bi-trash3 mr-1"></i> 삭제
                     </button>
                 </div>
             </div>
