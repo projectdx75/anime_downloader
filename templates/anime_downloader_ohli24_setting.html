@@ -918,7 +918,7 @@ $('#clear_tag_selection_btn').on('click', function() {
 $('#remove_selected_tags_btn').on('click', function() {
   removeSelectedTags();
 });
-$('#confirmDeleteSelectedBtn').on('click', function() {
+$(document).on('click', '#confirmDeleteSelectedBtn', function() {
   var $modal = $('#deleteSelectedModal');
   var chips = $modal.data('targetChips');
   var count = chips && chips.length ? chips.length : 0;
