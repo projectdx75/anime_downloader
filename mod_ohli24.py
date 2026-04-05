@@ -118,6 +118,11 @@ class LogicOhli24(AnimeModuleBase):
     zendriver_daemon_process = None  # Zendriver 데몬 프로세스
     zendriver_daemon_port = 19876
     daemon_fail_count = 0  # 데몬 연속 실패 카운트
+    daemon_start_lock = threading.RLock()
+    daemon_monitor_thread = None
+    daemon_monitor_stop = threading.Event()
+    daemon_last_start_at = 0.0
+    daemon_start_grace_seconds = 30.0
     
     # Streaming tokens for external players (no auth required)
     _stream_tokens: Dict[str, Dict[str, Any]] = {}
@@ -237,77 +242,320 @@ class LogicOhli24(AnimeModuleBase):
     @classmethod
     def start_zendriver_daemon(cls) -> bool:
         """Zendriver 데몬 시작"""
-        if cls.is_zendriver_daemon_running():
-            logger.debug("[ZendriverDaemon] Already running")
-            return True
-        
-        if not cls.ensure_zendriver_installed():
-            return False
-        
-        try:
-            import subprocess
-            daemon_script = os.path.join(os.path.dirname(__file__), "lib", "zendriver_daemon.py")
-            
-            if not os.path.exists(daemon_script):
-                logger.warning("[ZendriverDaemon] Daemon script not found")
+        with cls.daemon_start_lock:
+            status = cls.get_zendriver_daemon_status(timeout=1.0)
+            if status.get("reachable"):
+                logger.debug("[ZendriverDaemon] Already running")
+                return True
+
+            proc = cls.zendriver_daemon_process
+            if proc is not None:
+                try:
+                    if proc.poll() is None:
+                        logger.info("[ZendriverDaemon] Existing daemon process still booting; waiting for health")
+                        started = cls.wait_for_zendriver_daemon(wait_timeout=20.0, require_browser_ready=False)
+                        if started:
+                            logger.info(f"[ZendriverDaemon] Started on port {cls.zendriver_daemon_port}")
+                        else:
+                            logger.warning("[ZendriverDaemon] Existing daemon process did not become reachable in time")
+                        return started
+                    cls.zendriver_daemon_process = None
+                except Exception:
+                    cls.zendriver_daemon_process = None
+
+            if not cls.ensure_zendriver_installed():
                 return False
-            
-            # 데몬 프로세스 시작 (백그라운드)
-            browser_path = P.ModelSetting.get("ohli24_zendriver_browser_path")
-            cmd = [sys.executable, daemon_script]
-            if browser_path:
-                cmd.extend(["--browser_path", browser_path])
-                
-            cls.zendriver_daemon_process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True
-            )
-            
-            # 시작 대기
-            import time
-            for _ in range(10):
-                time.sleep(0.5)
-                if cls.is_zendriver_daemon_running():
+
+            try:
+                import subprocess
+                daemon_script = os.path.join(os.path.dirname(__file__), "lib", "zendriver_daemon.py")
+
+                if not os.path.exists(daemon_script):
+                    logger.warning("[ZendriverDaemon] Daemon script not found")
+                    return False
+
+                browser_path = P.ModelSetting.get("ohli24_zendriver_browser_path")
+                cmd = [sys.executable, daemon_script]
+                if browser_path:
+                    cmd.extend(["--browser_path", browser_path])
+
+                cls.zendriver_daemon_process = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True
+                )
+                cls.daemon_last_start_at = time.time()
+
+                started = cls.wait_for_zendriver_daemon(wait_timeout=20.0, require_browser_ready=False)
+                if started:
                     logger.info(f"[ZendriverDaemon] Started on port {cls.zendriver_daemon_port}")
                     return True
-            
-            logger.warning("[ZendriverDaemon] Failed to start (timeout)")
-            return False
-            
+
+                logger.warning("[ZendriverDaemon] Failed to start (timeout)")
+                return False
+
+            except Exception as e:
+                logger.error(f"[ZendriverDaemon] Start error: {e}")
+                return False
+
+    @classmethod
+    def get_zendriver_daemon_status(cls, timeout: float = 2.0) -> Dict[str, Any]:
+        """데몬 상태 조회"""
+        try:
+            import requests
+            resp = requests.get(f"http://127.0.0.1:{cls.zendriver_daemon_port}/health", timeout=timeout)
+            data = resp.json() if resp.headers.get("Content-Type", "").startswith("application/json") else {}
+            return {
+                "reachable": resp.status_code == 200,
+                "status_code": resp.status_code,
+                "browser_ready": data.get("browser_ready", False),
+                "healthy": resp.status_code == 200 and data.get("browser_ready", False),
+                "data": data,
+            }
         except Exception as e:
-            logger.error(f"[ZendriverDaemon] Start error: {e}")
-            return False
+            return {
+                "reachable": False,
+                "status_code": None,
+                "browser_ready": False,
+                "healthy": False,
+                "error": str(e),
+            }
 
     @classmethod
-    def is_zendriver_daemon_running(cls) -> bool:
+    def is_zendriver_daemon_running(cls, timeout: float = 2.0) -> bool:
         """데몬 실행 상태 확인"""
-        try:
-            import requests
-            resp = requests.get(f"http://127.0.0.1:{cls.zendriver_daemon_port}/health", timeout=1)
-            return resp.status_code == 200
-        except:
-            return False
+        return cls.get_zendriver_daemon_status(timeout=timeout).get("reachable", False)
 
     @classmethod
-    def fetch_via_daemon(cls, url: str, timeout: int = 30, headers: dict = None) -> dict:
-        """데몬을 통한 HTML 페칭 (빠름, 헤더 지원)"""
+    def wait_for_zendriver_daemon(
+        cls,
+        wait_timeout: float = 8.0,
+        interval: float = 0.5,
+        require_browser_ready: bool = False,
+    ) -> bool:
+        """데몬 health 응답 대기"""
+        deadline = time.time() + wait_timeout
+        while time.time() < deadline:
+            status = cls.get_zendriver_daemon_status(timeout=max(1.0, interval))
+            if status.get("reachable") and (not require_browser_ready or status.get("browser_ready")):
+                return True
+            time.sleep(interval)
+        return False
+
+    @classmethod
+    def ensure_zendriver_daemon_ready(
+        cls,
+        wait_timeout: float = 8.0,
+        require_browser_ready: bool = False,
+    ) -> bool:
+        """데몬이 응답 가능하도록 보장"""
+        status = cls.get_zendriver_daemon_status()
+        if status.get("reachable") and (not require_browser_ready or status.get("browser_ready")):
+            return True
+
+        with cls.daemon_start_lock:
+            status = cls.get_zendriver_daemon_status()
+            if status.get("reachable") and (not require_browser_ready or status.get("browser_ready")):
+                return True
+
+            # 기존 프로세스 핸들이 죽어 있으면 정리
+            if cls.zendriver_daemon_process is not None:
+                try:
+                    if cls.zendriver_daemon_process.poll() is not None:
+                        cls.zendriver_daemon_process = None
+                except Exception:
+                    cls.zendriver_daemon_process = None
+
+            proc = cls.zendriver_daemon_process
+            if proc is not None:
+                try:
+                    if proc.poll() is None:
+                        return cls.wait_for_zendriver_daemon(
+                            wait_timeout=wait_timeout,
+                            require_browser_ready=require_browser_ready,
+                        )
+                    cls.zendriver_daemon_process = None
+                except Exception:
+                    cls.zendriver_daemon_process = None
+
+            started = cls.start_zendriver_daemon()
+            if not started:
+                return False
+
+        return cls.wait_for_zendriver_daemon(
+            wait_timeout=wait_timeout,
+            require_browser_ready=require_browser_ready,
+        )
+
+    @classmethod
+    def shutdown_zendriver_daemon(cls) -> None:
+        """데몬 종료"""
         try:
             import requests
+            requests.post(
+                f"http://127.0.0.1:{cls.zendriver_daemon_port}/shutdown",
+                timeout=2,
+            )
+        except Exception:
+            pass
+
+        proc = cls.zendriver_daemon_process
+        if proc is not None:
+            try:
+                if proc.poll() is None:
+                    proc.terminate()
+                    proc.wait(timeout=3)
+            except Exception:
+                try:
+                    if proc.poll() is None:
+                        proc.kill()
+                except Exception:
+                    pass
+            finally:
+                cls.zendriver_daemon_process = None
+
+    @classmethod
+    def restart_zendriver_daemon(cls, wait_timeout: float = 8.0) -> bool:
+        """데몬 비정상 시 새로 시작"""
+        with cls.daemon_start_lock:
+            cls.shutdown_zendriver_daemon()
+            started = cls.start_zendriver_daemon()
+        if not started:
+            return False
+        return cls.wait_for_zendriver_daemon(wait_timeout=wait_timeout, require_browser_ready=True)
+
+    @classmethod
+    def daemon_watchdog_loop(cls) -> None:
+        """백그라운드 데몬 감시 및 자동 복구"""
+        logger.info("[ZendriverDaemon] Watchdog started")
+        unhealthy_count = 0
+
+        while not cls.daemon_monitor_stop.wait(15):
+            try:
+                status = cls.get_zendriver_daemon_status(timeout=2.0)
+                healthy = status.get("healthy", False)
+                within_start_grace = (time.time() - cls.daemon_last_start_at) < cls.daemon_start_grace_seconds
+
+                if healthy:
+                    unhealthy_count = 0
+                    continue
+
+                if within_start_grace:
+                    logger.info(
+                        f"[ZendriverDaemon] Watchdog waiting for startup grace "
+                        f"(reachable={status.get('reachable')}, browser_ready={status.get('browser_ready')})"
+                    )
+                    continue
+
+                unhealthy_count += 1
+                logger.warning(
+                    f"[ZendriverDaemon] Watchdog detected unhealthy daemon "
+                    f"(reachable={status.get('reachable')}, browser_ready={status.get('browser_ready')}, "
+                    f"fail_count={cls.daemon_fail_count}, streak={unhealthy_count})"
+                )
+
+                should_recover = (
+                    not status.get("reachable")
+                    or not status.get("browser_ready")
+                    or cls.daemon_fail_count >= 2
+                    or unhealthy_count >= 2
+                )
+
+                if should_recover:
+                    cls.restart_zendriver_daemon(wait_timeout=12.0)
+                    unhealthy_count = 0
+                    cls.daemon_fail_count = 0
+            except Exception as e:
+                logger.warning(f"[ZendriverDaemon] Watchdog error: {e}")
+
+        logger.info("[ZendriverDaemon] Watchdog stopped")
+
+    @classmethod
+    def start_zendriver_watchdog(cls) -> None:
+        """데몬 감시 스레드 시작"""
+        with cls.daemon_start_lock:
+            if cls.daemon_monitor_thread is not None and cls.daemon_monitor_thread.is_alive():
+                return
+            cls.daemon_monitor_stop.clear()
+            cls.daemon_monitor_thread = threading.Thread(
+                target=cls.daemon_watchdog_loop,
+                name="zendriver-daemon-watchdog",
+                daemon=True,
+            )
+            cls.daemon_monitor_thread.start()
+
+    @classmethod
+    def stop_zendriver_watchdog(cls) -> None:
+        """데몬 감시 스레드 종료"""
+        cls.daemon_monitor_stop.set()
+
+    @classmethod
+    def bootstrap_zendriver_service(cls) -> bool:
+        """플러그인 로드시 데몬 워밍업 + 감시 시작"""
+        cls.start_zendriver_watchdog()
+        ready = cls.ensure_zendriver_daemon_ready(
+            wait_timeout=15.0,
+            require_browser_ready=True,
+        )
+        if ready:
+            logger.info("[ZendriverDaemon] Service ready for reuse")
+        else:
+            logger.warning("[ZendriverDaemon] Service bootstrap failed; watchdog will keep retrying")
+        return ready
+
+    @classmethod
+    def fetch_via_daemon(
+        cls,
+        url: str,
+        timeout: int = 30,
+        headers: dict = None,
+        auto_start: bool = True,
+        retry_on_failure: bool = True,
+    ) -> dict:
+        """데몬을 통한 HTML 페칭 (빠름, 헤더 지원, 자동 복구 포함)"""
+        try:
+            import requests
+
+            if auto_start and not cls.ensure_zendriver_daemon_ready(
+                wait_timeout=20.0,
+                require_browser_ready=True,
+            ):
+                return {"success": False, "error": "Daemon not ready"}
+
             payload = {"url": url, "timeout": timeout}
             if headers:
                 payload["headers"] = headers
-                
-            resp = requests.post(
-                f"http://127.0.0.1:{cls.zendriver_daemon_port}/fetch",
-                json=payload,
-                timeout=timeout + 5
-            )
-            if resp.status_code == 200:
-                return resp.json()
-            return {"success": False, "error": f"HTTP {resp.status_code}"}
+
+            def do_fetch() -> dict:
+                resp = requests.post(
+                    f"http://127.0.0.1:{cls.zendriver_daemon_port}/fetch",
+                    json=payload,
+                    timeout=timeout + 10
+                )
+                if resp.status_code == 200:
+                    return resp.json()
+                return {"success": False, "error": f"HTTP {resp.status_code}"}
+
+            result = do_fetch()
+            if result.get("success") and result.get("html"):
+                cls.daemon_fail_count = 0
+                return result
+
+            cls.daemon_fail_count += 1
+
+            if retry_on_failure:
+                logger.warning(f"[ZendriverDaemon] Fetch failed, attempting one recovery retry: {result.get('error', 'Unknown')}")
+                restarted = cls.restart_zendriver_daemon(wait_timeout=8.0)
+                if restarted and cls.wait_for_zendriver_daemon(wait_timeout=8.0, require_browser_ready=True):
+                    retry_result = do_fetch()
+                    if retry_result.get("success") and retry_result.get("html"):
+                        cls.daemon_fail_count = 0
+                    return retry_result
+
+            return result
         except Exception as e:
+            cls.daemon_fail_count += 1
             return {"success": False, "error": str(e)}
 
     @classmethod
@@ -2037,13 +2285,6 @@ class LogicOhli24(AnimeModuleBase):
             # 잔여 Temp 폴더 정리
             self.cleanup_stale_temps()
             
-            # Zendriver 데몬 시작 (백그라운드)
-            try:
-                from threading import Thread
-                Thread(target=LogicOhli24.start_zendriver_daemon, daemon=True).start()
-            except Exception as daemon_err:
-                logger.debug(f"[ZendriverDaemon] Auto-start skipped: {daemon_err}")
-
         except Exception as e:
             logger.error("Exception:%s", e)
             logger.error(traceback.format_exc())
@@ -2052,6 +2293,8 @@ class LogicOhli24(AnimeModuleBase):
     def plugin_unload(self) -> None:
         try:
             logger.debug("%s plugin_unload", P.package_name)
+            LogicOhli24.stop_zendriver_watchdog()
+            LogicOhli24.shutdown_zendriver_daemon()
             scheduler.remove_job("%s_recent" % P.package_name)
         except Exception as e:
             logger.error("Exception:%s", e)
@@ -2153,18 +2396,15 @@ class LogicOhli24(AnimeModuleBase):
         # === [Layer 3A: Zendriver Daemon (Primary - Persistent Browser)] ===
         # 리눅스/도커 차단 환경 대응: 가장 확실하고 빠른 젠드라이버 데몬을 최우선으로 시도
         if not response_data or len(response_data) < 10:
-            if LogicOhli24.is_zendriver_daemon_running():
-                logger.debug(f"[Layer3A] Trying Zendriver Daemon: {url}")
-                daemon_result = LogicOhli24.fetch_via_daemon(url, 30)
-                
-                if daemon_result.get("success") and daemon_result.get("html"):
-                    elapsed = time.time() - total_start
-                    logger.info(f"[Layer3A] Success in {elapsed:.2f}s (HTML: {len(daemon_result['html'])})")
-                    LogicOhli24.daemon_fail_count = 0
-                    return daemon_result["html"]
-                else:
-                    logger.warning(f"[Layer3A] Daemon failed: {daemon_result.get('error', 'Unknown')}")
-                    LogicOhli24.daemon_fail_count += 1
+            logger.debug(f"[Layer3A] Trying Zendriver Daemon: {url}")
+            daemon_result = LogicOhli24.fetch_via_daemon(url, 30, auto_start=True, retry_on_failure=True)
+
+            if daemon_result.get("success") and daemon_result.get("html"):
+                elapsed = time.time() - total_start
+                logger.info(f"[Layer3A] Success in {elapsed:.2f}s (HTML: {len(daemon_result['html'])})")
+                return daemon_result["html"]
+            else:
+                logger.warning(f"[Layer3A] Daemon failed: {daemon_result.get('error', 'Unknown')}")
 
         # === [Layer 1: curl-cffi (Fallback 1)] ===
         if not response_data or len(response_data) < 10:

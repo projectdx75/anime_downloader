@@ -13,7 +13,7 @@ import signal
 import time
 import os
 import traceback
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from threading import Thread, Lock
 from typing import Any, Optional, Dict, List, Type, cast
 import zendriver as zd
@@ -486,7 +486,7 @@ async def run_async_loop() -> None:
 def run_server() -> None:
     """HTTP 서버 실행"""
     try:
-        server: HTTPServer = HTTPServer(('127.0.0.1', DAEMON_PORT), ZendriverHandler)
+        server: ThreadingHTTPServer = ThreadingHTTPServer(('127.0.0.1', DAEMON_PORT), ZendriverHandler)
         log_debug(f"[ZendriverDaemon] HTTP server starting on port {DAEMON_PORT}")
         server.serve_forever()
     except Exception as e:

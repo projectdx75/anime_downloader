@@ -423,7 +423,7 @@ body {
             dataType: "json",
             success: function (data) {
                 // console.log('#add_queue_btn::data >>', data)
-                if (data.ret == 'enqueue_db_append' || data.ret == 'enqueue_db_exist') {
+                if (data.ret == 'enqueue_db_append' || data.ret == 'enqueue_db_exist' || data.ret == 'enqueue_gdm_success') {
                     $.notify('<strong>다운로드 작업을 추가 하였습니다.</strong>', {type: 'success'});
                 } else if (data.ret == 'queue_exist') {
                     $.notify('<strong>이미 큐에 있습니다. 삭제 후 추가하세요.</strong>', {type: 'warning'});
@@ -1378,11 +1378,18 @@ $(document).ready(function(){
     }
 
     #preloader.loader {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
         display: grid;
         place-items: center;
         padding: 0;
         background: radial-gradient(circle at center, rgba(49, 46, 129, 0.28) 0%, rgba(2, 6, 23, 0.78) 100%);
         opacity: 1;
+        margin: 0;
+        z-index: 100000;
+        pointer-events: all;
     }
 
     #preloader.loader .loader-inner {
@@ -1395,6 +1402,7 @@ $(document).ready(function(){
         margin: 0;
         width: 100px;
         height: 60px;
+        transform: translate3d(0, 0, 0);
     }
 
     @media (max-width: 768px) {
