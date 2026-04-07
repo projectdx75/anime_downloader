@@ -300,6 +300,61 @@ class LogicOhli24(AnimeModuleBase):
                 return False
 
     @classmethod
+    def cleanup_existing_zendriver_daemon(cls) -> None:
+        """서버 재시작 시 남아있는 기존 zendriver daemon 정리"""
+        # 1. HTTP shutdown 시도
+        try:
+            import requests
+            requests.post(
+                f"http://127.0.0.1:{cls.zendriver_daemon_port}/shutdown",
+                timeout=2,
+            )
+            time.sleep(1.0)
+        except Exception:
+            pass
+
+        # 2. 현재 프로세스 핸들 정리
+        proc = cls.zendriver_daemon_process
+        if proc is not None:
+            try:
+                if proc.poll() is None:
+                    proc.terminate()
+                    proc.wait(timeout=3)
+            except Exception:
+                try:
+                    if proc.poll() is None:
+                        proc.kill()
+                except Exception:
+                    pass
+            finally:
+                cls.zendriver_daemon_process = None
+
+        # 3. 포트를 점유 중인 이전 daemon 프로세스 정리
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["lsof", "-ti", f"tcp:{cls.zendriver_daemon_port}"],
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
+            pids = [pid.strip() for pid in result.stdout.splitlines() if pid.strip()]
+            for pid in pids:
+                try:
+                    os.kill(int(pid), 15)
+                except Exception:
+                    pass
+            if pids:
+                time.sleep(1.0)
+                for pid in pids:
+                    try:
+                        os.kill(int(pid), 9)
+                    except Exception:
+                        pass
+        except Exception as e:
+            logger.debug(f"[ZendriverDaemon] cleanup_existing_zendriver_daemon skipped: {e}")
+
+    @classmethod
     def get_zendriver_daemon_status(cls, timeout: float = 2.0) -> Dict[str, Any]:
         """데몬 상태 조회"""
         try:
@@ -493,6 +548,9 @@ class LogicOhli24(AnimeModuleBase):
     @classmethod
     def bootstrap_zendriver_service(cls) -> bool:
         """플러그인 로드시 데몬 워밍업 + 감시 시작"""
+        with cls.daemon_start_lock:
+            logger.info("[ZendriverDaemon] Bootstrap requested; cleaning up any stale daemon before restart")
+            cls.cleanup_existing_zendriver_daemon()
         cls.start_zendriver_watchdog()
         ready = cls.ensure_zendriver_daemon_ready(
             wait_timeout=15.0,
@@ -2368,6 +2426,41 @@ class LogicOhli24(AnimeModuleBase):
                 else:
                     response = session.get(url, timeout=timeout, proxies=proxies)
                 return response.text
+
+        # def fetch_url_with_scrapling(url, headers, timeout):
+        #     """Scrapling StealthyFetcher 실험 코드.
+        #     worker timeout 이슈로 운영 경로에서는 일단 비활성화.
+        #     필요 시 daemon/session 재사용형으로 다시 이식할 것.
+        #     """
+        #     from scrapling.fetchers import StealthyFetcher
+        #
+        #     extra_headers = dict(headers or {})
+        #     useragent = extra_headers.pop("User-Agent", None) or extra_headers.pop("user-agent", None)
+        #     proxy = LogicOhli24.get_proxy()
+        #
+        #     response = StealthyFetcher.fetch(
+        #         url,
+        #         headless=True,
+        #         google_search=False,
+        #         network_idle=True,
+        #         wait=1000,
+        #         timeout=max(int(timeout * 1000), 60000),
+        #         solve_cloudflare=True,
+        #         extra_headers=extra_headers,
+        #         useragent=useragent,
+        #         proxy=proxy if proxy else None,
+        #     )
+        #
+        #     html_text = getattr(response, "text", None)
+        #     if callable(html_text):
+        #         html_text = html_text()
+        #     if not html_text:
+        #         body = getattr(response, "body", None)
+        #         if isinstance(body, bytes):
+        #             html_text = body.decode("utf-8", errors="ignore")
+        #         elif isinstance(body, str):
+        #             html_text = body
+        #     return html_text or ""
         
         response_data = ""
         
@@ -2392,6 +2485,10 @@ class LogicOhli24(AnimeModuleBase):
         elif "Referer" not in headers and "referer" not in headers:
             headers["Referer"] = "https://ani.ohli24.com"
 
+        # === [Layer 0: Scrapling StealthyFetcher (Disabled)] ===
+        # worker timeout 이슈로 일단 비활성화.
+        # daemon/session 재사용형으로 재이식 전까지는 켜지지 않는다.
+
         
         # === [Layer 3A: Zendriver Daemon (Primary - Persistent Browser)] ===
         # 리눅스/도커 차단 환경 대응: 가장 확실하고 빠른 젠드라이버 데몬을 최우선으로 시도
@@ -2406,80 +2503,11 @@ class LogicOhli24(AnimeModuleBase):
             else:
                 logger.warning(f"[Layer3A] Daemon failed: {daemon_result.get('error', 'Unknown')}")
 
-        # === [Layer 1: curl-cffi (Fallback 1)] ===
-        if not response_data or len(response_data) < 10:
-            try:
-                from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
-                logger.debug(f"[Layer1] Trying curl_cffi: {url}")
-                
-                with ThreadPoolExecutor(max_workers=1) as executor:
-                    future = executor.submit(fetch_url_with_cffi, url, headers, 15, data, method)
-                    response_data = future.result(timeout=20)
-                
-                if response_data and len(response_data) > 500:
-                    logger.info(f"[Layer1] curl_cffi success, HTML len: {len(response_data)}")
-                    return response_data
-                else:
-                    response_data = "" 
-            except Exception as e:
-                logger.warning(f"[Layer1] curl_cffi failed: {e}")
-                response_data = ""
+        # === [Layer 1: curl-cffi (Disabled)] ===
+        # ohli24 대상에서 실효성이 낮아 일단 비활성화.
 
-        # === [Layer 2: Botasaurus @request (Mac Subprocess / Stealth)] ===
-        if not response_data or len(response_data) < 10:
-            # 리스트/검색 페이지에서 Botasaurus 활용 (Zendriver보다 빠름)
-            is_list_page = any(x in url for x in ["bo_table=", "/anime/", "search"])
-            if is_list_page and LogicOhli24.ensure_essential_dependencies():
-                import platform
-                is_mac = platform.system() == "Darwin"
-                
-                try:
-                    if is_mac:
-                        # Mac에서는 gevent-Trio 충돌로 인해 서브프로세스로 실행
-                        logger.debug(f"[Layer2] Trying Botasaurus subprocess (Mac): {url}")
-                        import subprocess
-                        script_path = os.path.join(os.path.dirname(__file__), "lib", "botasaurus_ohli24.py")
-                        
-                        cmd = [sys.executable, script_path, url, json.dumps(headers), LogicOhli24.get_proxy() or ""]
-                        result = subprocess.run(
-                            cmd,
-                            capture_output=True,
-                            text=True,
-                            timeout=timeout + 15
-                        )
-                        
-                        if result.returncode == 0 and result.stdout.strip():
-                            try:
-                                b_result = json.loads(result.stdout.strip())
-                                if b_result.get("success") and b_result.get("html"):
-                                    logger.info(f"[Layer2] Botasaurus(sub) success, HTML len: {len(b_result['html'])} (Attempt: {b_result.get('attempt', 1)})")
-                                    return b_result["html"]
-                                else:
-                                    logger.warning(f"[Layer2] Botasaurus(sub) logic failed: {b_result.get('error')}")
-                                    if b_result.get("traceback"):
-                                        logger.debug(f"Botasaurus Traceback: {b_result.get('traceback')}")
-                            except json.JSONDecodeError:
-                                logger.error(f"[Layer2] Botasaurus JSON Decode Error. Output: {result.stdout[:200]}")
-                                logger.debug(f"Botasaurus Stderr: {result.stderr}")
-                        else:
-                            logger.warning(f"[Layer2] Botasaurus subprocess error (RC: {result.returncode}): {result.stderr}")
-                    else:
-                        # Linux 등에서는 직접 실행 시도
-                        logger.debug(f"[Layer2] Trying Botasaurus @request (Direct): {url}")
-                        from botasaurus.request import request as b_request
-                        
-                        @b_request(headers=headers, use_stealth=True, proxy=LogicOhli24.get_proxy())
-                        def fetch_url(request, data):
-                            return request.get(data)
-
-                        b_resp = fetch_url(url)
-                        if b_resp and len(b_resp) > 500:
-                            logger.info(f"[Layer2] Botasaurus success, HTML len: {len(b_resp)}")
-                            return b_resp
-                        else:
-                            logger.warning(f"[Layer2] Botasaurus short response: {len(b_resp) if b_resp else 0}")
-                except Exception as e:
-                    logger.warning(f"[Layer2] Botasaurus failed: {e}")
+        # === [Layer 2: Botasaurus @request (Disabled)] ===
+        # ohli24 대상에서 실효성이 낮아 일단 비활성화.
 
         response_data = "" 
         
