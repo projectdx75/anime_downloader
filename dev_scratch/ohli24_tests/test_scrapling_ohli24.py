@@ -65,7 +65,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--network-idle", action="store_true")
     parser.add_argument("--proxy", default="")
     parser.add_argument("--save-html", action="store_true")
-    parser.add_argument("--output-dir", default="dev_scratch/output_scrapling")
+    parser.add_argument("--output-dir", default="dev_scratch/ohli24_tests/output_scrapling")
     return parser.parse_args()
 
 
