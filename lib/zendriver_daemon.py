@@ -291,7 +291,7 @@ async def ensure_browser() -> Any:
 
 
 async def fetch_with_browser(url: str, timeout: int = 30, headers: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
-    """상시 대기 브라우저로 HTML 페칭 (탭 유지 방식, 헤더 지원)"""
+    """상시 대기 브라우저로 HTML 페칭 (요청마다 fresh tab 확보, 헤더 지원)"""
     global browser
     
     result: Dict[str, Any] = {"success": False, "html": "", "elapsed": 0.0}
@@ -319,27 +319,20 @@ async def fetch_with_browser(url: str, timeout: int = 30, headers: Optional[Dict
             
             # 페이지 로드 시도
             try:
-                # zendriver/core/browser.py:304 에서 self.targets가 비어있을 때 StopIteration 발생 가능
-                # 이를 방지하기 위해 tabs가 생길 때까지 잠시 대기하거나 직접 생성 시도
-                
-                # 탭(페이지) 확보
+                # 기존 탭 재사용은 세션 꼬임/hang 가능성이 있어 요청마다 fresh tab 확보
                 page = None
-                for attempt in range(5):
+                for attempt in range(3):
                     try:
-                        if browser.tabs:
-                            page = browser.tabs[0]
-                            log_debug(f"[ZendriverDaemon] Using existing tab (Attempt {attempt+1})")
-                            break
-                        else:
-                            log_debug(f"[ZendriverDaemon] No tabs found, trying browser.get('about:blank') (Attempt {attempt+1})")
-                            page = await browser.get("about:blank")
-                            break
-                    except (StopIteration, RuntimeError, Exception) as tab_e:
-                        log_debug(f"[ZendriverDaemon] Tab acquisition failed: {tab_e}. Retrying...")
+                        page = await asyncio.wait_for(browser.get("about:blank"), timeout=8)
+                        log_debug(f"[ZendriverDaemon] Fresh tab acquired (Attempt {attempt+1})")
+                        break
+                    except (StopIteration, RuntimeError, asyncio.TimeoutError, Exception) as tab_e:
+                        log_debug(f"[ZendriverDaemon] Fresh tab acquisition failed: {tab_e}. Retrying...")
                         await asyncio.sleep(0.5)
                 
                 if not page:
                     result["error"] = "Failed to acquire browser tab"
+                    browser = None
                     return result
 
                 # 헤더 설정 (CDP 사용)
@@ -354,16 +347,18 @@ async def fetch_with_browser(url: str, timeout: int = 30, headers: Optional[Dict
                         log_debug(f"[ZendriverDaemon] Failed to set headers: {e}")
 
                 # 실제 페이지 로드
-                await asyncio.wait_for(page.get(url), timeout=20)
+                nav_timeout = min(20, max(12, timeout))
+                await asyncio.wait_for(page.get(url), timeout=nav_timeout)
                 nav_elapsed = time.time() - nav_start
             except asyncio.TimeoutError:
-                log_debug(f"[ZendriverDaemon] Navigation timeout after 20s")
-                nav_elapsed = 20.0
+                log_debug(f"[ZendriverDaemon] Navigation timeout after {nav_timeout}s")
+                nav_elapsed = float(nav_timeout)
             
             # 컨텐츠 완전 로드 대기 (폴링)
             poll_start = time.time()
             if page:
-                max_wait = 10  # 최대 10초 대기
+                # navigation timeout이 났다면 polling은 짧게 끊어 tail latency를 제한
+                max_wait = 3 if nav_elapsed >= nav_timeout else 6
                 poll_interval = 0.3
                 waited = 0
                 last_length = 0
@@ -371,7 +366,7 @@ async def fetch_with_browser(url: str, timeout: int = 30, headers: Optional[Dict
                 
                 while waited < max_wait:
                     try:
-                        html_content = await page.get_content()
+                        html_content = await asyncio.wait_for(page.get_content(), timeout=3)
                         current_length = len(html_content) if html_content else 0
                         
                         # 충분히 긴 컨텐츠 + 마커 발견시 즉시 탈출
@@ -403,7 +398,7 @@ async def fetch_with_browser(url: str, timeout: int = 30, headers: Optional[Dict
                 # 최종 컨텐츠 가져오기
                 if not html_content or len(html_content) < 1000:
                     try:
-                        html_content = await page.get_content()
+                        html_content = await asyncio.wait_for(page.get_content(), timeout=3)
                     except Exception as e:
                         log_debug(f"[ZendriverDaemon] Final get_content failed: {e}")
             
