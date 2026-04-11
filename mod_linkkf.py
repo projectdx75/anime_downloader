@@ -6,6 +6,7 @@
 # @File    : logic_linkkf
 # @Software: PyCharm
 import json
+import ipaddress
 import os
 import random
 import re
@@ -556,6 +557,168 @@ class LogicLinkkf(AnimeModuleBase):
                     logger.error(f"Stream video error: {e}")
                     logger.error(traceback.format_exc())
                     return jsonify({"error": str(e)}), 500
+            elif sub == "resolve_remote_stream":
+                # 원본 사이트 playid URL -> 실제 스트림(m3u8) / 자막(vtt) 추출
+                try:
+                    playid_url = (
+                        request.form.get("playid_url")
+                        or request.form.get("url")
+                        or request.args.get("playid_url")
+                        or request.args.get("url")
+                        or ""
+                    ).strip()
+
+                    if not playid_url:
+                        return jsonify({"ret": "error", "log": "playid_url is required"})
+
+                    stream_url, referer_url, subtitle_url = LogicLinkkf.extract_video_url_from_playid(playid_url)
+                    if not stream_url:
+                        return jsonify(
+                            {
+                                "ret": "error",
+                                "log": "스트림 URL(m3u8) 추출에 실패했습니다.",
+                                "playid_url": playid_url,
+                            }
+                        )
+
+                    return jsonify(
+                        {
+                            "ret": "success",
+                            "stream_url": stream_url,
+                            "subtitle_url": subtitle_url,
+                            "referer_url": referer_url,
+                            "playid_url": playid_url,
+                        }
+                    )
+                except Exception as e:
+                    logger.error(f"resolve_remote_stream error: {e}")
+                    logger.error(traceback.format_exc())
+                    return jsonify({"ret": "error", "log": str(e)})
+            elif sub == "proxy_remote_media":
+                # CORS/핫링크 차단 회피를 위해 원격 HLS/자막을 서버 프록시로 중계
+                try:
+                    from flask import Response
+                    from urllib.parse import quote, urljoin, urlparse
+
+                    media_url = (request.args.get("url") or "").strip()
+                    referer_url = (request.args.get("referer") or "https://linkkf.live/").strip()
+                    if not media_url:
+                        return jsonify({"ret": "error", "log": "url is required"}), 400
+
+                    parsed = urlparse(media_url)
+                    if parsed.scheme not in ("http", "https"):
+                        return jsonify({"ret": "error", "log": "invalid url scheme"}), 400
+
+                    # 최소한의 오픈 프록시 방지:
+                    # localhost/사설망/loopback 주소로의 요청은 차단
+                    host = (parsed.netloc or "").lower()
+                    host_only = host.split(":", 1)[0]
+                    if host_only in ("localhost",):
+                        return jsonify({"ret": "error", "log": f"host not allowed: {host}"}), 403
+                    try:
+                        ip_obj = ipaddress.ip_address(host_only)
+                        if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local:
+                            return jsonify({"ret": "error", "log": f"host not allowed: {host}"}), 403
+                    except ValueError:
+                        # 도메인인 경우 통과
+                        pass
+
+                    req_headers = {
+                        "User-Agent": LogicLinkkf.headers.get("User-Agent")
+                        or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                        "Referer": referer_url,
+                        "Accept": "*/*",
+                    }
+                    range_header = request.headers.get("Range")
+                    if range_header:
+                        req_headers["Range"] = range_header
+
+                    # 일부 CDN은 Origin 체크를 요구하는 경우가 있어 함께 전달
+                    req_headers["Origin"] = f"{parsed.scheme}://{parsed.netloc}"
+
+                    remote_res = requests.get(
+                        media_url,
+                        headers=req_headers,
+                        timeout=20,
+                        allow_redirects=True,
+                    )
+
+                    remote_ct = remote_res.headers.get("Content-Type", "")
+                    remote_body = remote_res.content
+
+                    if remote_res.status_code >= 400:
+                        return Response(
+                            remote_body,
+                            status=remote_res.status_code,
+                            content_type=remote_ct or "text/plain; charset=utf-8",
+                        )
+
+                    body_head = remote_body[:64].decode("utf-8", "ignore")
+                    is_playlist = (
+                        ".m3u8" in media_url.lower()
+                        or "mpegurl" in remote_ct.lower()
+                        or body_head.startswith("#EXTM3U")
+                    )
+
+                    def build_proxy_url(target_url):
+                        return (
+                            f"/{P.package_name}/ajax/{self.name}/proxy_remote_media"
+                            f"?url={quote(target_url, safe='')}"
+                            f"&referer={quote(referer_url, safe='')}"
+                        )
+
+                    if is_playlist:
+                        playlist_text = remote_body.decode("utf-8", "ignore")
+                        rewritten_lines = []
+                        key_uri_pattern = re.compile(r'URI="([^"]+)"')
+
+                        for raw_line in playlist_text.splitlines():
+                            line = raw_line.strip()
+                            if not line:
+                                rewritten_lines.append(raw_line)
+                                continue
+
+                            if line.startswith("#"):
+                                # #EXT-X-KEY, #EXT-X-MAP 등의 URI 속성 재작성
+                                if 'URI="' in raw_line:
+                                    def _replace_uri(match):
+                                        abs_uri = urljoin(media_url, match.group(1))
+                                        return f'URI="{build_proxy_url(abs_uri)}"'
+
+                                    raw_line = key_uri_pattern.sub(_replace_uri, raw_line)
+                                rewritten_lines.append(raw_line)
+                                continue
+
+                            abs_media = urljoin(media_url, line)
+                            rewritten_lines.append(build_proxy_url(abs_media))
+
+                        rewritten_playlist = "\n".join(rewritten_lines)
+                        resp = Response(
+                            rewritten_playlist,
+                            status=200,
+                            content_type="application/vnd.apple.mpegurl; charset=utf-8",
+                        )
+                        resp.headers["Cache-Control"] = "no-store"
+                        return resp
+
+                    resp = Response(
+                        remote_body,
+                        status=remote_res.status_code,
+                        content_type=remote_ct or "application/octet-stream",
+                    )
+                    # 스트리밍 탐색(seek) 관련 헤더 전달
+                    if "Content-Length" in remote_res.headers:
+                        resp.headers["Content-Length"] = remote_res.headers["Content-Length"]
+                    if "Accept-Ranges" in remote_res.headers:
+                        resp.headers["Accept-Ranges"] = remote_res.headers["Accept-Ranges"]
+                    if "Content-Range" in remote_res.headers:
+                        resp.headers["Content-Range"] = remote_res.headers["Content-Range"]
+                    resp.headers["Cache-Control"] = "no-store"
+                    return resp
+                except Exception as e:
+                    logger.error(f"proxy_remote_media error: {e}")
+                    logger.error(traceback.format_exc())
+                    return jsonify({"ret": "error", "log": str(e)}), 500
 
             # 매치되는 sub가 없는 경우 기본 응답
             if sub == "browse_dir":
@@ -1038,12 +1201,21 @@ class LogicLinkkf(AnimeModuleBase):
                     if video_url:
                         logger.info(f"Extracted m3u8 via Artplayer pattern: {video_url}")
 
+                # 패턴 5: 신규 ArtPlayer config.videoUrl = "..."
+                if not m3u8_match and not video_url:
+                    video_url_pattern = re.compile(r"videoUrl\s*:\s*['\"]([^'\"]+)['\"]", re.IGNORECASE)
+                    video_url_match = video_url_pattern.search(iframe_content)
+                    if video_url_match:
+                        video_url = video_url_match.group(1)
+                        logger.info(f"Extracted m3u8 via config.videoUrl pattern: {video_url}")
+
                 if m3u8_match and not video_url:
                     video_url = m3u8_match.group(1)
                 
                 if video_url:
+                    video_url = video_url.replace("\\/", "/")
                     # 상대 경로 처리 (예: cache/...)
-                    if video_url.startswith('cache/') or video_url.startswith('/cache/'):
+                    if video_url.startswith("cache/") or video_url.startswith("/cache/") or video_url.startswith("/r2/"):
                         from urllib.parse import urljoin
                         video_url = urljoin(iframe_src, video_url)
                     logger.info(f"Extracted m3u8 URL: {video_url}")
@@ -1066,9 +1238,15 @@ class LogicLinkkf(AnimeModuleBase):
                     vtt_pattern = re.compile(r"url:\s*['\"]([^'\"]*\.vtt[^'\"]*)['\"]", re.IGNORECASE)
                     vtt_match = vtt_pattern.search(iframe_content)
 
+                # 패턴 3: 신규 ArtPlayer tracks[].file = "..."
+                if not vtt_match:
+                    vtt_pattern = re.compile(r"['\"]file['\"]\s*:\s*['\"]([^'\"]*\.vtt[^'\"]*)['\"]", re.IGNORECASE)
+                    vtt_match = vtt_pattern.search(iframe_content)
+
                 if vtt_match:
                     vtt_url = vtt_match.group(1)
-                    if vtt_url.startswith('s/') or vtt_url.startswith('/s/'):
+                    vtt_url = vtt_url.replace("\\/", "/")
+                    if vtt_url.startswith("s/") or vtt_url.startswith("/s/") or vtt_url.startswith("/r2/"):
                         from urllib.parse import urljoin
                         vtt_url = urljoin(iframe_src, vtt_url)
                     logger.info(f"Extracted VTT URL: {vtt_url}")
@@ -1622,7 +1800,10 @@ class LogicLinkkf(AnimeModuleBase):
                 and LogicLinkkf.current_data["code"] == code
                 and LogicLinkkf.current_data["ret"]
             ):
-                return LogicLinkkf.current_data
+                # 포스터/에피소드가 정상 포함된 캐시만 재사용
+                if LogicLinkkf.current_data.get("poster_url"):
+                    return LogicLinkkf.current_data
+                logger.info("Cached current_data has no poster_url; refreshing from source.")
             
             url = "%s/%s/" % (P.ModelSetting.get("linkkf_url"), code)
             
@@ -1659,7 +1840,9 @@ class LogicLinkkf(AnimeModuleBase):
                     data["title"] = card_link.get("title")
                 else:
                     # 방법 4: 포스터 이미지의 alt 속성
-                    poster_img = soup.select_one("img.gemini-dark-card__image")
+                    poster_img = soup.select_one(
+                        "img.gemini-dark-card__image, img.animeimglink-dark-card__image"
+                    )
                     if poster_img and poster_img.get("alt"):
                         data["title"] = poster_img.get("alt")
                     else:
@@ -1685,7 +1868,9 @@ class LogicLinkkf(AnimeModuleBase):
                 data["season"] = "1"
             
             # === 포스터 이미지 ===
-            poster_elem = soup.select_one("img.gemini-dark-card__image")
+            poster_elem = soup.select_one(
+                "img.gemini-dark-card__image, img.animeimglink-dark-card__image"
+            )
             if poster_elem:
                 # lazy loading 대응: data-lazy-src (사이트에서 사용하는 속성), data-src, src 순서로 확인
                 data["poster_url"] = (
@@ -1698,7 +1883,9 @@ class LogicLinkkf(AnimeModuleBase):
                     data["poster_url"] = poster_elem.get("data-lazy-src") or poster_elem.get("data-src") or ""
             else:
                 # 대안 선택자
-                poster_alt = soup.select_one("a.gemini-dark-card__link img")
+                poster_alt = soup.select_one(
+                    "a.gemini-dark-card__link img, .animeimglink-dark-card img, .animeimglink-ratio-16-9 img"
+                )
                 if poster_alt:
                     data["poster_url"] = (
                         poster_alt.get("data-lazy-src") or 
@@ -1706,7 +1893,15 @@ class LogicLinkkf(AnimeModuleBase):
                         poster_alt.get("src") or ""
                     )
                 else:
-                    data["poster_url"] = None
+                    # 최종 fallback: og:image/twitter:image 메타
+                    og_image = soup.select_one("meta[property='og:image']")
+                    tw_image = soup.select_one("meta[name='twitter:image']")
+                    data["poster_url"] = (og_image.get("content") if og_image else None) or (
+                        tw_image.get("content") if tw_image else None
+                    )
+
+            if data.get("poster_url"):
+                data["poster_url"] = data["poster_url"].replace("\\/", "/").strip()
             
             # === 상세 정보 ===
             data["detail"] = []
