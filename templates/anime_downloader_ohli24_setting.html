@@ -752,11 +752,18 @@ function runDaemonStatusCheck() {
       }
 
       var detail = 'reachable=' + reachable + ', browser_ready=' + browserReady;
+      if (ret.pid) {
+        detail += ', pid=' + ret.pid;
+      }
+      detail += ', process_alive=' + (!!ret.process_alive);
       if (ret.status_code !== null && ret.status_code !== undefined) {
         detail += ', status_code=' + ret.status_code;
       }
       if (ret.error) {
         detail += ', error=' + ret.error;
+      }
+      if (ret.log_tail) {
+        detail += '\n' + ret.log_tail;
       }
       $('#daemon_status_detail').text(detail);
     },

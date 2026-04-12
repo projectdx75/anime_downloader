@@ -357,24 +357,55 @@ class LogicOhli24(AnimeModuleBase):
     @classmethod
     def get_zendriver_daemon_status(cls, timeout: float = 2.0) -> Dict[str, Any]:
         """데몬 상태 조회"""
+        def _process_info() -> Dict[str, Any]:
+            pid = None
+            alive = False
+            proc = cls.zendriver_daemon_process
+            if proc is not None:
+                try:
+                    pid = proc.pid
+                    alive = proc.poll() is None
+                except Exception:
+                    alive = False
+            return {"pid": pid, "process_alive": alive}
+
+        def _tail_log(lines: int = 5) -> str:
+            try:
+                log_file = "/tmp/zendriver_daemon.log"
+                if not os.path.exists(log_file):
+                    return ""
+                with open(log_file, "r", encoding="utf-8", errors="ignore") as f:
+                    rows = f.readlines()
+                return "".join(rows[-lines:]).strip()
+            except Exception:
+                return ""
+
         try:
             import requests
             resp = requests.get(f"http://127.0.0.1:{cls.zendriver_daemon_port}/health", timeout=timeout)
             data = resp.json() if resp.headers.get("Content-Type", "").startswith("application/json") else {}
+            info = _process_info()
             return {
                 "reachable": resp.status_code == 200,
                 "status_code": resp.status_code,
                 "browser_ready": data.get("browser_ready", False),
                 "healthy": resp.status_code == 200 and data.get("browser_ready", False),
                 "data": data,
+                "pid": info["pid"],
+                "process_alive": info["process_alive"],
+                "log_tail": _tail_log(),
             }
         except Exception as e:
+            info = _process_info()
             return {
                 "reachable": False,
                 "status_code": None,
                 "browser_ready": False,
                 "healthy": False,
                 "error": str(e),
+                "pid": info["pid"],
+                "process_alive": info["process_alive"],
+                "log_tail": _tail_log(),
             }
 
     @classmethod
@@ -475,6 +506,7 @@ class LogicOhli24(AnimeModuleBase):
         """데몬 비정상 시 새로 시작"""
         with cls.daemon_start_lock:
             cls.shutdown_zendriver_daemon()
+            cls.cleanup_existing_zendriver_daemon()
             started = cls.start_zendriver_daemon()
         if not started:
             return False
@@ -2356,6 +2388,20 @@ class LogicOhli24(AnimeModuleBase):
             
             # 잔여 Temp 폴더 정리
             self.cleanup_stale_temps()
+
+            # Zendriver daemon/watchdog 부트스트랩 (백그라운드)
+            def _bootstrap_daemon():
+                try:
+                    LogicOhli24.bootstrap_zendriver_service()
+                except Exception as e:
+                    logger.warning(f"[ZendriverDaemon] bootstrap thread error: {e}")
+
+            daemon_thread = threading.Thread(
+                target=_bootstrap_daemon,
+                name="ohli24-zendriver-bootstrap",
+                daemon=True,
+            )
+            daemon_thread.start()
             
         except Exception as e:
             logger.error("Exception:%s", e)
