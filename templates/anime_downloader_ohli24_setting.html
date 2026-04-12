@@ -161,6 +161,24 @@
             </div>
           </div>
 
+          <div id="daemon_check_result" class="mb-3 p-3 rounded" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05);">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+              <div>
+                <span class="mr-2">Zendriver Daemon:</span>
+                <span id="daemon_status_badge" class="badge badge-secondary">확인 중...</span>
+              </div>
+              <div class="btn-group btn-group-sm" role="group">
+                <button type="button" id="check_daemon_btn" class="btn btn-outline-info">
+                  <i class="bi bi-activity mr-1"></i>상태체크
+                </button>
+                <button type="button" id="restart_daemon_btn" class="btn btn-outline-warning">
+                  <i class="bi bi-arrow-clockwise mr-1"></i>데몬 다시 띄우기
+                </button>
+              </div>
+            </div>
+            <div id="daemon_status_detail" class="small text-muted" style="font-family: monospace;">상태 조회 대기 중...</div>
+          </div>
+
           <hr style="border-color: rgba(255,255,255,0.1);">
           <h5 class="text-info mb-3"><i class="bi bi-browser-chrome mr-2"></i>Zendriver 설정</h5>
           {{ macros.setting_input_text('ohli24_zendriver_browser_path', '브라우저 경로', value=arg.get('ohli24_zendriver_browser_path', ''), desc=['Zendriver가 사용할 Chrome/Chromium 실행 파일 경로입니다.', '위의 시스템 상태에서 자동으로 찾은 경우 비워두셔도 됩니다 (수동 설정 시 우선 적용).']) }}
@@ -716,6 +734,68 @@ function runSystemCheck() {
   });
 }
 
+function runDaemonStatusCheck() {
+  $.ajax({
+    url: '/' + package_name + '/ajax/' + sub + '/daemon_status',
+    type: 'POST',
+    success: function(ret) {
+      var reachable = !!ret.reachable;
+      var browserReady = !!ret.browser_ready;
+      var healthy = !!ret.healthy;
+
+      if (healthy) {
+        $('#daemon_status_badge').removeClass('badge-secondary badge-warning badge-danger').addClass('badge-success').text('정상');
+      } else if (reachable || browserReady) {
+        $('#daemon_status_badge').removeClass('badge-secondary badge-success badge-danger').addClass('badge-warning').text('준비중');
+      } else {
+        $('#daemon_status_badge').removeClass('badge-secondary badge-success badge-warning').addClass('badge-danger').text('중지');
+      }
+
+      var detail = 'reachable=' + reachable + ', browser_ready=' + browserReady;
+      if (ret.status_code !== null && ret.status_code !== undefined) {
+        detail += ', status_code=' + ret.status_code;
+      }
+      if (ret.error) {
+        detail += ', error=' + ret.error;
+      }
+      $('#daemon_status_detail').text(detail);
+    },
+    error: function(xhr) {
+      $('#daemon_status_badge').removeClass('badge-secondary badge-success badge-warning').addClass('badge-danger').text('오류');
+      $('#daemon_status_detail').text('status check failed: ' + (xhr.status || 'network'));
+    }
+  });
+}
+
+$('#check_daemon_btn').on('click', function() {
+  runDaemonStatusCheck();
+});
+
+$('#restart_daemon_btn').on('click', function() {
+  var btn = $(this);
+  btn.prop('disabled', true).html('<i class="bi bi-arrow-repeat spin mr-1"></i>재시작 중...');
+
+  $.ajax({
+    url: '/' + package_name + '/ajax/' + sub + '/restart_zendriver_daemon',
+    type: 'POST',
+    success: function(ret) {
+      if (ret && ret.restarted) {
+        $.notify('Zendriver 데몬 재시작 완료', {type: 'success'});
+      } else {
+        $.notify('Zendriver 데몬 재시작 실패', {type: 'warning'});
+      }
+      runDaemonStatusCheck();
+    },
+    error: function() {
+      $.notify('데몬 재시작 요청 중 오류가 발생했습니다.', {type: 'danger'});
+      runDaemonStatusCheck();
+    },
+    complete: function() {
+      btn.prop('disabled', false).html('<i class="bi bi-arrow-clockwise mr-1"></i>데몬 다시 띄우기');
+    }
+  });
+});
+
 // 자동 설치 버튼
 $('#auto_install_btn').on('click', function() {
   if (!confirm('시스템 브라우저 설치를 시작하시겠습니까?\n(Ubuntu/Debian 기반 도커 환경에서만 작동합니다)')) return;
@@ -759,6 +839,7 @@ $('#copy_cmd_btn').on('click', function() {
 $(document).ready(function() {
   // Action 탭이 활성화될 때 체크 (또는 그냥 로딩 시 한 번)
   runSystemCheck();
+  runDaemonStatusCheck();
 });
 
 // ======================================

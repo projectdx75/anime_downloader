@@ -1066,6 +1066,20 @@ class LogicOhli24(AnimeModuleBase):
             
             elif sub == "system_check":
                 return jsonify(self.system_check())
+
+            elif sub == "daemon_status":
+                return jsonify(LogicOhli24.get_zendriver_daemon_status())
+
+            elif sub == "restart_zendriver_daemon":
+                ok = LogicOhli24.restart_zendriver_daemon(wait_timeout=12.0)
+                status = LogicOhli24.get_zendriver_daemon_status()
+                return jsonify(
+                    {
+                        "ret": "success" if ok else "error",
+                        "restarted": ok,
+                        "status": status,
+                    }
+                )
             
             elif sub == "install_browser":
                 return jsonify(self.install_system_browser())
@@ -2502,6 +2516,29 @@ class LogicOhli24(AnimeModuleBase):
                 return daemon_result["html"]
             else:
                 logger.warning(f"[Layer3A] Daemon failed: {daemon_result.get('error', 'Unknown')}")
+                # 데몬이 준비 안 된 상태면 즉시 1회 강제 재시작 후 같은 경로로 재시도
+                daemon_error = str(daemon_result.get("error", "")).lower()
+                if "daemon not ready" in daemon_error:
+                    logger.info("[Layer3A] Attempting immediate daemon restart and one-shot retry")
+                    if LogicOhli24.restart_zendriver_daemon(wait_timeout=12.0):
+                        daemon_retry = LogicOhli24.fetch_via_daemon(
+                            url,
+                            30,
+                            auto_start=False,
+                            retry_on_failure=False,
+                        )
+                        if daemon_retry.get("success") and daemon_retry.get("html"):
+                            elapsed = time.time() - total_start
+                            logger.info(
+                                f"[Layer3A] Success after restart in {elapsed:.2f}s "
+                                f"(HTML: {len(daemon_retry['html'])})"
+                            )
+                            return daemon_retry["html"]
+                        logger.warning(
+                            f"[Layer3A] Retry after restart failed: {daemon_retry.get('error', 'Unknown')}"
+                        )
+                    else:
+                        logger.warning("[Layer3A] Daemon restart attempt failed")
 
         # === [Layer 1: curl-cffi (Disabled)] ===
         # ohli24 대상에서 실효성이 낮아 일단 비활성화.
