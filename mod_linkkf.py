@@ -67,6 +67,9 @@ class LogicLinkkf(AnimeModuleBase):
     download_thread = None
     current_download_count = 0
     _scraper = None  # cloudscraper 싱글톤
+    _view_stream_cache = {}
+    _view_stream_cache_ttl = 900  # 15분
+    _view_session = requests.Session()
     queue = None  # 클래스 레벨에서 큐 관리
 
     cache_path = os.path.dirname(__file__)
@@ -513,23 +516,36 @@ class LogicLinkkf(AnimeModuleBase):
             elif sub == "stream_video":
                 # 비디오 스트리밍 (MP4 파일 직접 서빙)
                 try:
-                    from flask import send_file, Response, make_response
+                    from flask import send_file, Response
                     import mimetypes
                     
-                    file_path = request.args.get("path", "")
-                    if not file_path or not os.path.exists(file_path):
+                    file_path_raw = request.args.get("path", "")
+                    if not file_path_raw:
+                        return "File not found", 404
+
+                    file_path = os.path.realpath(os.path.expanduser(file_path_raw))
+                    if not os.path.isfile(file_path):
                         return "File not found", 404
                     
                     # 보안 체크: 다운로드 경로 내에 있는지 확인
-                    download_path = P.ModelSetting.get("linkkf_download_path")
-                    if not file_path.startswith(download_path):
+                    download_path_raw = P.ModelSetting.get("linkkf_download_path") or ""
+                    download_path = os.path.realpath(os.path.expanduser(download_path_raw))
+                    if not download_path:
+                        return "Access denied", 403
+                    try:
+                        if os.path.commonpath([file_path, download_path]) != download_path:
+                            return "Access denied", 403
+                    except ValueError:
                         return "Access denied", 403
                         
                     file_size = os.path.getsize(file_path)
+                    mime_type = mimetypes.guess_type(file_path)[0] or "video/mp4"
                     range_header = request.headers.get('Range', None)
                     
                     if not range_header:
-                        return send_file(file_path, mimetype='video/mp4', as_attachment=False)
+                        rv = send_file(file_path, mimetype=mime_type, as_attachment=False, conditional=True)
+                        rv.headers.add('Accept-Ranges', 'bytes')
+                        return rv
                     
                     # Range Request 처리 (seeking 지원)
                     byte1, byte2 = 0, None
@@ -542,6 +558,8 @@ class LogicLinkkf(AnimeModuleBase):
                     
                     if byte2 is None:
                         byte2 = file_size - 1
+                    if byte1 > byte2 or byte2 >= file_size:
+                        return "Invalid range", 416
                     
                     length = byte2 - byte1 + 1
                     
@@ -549,9 +567,10 @@ class LogicLinkkf(AnimeModuleBase):
                         f.seek(byte1)
                         data = f.read(length)
                     
-                    rv = Response(data, 206, mimetype='video/mp4', content_type='video/mp4', direct_passthrough=True)
+                    rv = Response(data, 206, mimetype=mime_type, content_type=mime_type, direct_passthrough=True)
                     rv.headers.add('Content-Range', 'bytes {0}-{1}/{2}'.format(byte1, byte2, file_size))
                     rv.headers.add('Accept-Ranges', 'bytes')
+                    rv.headers.add('Content-Length', str(length))
                     return rv
                 except Exception as e:
                     logger.error(f"Stream video error: {e}")
@@ -571,7 +590,10 @@ class LogicLinkkf(AnimeModuleBase):
                     if not playid_url:
                         return jsonify({"ret": "error", "log": "playid_url is required"})
 
-                    stream_url, referer_url, subtitle_url = LogicLinkkf.extract_video_url_from_playid(playid_url)
+                    stream_url, referer_url, subtitle_url = LogicLinkkf.extract_video_url_from_playid(
+                        playid_url,
+                        light_mode=True,
+                    )
                     if not stream_url:
                         return jsonify(
                             {
@@ -588,10 +610,48 @@ class LogicLinkkf(AnimeModuleBase):
                             "subtitle_url": subtitle_url,
                             "referer_url": referer_url,
                             "playid_url": playid_url,
+                            "cached": True if LogicLinkkf._get_cached_view_stream(playid_url) else False,
                         }
                     )
                 except Exception as e:
                     logger.error(f"resolve_remote_stream error: {e}")
+                    logger.error(traceback.format_exc())
+                    return jsonify({"ret": "error", "log": str(e)})
+            elif sub == "prefetch_remote_stream":
+                # request 분석 직후 첫 화 URL prewarm
+                try:
+                    playid_url = (
+                        request.form.get("playid_url")
+                        or request.form.get("url")
+                        or request.args.get("playid_url")
+                        or request.args.get("url")
+                        or ""
+                    ).strip()
+                    if not playid_url:
+                        return jsonify({"ret": "error", "log": "playid_url is required"})
+
+                    cached = LogicLinkkf._get_cached_view_stream(playid_url)
+                    if cached:
+                        return jsonify({"ret": "success", "cached": True})
+
+                    stream_url, referer_url, subtitle_url = LogicLinkkf.extract_video_url_from_playid(
+                        playid_url,
+                        light_mode=True,
+                    )
+                    if not stream_url:
+                        return jsonify({"ret": "error", "cached": False, "log": "prefetch miss"})
+
+                    return jsonify(
+                        {
+                            "ret": "success",
+                            "cached": False,
+                            "stream_url": stream_url,
+                            "subtitle_url": subtitle_url,
+                            "referer_url": referer_url,
+                        }
+                    )
+                except Exception as e:
+                    logger.error(f"prefetch_remote_stream error: {e}")
                     logger.error(traceback.format_exc())
                     return jsonify({"ret": "error", "log": str(e)})
             elif sub == "proxy_remote_media":
@@ -1116,7 +1176,115 @@ class LogicLinkkf(AnimeModuleBase):
             )
 
     @staticmethod
-    def extract_video_url_from_playid(playid_url):
+    def _cleanup_view_stream_cache(now_ts=None):
+        now_ts = now_ts or time.time()
+        expired_keys = [
+            key
+            for key, value in LogicLinkkf._view_stream_cache.items()
+            if (now_ts - value.get("ts", 0)) > LogicLinkkf._view_stream_cache_ttl
+        ]
+        for key in expired_keys:
+            LogicLinkkf._view_stream_cache.pop(key, None)
+
+    @staticmethod
+    def _get_cached_view_stream(playid_url):
+        if not playid_url:
+            return None
+        now_ts = time.time()
+        LogicLinkkf._cleanup_view_stream_cache(now_ts)
+        item = LogicLinkkf._view_stream_cache.get(playid_url)
+        if not item:
+            return None
+        if (now_ts - item.get("ts", 0)) > LogicLinkkf._view_stream_cache_ttl:
+            LogicLinkkf._view_stream_cache.pop(playid_url, None)
+            return None
+        return item.get("value")
+
+    @staticmethod
+    def _set_cached_view_stream(playid_url, video_url, referer_url, vtt_url):
+        if not playid_url or not video_url:
+            return
+        LogicLinkkf._view_stream_cache[playid_url] = {
+            "ts": time.time(),
+            "value": (video_url, referer_url, vtt_url),
+        }
+        LogicLinkkf._cleanup_view_stream_cache()
+
+    @staticmethod
+    def _fetch_html_for_view(url, referer=None, timeout=8):
+        if not url:
+            return ""
+        headers = {
+            "User-Agent": LogicLinkkf.headers.get("User-Agent")
+            or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Connection": "keep-alive",
+            "Referer": referer or LogicLinkkf.referer or P.ModelSetting.get("linkkf_url") or "https://linkkf.live/",
+        }
+        res = LogicLinkkf._view_session.get(url, headers=headers, timeout=timeout, allow_redirects=True)
+        res.raise_for_status()
+        return res.text or ""
+
+    @staticmethod
+    def _extract_stream_config_from_iframe_html(iframe_content, iframe_src):
+        if not iframe_content:
+            return None, None
+
+        video_url = None
+        vtt_url = None
+
+        m3u8_pattern = re.compile(r"url:\s*['\"]([^'\"]*\.m3u8[^'\"]*)['\"]")
+        m3u8_match = m3u8_pattern.search(iframe_content)
+
+        if not m3u8_match:
+            source_pattern = re.compile(r"<source[^>]+src=['\"]([^'\"]*\.m3u8[^'\"]*)['\"]", re.IGNORECASE)
+            m3u8_match = source_pattern.search(iframe_content)
+
+        if not m3u8_match:
+            src_pattern = re.compile(r"src\s*=\s*['\"]([^'\"]*\.m3u8[^'\"]*)['\"]", re.IGNORECASE)
+            m3u8_match = src_pattern.search(iframe_content)
+
+        if not m3u8_match:
+            art_pattern = re.compile(r"url\s*:\s*['\"]([^'\"]+)['\"]")
+            for matched in art_pattern.findall(iframe_content):
+                if ".m3u8" in matched:
+                    video_url = matched
+                    break
+
+        if not m3u8_match and not video_url:
+            video_url_pattern = re.compile(r"videoUrl\s*:\s*['\"]([^'\"]+)['\"]", re.IGNORECASE)
+            video_url_match = video_url_pattern.search(iframe_content)
+            if video_url_match:
+                video_url = video_url_match.group(1)
+
+        if m3u8_match and not video_url:
+            video_url = m3u8_match.group(1)
+
+        if video_url:
+            video_url = video_url.replace("\\/", "/")
+            if video_url.startswith("cache/") or video_url.startswith("/cache/") or video_url.startswith("/r2/"):
+                from urllib.parse import urljoin
+                video_url = urljoin(iframe_src, video_url)
+
+        vtt_pattern = re.compile(r"['\"]src['\"]?:\s*['\"]([^'\"]*\.vtt)['\"]", re.IGNORECASE)
+        vtt_match = vtt_pattern.search(iframe_content)
+        if not vtt_match:
+            vtt_pattern = re.compile(r"url:\s*['\"]([^'\"]*\.vtt[^'\"]*)['\"]", re.IGNORECASE)
+            vtt_match = vtt_pattern.search(iframe_content)
+        if not vtt_match:
+            vtt_pattern = re.compile(r"['\"]file['\"]\s*:\s*['\"]([^'\"]*\.vtt[^'\"]*)['\"]", re.IGNORECASE)
+            vtt_match = vtt_pattern.search(iframe_content)
+        if vtt_match:
+            vtt_url = vtt_match.group(1).replace("\\/", "/")
+            if vtt_url.startswith("s/") or vtt_url.startswith("/s/") or vtt_url.startswith("/r2/"):
+                from urllib.parse import urljoin
+                vtt_url = urljoin(iframe_src, vtt_url)
+
+        return video_url, vtt_url
+
+    @staticmethod
+    def extract_video_url_from_playid(playid_url, light_mode=False):
         """
         linkkf.live의 playid URL에서 실제 비디오 URL(m3u8)과 자막 URL(vtt)을 추출합니다.
         
@@ -1131,6 +1299,54 @@ class LogicLinkkf(AnimeModuleBase):
         video_url = None
         referer_url = None
         vtt_url = None
+        playid_url = (playid_url or "").strip()
+        if not playid_url:
+            return None, None, None
+
+        # 0) cache
+        cached_value = LogicLinkkf._get_cached_view_stream(playid_url)
+        if cached_value:
+            return cached_value
+
+        # 1) fast path (보기 버튼용)
+        try:
+            html_content = LogicLinkkf._fetch_html_for_view(playid_url, timeout=8)
+            if html_content:
+                soup = BeautifulSoup(html_content, "html.parser")
+                iframe = soup.select_one("iframe#video-player-iframe")
+                if not iframe:
+                    iframe = soup.select_one("iframe[src*='play.sub'], iframe[src*='playv2'], iframe[src*='play.php']")
+                if not iframe:
+                    for found_iframe in soup.select("iframe[src]"):
+                        src = (found_iframe.get("src") or "").strip()
+                        if not src:
+                            continue
+                        if any(blocked in src for blocked in ["googlead", "googletag", "adsystem", "cloud.google"]):
+                            continue
+                        iframe = found_iframe
+                        break
+
+                if iframe and iframe.get("src"):
+                    import html as html_lib
+                    iframe_src = html_lib.unescape(iframe.get("src"))
+                    if iframe_src.startswith("/"):
+                        iframe_src = urllib.parse.urljoin(playid_url, iframe_src)
+                    referer_url = iframe_src
+                    iframe_content = LogicLinkkf._fetch_html_for_view(
+                        iframe_src,
+                        referer=playid_url,
+                        timeout=8,
+                    )
+                    video_url, vtt_url = LogicLinkkf._extract_stream_config_from_iframe_html(iframe_content, iframe_src)
+                    if video_url:
+                        LogicLinkkf._set_cached_view_stream(playid_url, video_url, referer_url, vtt_url)
+                        return video_url, referer_url, vtt_url
+        except Exception as fast_e:
+            logger.debug(f"[Linkkf][FastView] extraction failed: {fast_e}")
+
+        if light_mode:
+            # 보기 버튼 경로는 속도 우선: 무거운 fallback 생략
+            return None, None, None
         
         try:
             logger.info(f"Extracting video URL from: {playid_url}")
@@ -1175,49 +1391,9 @@ class LogicLinkkf(AnimeModuleBase):
                     logger.error(f"Failed to fetch iframe content (Timeout or Error): {iframe_src}")
                     return None, iframe_src, None
                 
-                # m3u8 URL 패턴 찾기 (더 정밀하게)
-                # 패턴 1: url: 'https://...m3u8' 또는 url: "https://...m3u8"
-                m3u8_pattern = re.compile(r"url:\s*['\"]([^'\"]*\.m3u8[^'\"]*)['\"]")
-                m3u8_match = m3u8_pattern.search(iframe_content)
-                
-                # 패턴 2: <source src="https://...m3u8">
-                if not m3u8_match:
-                    source_pattern = re.compile(r"<source[^>]+src=['\"]([^'\"]*\.m3u8[^'\"]*)['\"]", re.IGNORECASE)
-                    m3u8_match = source_pattern.search(iframe_content)
-                
-                # 패턴 3: var src = '...m3u8'
-                if not m3u8_match:
-                    src_pattern = re.compile(r"src\s*=\s*['\"]([^'\"]*\.m3u8[^'\"]*)['\"]", re.IGNORECASE)
-                    m3u8_match = src_pattern.search(iframe_content)
+                video_url, vtt_url = LogicLinkkf._extract_stream_config_from_iframe_html(iframe_content, iframe_src)
 
-                # 패턴 4: Artplayer 전용 더 넓은 범위
-                if not m3u8_match:
-                    art_pattern = re.compile(r"url\s*:\s*['\"]([^'\"]+)['\"]")
-                    matches = art_pattern.findall(iframe_content)
-                    for m in matches:
-                        if ".m3u8" in m:
-                            video_url = m
-                            break
-                    if video_url:
-                        logger.info(f"Extracted m3u8 via Artplayer pattern: {video_url}")
-
-                # 패턴 5: 신규 ArtPlayer config.videoUrl = "..."
-                if not m3u8_match and not video_url:
-                    video_url_pattern = re.compile(r"videoUrl\s*:\s*['\"]([^'\"]+)['\"]", re.IGNORECASE)
-                    video_url_match = video_url_pattern.search(iframe_content)
-                    if video_url_match:
-                        video_url = video_url_match.group(1)
-                        logger.info(f"Extracted m3u8 via config.videoUrl pattern: {video_url}")
-
-                if m3u8_match and not video_url:
-                    video_url = m3u8_match.group(1)
-                
                 if video_url:
-                    video_url = video_url.replace("\\/", "/")
-                    # 상대 경로 처리 (예: cache/...)
-                    if video_url.startswith("cache/") or video_url.startswith("/cache/") or video_url.startswith("/r2/"):
-                        from urllib.parse import urljoin
-                        video_url = urljoin(iframe_src, video_url)
                     logger.info(f"Extracted m3u8 URL: {video_url}")
                 else:
                     logger.warning(f"m3u8 URL not found in iframe for: {playid_url}")
@@ -1227,31 +1403,9 @@ class LogicLinkkf(AnimeModuleBase):
                     # 'cache/' 가 들어있는지 확인
                     if 'cache/' in iframe_content:
                         logger.debug("Found 'cache/' keyword in iframe content but regex failed. Inspection required.")
-                
-                # VTT 자막 URL 추출
-                # VTT 자막 URL 추출 (패턴 1: generic src)
-                vtt_pattern = re.compile(r"['\"]src['\"]?:\s*['\"]([^'\"]*\.vtt)['\"]", re.IGNORECASE)
-                vtt_match = vtt_pattern.search(iframe_content)
-                
-                # 패턴 2: url: '...vtt' (Artplayer 등)
-                if not vtt_match:
-                    vtt_pattern = re.compile(r"url:\s*['\"]([^'\"]*\.vtt[^'\"]*)['\"]", re.IGNORECASE)
-                    vtt_match = vtt_pattern.search(iframe_content)
 
-                # 패턴 3: 신규 ArtPlayer tracks[].file = "..."
-                if not vtt_match:
-                    vtt_pattern = re.compile(r"['\"]file['\"]\s*:\s*['\"]([^'\"]*\.vtt[^'\"]*)['\"]", re.IGNORECASE)
-                    vtt_match = vtt_pattern.search(iframe_content)
-
-                if vtt_match:
-                    vtt_url = vtt_match.group(1)
-                    vtt_url = vtt_url.replace("\\/", "/")
-                    if vtt_url.startswith("s/") or vtt_url.startswith("/s/") or vtt_url.startswith("/r2/"):
-                        from urllib.parse import urljoin
-                        vtt_url = urljoin(iframe_src, vtt_url)
+                if vtt_url:
                     logger.info(f"Extracted VTT URL: {vtt_url}")
-                else:
-                    logger.debug("VTT URL not found in iframe content.")
                 
                 referer_url = iframe_src
             else:
@@ -1261,6 +1415,8 @@ class LogicLinkkf(AnimeModuleBase):
             logger.error(f"Error in extract_video_url_from_playid: {e}")
             logger.error(traceback.format_exc())
         
+        if video_url:
+            LogicLinkkf._set_cached_view_stream(playid_url, video_url, referer_url, vtt_url)
         return video_url, referer_url, vtt_url
 
     def get_video_url_from_url(url, url2):
@@ -1608,9 +1764,15 @@ class LogicLinkkf(AnimeModuleBase):
                 url = "https://linkkf.5imgdarr.top/api/apiview.php?type={}&limit=100".format(normalized_top_type)
                 items_xpath = None # JSON fetching
                 title_xpath = None
+            elif cate == "adult":
+                # 16+ 카테고리
+                # 원본 사이트 16+ 필터 파라미터
+                url = "https://linkkf.5imgdarr.top/api/singlefilter.php?postseasontypetagid=5085&page={}&limit=20".format(page)
+                items_xpath = None
+                title_xpath = None
             else:
-                # Default: JSON API (singlefilter)
-                url = "https://linkkf.5imgdarr.top/api/singlefilter.php?categorytagid=1970&page=1&limit=20"
+                # Default: ing 목록
+                url = "https://linkkf.5imgdarr.top/api/singlefilter.php?categorytagid=2&page={}&limit=20".format(page)
                 items_xpath = None  # JSON fetching
                 title_xpath = None
 

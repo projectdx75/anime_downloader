@@ -284,3 +284,25 @@
         padding-top: 0 !important;
     }
 }
+
+/* Desktop-wide horizontal gutters for all template pages */
+@media (min-width: 1300px) {
+    #main_container,
+    #main_container.container,
+    #main_container.container-fluid {
+        width: 100% !important;
+        max-width: 100% !important;
+        padding-left: 5% !important;
+        padding-right: 5% !important;
+        box-sizing: border-box !important;
+    }
+
+    #menu_module_div,
+    #menu_page_div {
+        width: 100% !important;
+        max-width: 100% !important;
+        padding-left: 5% !important;
+        padding-right: 5% !important;
+        box-sizing: border-box !important;
+    }
+}

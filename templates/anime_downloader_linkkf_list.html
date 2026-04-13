@@ -292,50 +292,7 @@ $(document).ready(function(){
     <script src="{{ url_for('.static', filename='js/sjva_global1.js') }}"></script>
     <script src="{{ url_for('.static', filename='js/sjva_ui14.js') }}"></script>
     
-    <!-- Video.js -->
-    <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet" />
-    <script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
-    
-    <!-- Video Player Modal -->
-    <div class="modal fade" id="videoModal" tabindex="-1" role="dialog" aria-labelledby="videoModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-xl" role="document">
-            <div class="modal-content" style="background: #022c22; border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.2);">
-                <div class="modal-header" style="border-bottom: 1px solid rgba(16, 185, 129, 0.1);">
-                    <h5 class="modal-title" id="videoModalLabel" style="color: #ecfdf5;">링크애니 시청</h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close" style="color: #ecfdf5;">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
-                </div>
-                <div class="modal-body" style="padding: 0;">
-                    <video id="video-player" class="video-js vjs-big-play-centered vjs-theme-forest" controls preload="auto" style="width: 100%; height: auto; max-height: 75vh;">
-                        <p class="vjs-no-js">JavaScript가 필요합니다.</p>
-                    </video>
-                    <!-- 플레이리스트 컨트롤 UI -->
-                    <div class="playlist-controls" style="padding: 12px 16px; background: linear-gradient(135deg, rgba(2, 44, 34, 0.95) 0%, rgba(6, 78, 59, 0.95) 100%); border-top: 1px solid rgba(16, 185, 129, 0.1);">
-                        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-                            <button id="btn-prev-ep" class="playlist-nav-btn" style="display: none;" title="이전 에피소드">
-                                <i class="fa fa-step-backward"></i>
-                            </button>
-                            <div style="flex: 1; min-width: 200px;">
-                                <div id="current-video-title" style="color: #10b981; font-weight: 600; font-size: 14px;"></div>
-                                <div id="playlist-progress" style="color: #6ee7b7; font-size: 12px; margin-top: 2px;"></div>
-                            </div>
-                            <button id="btn-next-ep" class="playlist-nav-btn" style="display: none;" title="다음 에피소드">
-                                <i class="fa fa-step-forward"></i>
-                            </button>
-                            <button id="btn-toggle-playlist" class="playlist-toggle-btn" title="에피소드 목록">
-                                <i class="fa fa-list"></i>
-                            </button>
-                        </div>
-                        
-                        <div id="playlist-list-container" style="display: none; margin-top: 12px; max-height: 200px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 8px; padding: 8px;">
-                            <div id="playlist-list"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+    {% include 'anime_downloader/components/video_modal.html' %}
 
     <style>
         :root {
@@ -418,8 +375,8 @@ $(document).ready(function(){
             font-weight: 500; display: inline-flex; align-items: center; gap: 6px;
         }
         .action-btn:hover { background: rgba(255,255,255,0.1); color: #fff; transform: translateY(-1px); border-color: rgba(255,255,255,0.2); }
-        .action-btn.btn-play { background: linear-gradient(135deg, #10b981, #059669); color: #fff; border: none; font-weight: 700; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); }
-        .action-btn.btn-play:hover { background: linear-gradient(135deg, #34d399, #10b981); box-shadow: 0 6px 16px rgba(16, 185, 129, 0.3); }
+        .action-btn.btn-watch { background: linear-gradient(135deg, #10b981, #059669); color: #fff; border: none; font-weight: 700; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); }
+        .action-btn.btn-watch:hover { background: linear-gradient(135deg, #34d399, #10b981); box-shadow: 0 6px 16px rgba(16, 185, 129, 0.3); }
 
         /* VideoJS Customization */
         .vjs-theme-forest { --vjs-theme-forest--emerald: #10b981; }
@@ -553,11 +510,6 @@ $(document).ready(function(){
         var package_name = "{{arg['package_name']}}";
         var sub = "{{arg['sub']}}";
         var current_data = null;
-        var videoPlayer = null;
-        var playlist = [];
-        var currentPlaylistIndex = 0;
-        var currentPlayingPath = null;
-        var playlistRefreshInterval = null;
 
         $(document).ready(function () {
             global_sub_request_search('1');
@@ -597,131 +549,6 @@ $(document).ready(function(){
             document.getElementById("option").value = 'all';
             document.getElementById("search_word").value = '';
             global_sub_request_search('1');
-        });
-
-        // 비디오 재생 UI 핵심 로직
-        function playVideoAtIndex(index) {
-            if (index < 0 || index >= playlist.length) return;
-            currentPlaylistIndex = index;
-            var item = playlist[index];
-            currentPlayingPath = item.path;
-            
-            var streamUrl = '/' + package_name + '/ajax/' + sub + '/stream_video?path=' + encodeURIComponent(item.path);
-            
-            if (videoPlayer) {
-                videoPlayer.src({ type: 'video/mp4', src: streamUrl });
-                videoPlayer.play();
-            }
-            
-            $('#current-video-title').text(item.name);
-            updatePlaylistUI();
-        }
-
-        function updatePlaylistUI() {
-            var total = playlist.length;
-            var current = currentPlaylistIndex + 1;
-            $('#playlist-progress').text(current + ' / ' + total + ' 에피소드');
-            
-            // 버튼 활성/비활성
-            $('#btn-prev-ep').toggle(currentPlaylistIndex > 0);
-            $('#btn-next-ep').toggle(currentPlaylistIndex < playlist.length - 1);
-            
-            // 리스트 하이라이트
-            $('#playlist-list .playlist-item').removeClass('active');
-            $('#playlist-list .playlist-item').eq(currentPlaylistIndex).addClass('active');
-        }
-
-        function refreshPlaylistData(slient = true) {
-            if (!currentPlayingPath || !$('#videoModal').is(':visible')) return;
-            
-            $.get('/' + package_name + '/ajax/' + sub + '/get_playlist?path=' + encodeURIComponent(currentPlayingPath), function(data) {
-                if (data.playlist && data.playlist.length > 0) {
-                    var oldLength = playlist.length;
-                    playlist = data.playlist;
-                    currentPlaylistIndex = data.current_index;
-                    
-                    // 새 에피소드 감지
-                    if (playlist.length > oldLength) {
-                        $.notify('새로운 에피소드가 감지되어 플레이리스트가 업데이트되었습니다.', { type: 'success' });
-                    }
-                    
-                    renderPlaylistItems();
-                    updatePlaylistUI();
-                }
-            });
-        }
-
-        function renderPlaylistItems() {
-            var str = '';
-            for (var i = 0; i < playlist.length; i++) {
-                var item = playlist[i];
-                var isActive = (i === currentPlaylistIndex) ? 'active' : '';
-                str += '<div class="playlist-item ' + isActive + '" onclick="playVideoAtIndex(' + i + ')">';
-                str += '<i class="fa ' + (isActive ? 'fa-play-circle' : 'fa-play') + '"></i>';
-                str += '<span>' + item.name + '</span>';
-                str += '</div>';
-            }
-            $('#playlist-list').html(str);
-        }
-
-        // 재생 버튼 클릭
-        $("body").on('click', '.btn-play', function (e) {
-            var path = $(this).data('path');
-            var filename = $(this).data('filename');
-            
-            if (!path) {
-                $.notify('파일 경로를 찾을 수 없습니다.', { type: 'warning' });
-                return;
-            }
-
-            // 플레이리스트 정보 가져오기
-            $.get('/' + package_name + '/ajax/' + sub + '/get_playlist?path=' + encodeURIComponent(path), function(data) {
-                playlist = data.playlist || [{path: path, name: filename}];
-                currentPlaylistIndex = data.current_index || 0;
-                currentPlayingPath = path;
-
-                $('#videoModal').modal('show');
-                
-                if (!videoPlayer) {
-                    videoPlayer = videojs('video-player', {
-                        fluid: true,
-                        playbackRates: [0.5, 1, 1.25, 1.5, 2]
-                    });
-                    
-                    videoPlayer.on('ended', function() {
-                        if (currentPlaylistIndex < playlist.length - 1) {
-                            playVideoAtIndex(currentPlaylistIndex + 1);
-                        }
-                    });
-                }
-                
-                playVideoAtIndex(currentPlaylistIndex);
-                renderPlaylistItems();
-                
-                // 실시간 갱신 시작 (10초)
-                if (playlistRefreshInterval) clearInterval(playlistRefreshInterval);
-                playlistRefreshInterval = setInterval(refreshPlaylistData, 10000);
-            });
-        });
-
-        // 모달 닫힐 때 중지
-        $('#videoModal').on('hidden.bs.modal', function () {
-            if (videoPlayer) {
-                videoPlayer.pause();
-            }
-            if (playlistRefreshInterval) {
-                clearInterval(playlistRefreshInterval);
-                playlistRefreshInterval = null;
-            }
-            currentPlayingPath = null;
-        });
-
-        // 플레이리스트 컨트롤러 핸들러
-        $('#btn-prev-ep').click(function() { playVideoAtIndex(currentPlaylistIndex - 1); });
-        $('#btn-next-ep').click(function() { playVideoAtIndex(currentPlaylistIndex + 1); });
-        $('#btn-toggle-playlist').click(function() {
-            $(this).toggleClass('active');
-            $('#playlist-list-container').slideToggle(200);
         });
 
         // 목록 생성 함수
@@ -765,13 +592,13 @@ $(document).ready(function(){
                 // Actions
                 str += '<div class="item-actions">';
                 if (item.status === 'completed') {
-                    str += '<button class="action-btn btn-play" data-path="' + item.filepath + '" data-filename="' + item.filename + '"><i class="fa fa-play"></i> 재생</button>';
+                    str += '<button class="action-btn btn-watch" data-path="' + item.filepath + '"><i class="fa fa-play"></i> 보기</button>';
                     str += '<button class="action-btn btn-merge-sub" data-id="' + item.id + '" data-filename="' + item.filename + '"><i class="fa fa-cc"></i> 자막합침</button>';
                 }
                 
-                // [보기] 버튼 추가 - JSON 버튼 왼쪽에 배치
+                // request 페이지 이동 버튼
                 if (item.content_code) {
-                    str += '<button class="action-btn" onclick="location.href=\'/' + package_name + '/' + sub + '/request?code=' + item.content_code + '\'"><i class="fa fa-eye"></i> 보기</button>';
+                    str += '<button class="action-btn" onclick="location.href=\'/' + package_name + '/' + sub + '/request?code=' + item.content_code + '\'"><i class="fa fa-search"></i> 작품보기</button>';
                 }
                 
                 str += '<button class="action-btn" onclick="m_modal(current_data.list[' + i + '])"><i class="fa fa-code"></i> JSON</button>';

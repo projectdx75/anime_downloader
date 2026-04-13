@@ -15,6 +15,60 @@ var VideoModal = (function() {
     var currentPlayingPath = '';
     var currentStreamUrl = '';
     var isVideoZoomed = false;
+
+    function detectSourceType(url, explicitType) {
+        if (explicitType) return explicitType;
+        if (!url) return 'video/mp4';
+        var u = String(url).toLowerCase();
+        if (u.indexOf('.m3u8') >= 0 || u.indexOf('application/x-mpegurl') >= 0) {
+            return 'application/x-mpegURL';
+        }
+        return 'video/mp4';
+    }
+
+    function isHttpLikeUrl(value) {
+        if (!value) return false;
+        var v = String(value);
+        return /^https?:\/\//i.test(v) || v.indexOf('/ajax/' + config.sub + '/proxy_remote_media') >= 0;
+    }
+
+    function toAbsoluteUrl(url) {
+        if (!url) return '';
+        if (/^https?:\/\//i.test(url)) return url;
+        if (url.charAt(0) === '/') return window.location.origin + url;
+        return window.location.origin + '/' + url;
+    }
+
+    function clearSubtitleTracks() {
+        if (!videoPlayer) return;
+        try {
+            var trackEls = videoPlayer.remoteTextTrackEls ? videoPlayer.remoteTextTrackEls() : null;
+            if (trackEls && trackEls.length) {
+                for (var i = trackEls.length - 1; i >= 0; i--) {
+                    videoPlayer.removeRemoteTextTrack(trackEls[i]);
+                }
+            }
+        } catch (e) {}
+    }
+
+    function applySubtitleTrack(subtitleUrl) {
+        clearSubtitleTracks();
+        if (!videoPlayer || !subtitleUrl) return;
+        try {
+            var trackRef = videoPlayer.addRemoteTextTrack({
+                kind: 'subtitles',
+                src: subtitleUrl,
+                srclang: 'ko',
+                label: 'Korean',
+                "default": true
+            }, false);
+            if (trackRef && trackRef.track) {
+                trackRef.track.mode = 'showing';
+            }
+        } catch (e) {
+            console.warn('[VideoModal] subtitle attach failed:', e);
+        }
+    }
     
     /**
      * Initialize the video modal
@@ -128,22 +182,24 @@ var VideoModal = (function() {
     /**
      * Initialize player with URL based on current player selection
      */
-    function initPlayerWithUrl(streamUrl) {
+    function initPlayerWithUrl(streamUrl, options) {
+        options = options || {};
         currentStreamUrl = streamUrl;
         
         if (currentPlayer === 'videojs') {
-            initVideoJS(streamUrl);
+            initVideoJS(streamUrl, options);
         } else if (currentPlayer === 'artplayer') {
-            initArtplayer(streamUrl);
+            initArtplayer(streamUrl, options);
         } else if (currentPlayer === 'plyr') {
-            initPlyr(streamUrl);
+            initPlyr(streamUrl, options);
         }
     }
     
     /**
      * Initialize Video.js player
      */
-    function initVideoJS(streamUrl) {
+    function initVideoJS(streamUrl, options) {
+        options = options || {};
         // Hide other containers
         $('#artplayer-container').hide();
         $('#plyr-container').hide();
@@ -164,7 +220,9 @@ var VideoModal = (function() {
             videoPlayer.on('ended', handleVideoEnded);
         }
         
-        videoPlayer.src({ type: 'video/mp4', src: streamUrl });
+        var sourceType = detectSourceType(streamUrl, options.source_type);
+        videoPlayer.src({ type: sourceType, src: streamUrl });
+        applySubtitleTrack(options.subtitle_url || '');
     }
     
     /**
@@ -244,9 +302,15 @@ var VideoModal = (function() {
         if (index < 0 || index >= playlist.length) return;
         currentPlaylistIndex = index;
         var item = playlist[index];
-        var streamUrl = '/' + config.package_name + '/ajax/' + config.sub + '/stream_video?path=' + encodeURIComponent(item.path);
+        var streamUrl = item.stream_url
+            ? item.stream_url
+            : ('/' + config.package_name + '/ajax/' + config.sub + '/stream_video?path=' + encodeURIComponent(item.path));
+        var sourceType = detectSourceType(streamUrl, item.source_type);
         
-        initPlayerWithUrl(streamUrl);
+        initPlayerWithUrl(streamUrl, {
+            source_type: sourceType,
+            subtitle_url: item.subtitle_url || ''
+        });
         
         // Try to auto-play
         setTimeout(function() {
@@ -291,9 +355,20 @@ var VideoModal = (function() {
      * Open modal with a direct stream URL
      */
     function openWithUrl(streamUrl, title) {
-        playlist = [{ name: title || 'Video', path: streamUrl }];
+        var options = arguments.length > 2 ? arguments[2] : {};
+        playlist = [{
+            name: title || 'Video',
+            path: options.path || streamUrl,
+            stream_url: streamUrl,
+            subtitle_url: options.subtitle_url || '',
+            source_type: detectSourceType(streamUrl, options.source_type),
+            is_remote: options.is_remote === true
+        }];
         currentPlaylistIndex = 0;
-        initPlayerWithUrl(streamUrl);
+        initPlayerWithUrl(streamUrl, {
+            source_type: detectSourceType(streamUrl, options.source_type),
+            subtitle_url: options.subtitle_url || ''
+        });
         updatePlaylistUI();
         $('#videoModal').modal('show');
     }
@@ -305,9 +380,14 @@ var VideoModal = (function() {
         playlist = playlistData || [];
         currentPlaylistIndex = startIndex || 0;
         if (playlist.length > 0) {
-            var filePath = playlist[currentPlaylistIndex].path;
-            var streamUrl = '/' + config.package_name + '/ajax/' + config.sub + '/stream_video?path=' + encodeURIComponent(filePath);
-            initPlayerWithUrl(streamUrl);
+            var currentItem = playlist[currentPlaylistIndex];
+            var streamUrl = currentItem.stream_url
+                ? currentItem.stream_url
+                : ('/' + config.package_name + '/ajax/' + config.sub + '/stream_video?path=' + encodeURIComponent(currentItem.path));
+            initPlayerWithUrl(streamUrl, {
+                source_type: detectSourceType(streamUrl, currentItem.source_type),
+                subtitle_url: currentItem.subtitle_url || ''
+            });
             updatePlaylistUI();
             $('#videoModal').modal('show');
         }
@@ -341,16 +421,24 @@ var VideoModal = (function() {
      */
     function updateExternalPlayerButtons() {
         var currentFile = playlist[currentPlaylistIndex];
-        if (!currentFile || !currentFile.path) return;
+        if (!currentFile) return;
         
         // For internal Video.js player: use stream_video (session auth)
         // For external players: fetch token and use /normal/ route (no auth)
-        var filePath = currentFile.path;
+        var filePath = currentFile.path || '';
+        var directStreamUrl = currentFile.stream_url || '';
         var filename = currentFile.name || 'video.mp4';
         var imgBase = '/' + config.package_name + '/static/img/players/';
         
         // First, show loading state
         $('#external-player-buttons').html('<span class="text-muted">Loading...</span>');
+
+        // Remote/direct stream case
+        if (directStreamUrl || isHttpLikeUrl(filePath)) {
+            var remoteUrl = toAbsoluteUrl(directStreamUrl || filePath);
+            renderExternalPlayerButtons(remoteUrl, filename, imgBase);
+            return;
+        }
         
         // Fetch a streaming token for external players
         $.ajax({

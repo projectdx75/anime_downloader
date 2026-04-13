@@ -1122,15 +1122,25 @@ class LogicOhli24(AnimeModuleBase):
                     from flask import send_file, Response
                     import mimetypes
                     
-                    file_path = request.args.get("path", "")
-                    logger.info(f"Stream video request: {file_path}")
+                    file_path_raw = request.args.get("path", "")
+                    logger.info(f"Stream video request: {file_path_raw}")
                     
-                    if not file_path or not os.path.exists(file_path):
+                    if not file_path_raw:
+                        return jsonify({"error": "File not found"}), 404
+
+                    file_path = os.path.realpath(os.path.expanduser(file_path_raw))
+                    if not os.path.isfile(file_path):
                         return jsonify({"error": "File not found"}), 404
                     
                     # 보안 체크: 다운로드 폴더 내부인지 확인
-                    download_path = P.ModelSetting.get("ohli24_download_path")
-                    if not file_path.startswith(download_path):
+                    download_path_raw = P.ModelSetting.get("ohli24_download_path") or ""
+                    download_path = os.path.realpath(os.path.expanduser(download_path_raw))
+                    if not download_path:
+                        return jsonify({"error": "Access denied"}), 403
+                    try:
+                        if os.path.commonpath([file_path, download_path]) != download_path:
+                            return jsonify({"error": "Access denied"}), 403
+                    except ValueError:
                         return jsonify({"error": "Access denied"}), 403
                     
                     file_size = os.path.getsize(file_path)
@@ -1166,6 +1176,8 @@ class LogicOhli24(AnimeModuleBase):
                         
                         if byte_end is None or byte_end >= file_size:
                             byte_end = file_size - 1
+                        if byte_start > byte_end or byte_start >= file_size:
+                            return jsonify({"error": "Invalid range"}), 416
                         
                         length = byte_end - byte_start + 1
                         
