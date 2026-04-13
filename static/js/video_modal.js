@@ -14,7 +14,29 @@ var VideoModal = (function() {
     var currentPlaylistIndex = 0;
     var currentPlayingPath = '';
     var currentStreamUrl = '';
+    var currentSourceOptions = {};
     var isVideoZoomed = false;
+    var SUBTITLE_SIZE_KEY = 'anime_downloader_art_subtitle_size';
+    var SUBTITLE_BG_KEY = 'anime_downloader_art_subtitle_bg';
+
+    function getSavedSubtitleSize() {
+        var size = parseInt(localStorage.getItem(SUBTITLE_SIZE_KEY) || '18', 10);
+        if (isNaN(size) || size < 12 || size > 36) return 18;
+        return size;
+    }
+
+    function getSavedSubtitleBg() {
+        var mode = localStorage.getItem(SUBTITLE_BG_KEY) || 'dark';
+        return (mode === 'clear') ? 'clear' : 'dark';
+    }
+
+    function getSubtitleStyle(size, bgMode) {
+        return {
+            color: '#FFFFFF',
+            'font-size': size + 'px',
+            'background-color': (bgMode === 'clear') ? 'transparent' : 'rgba(0, 0, 0, 0.45)'
+        };
+    }
 
     function detectSourceType(url, explicitType) {
         if (explicitType) return explicitType;
@@ -125,6 +147,9 @@ var VideoModal = (function() {
         // Modal events
         $('#videoModal').off('show.bs.modal').on('show.bs.modal', function() {
             $('body').addClass('modal-video-open');
+            if (currentStreamUrl) {
+                tryAutoPlay(140);
+            }
         });
         
         $('#videoModal').off('hide.bs.modal').on('hide.bs.modal', function() {
@@ -158,7 +183,7 @@ var VideoModal = (function() {
         
         // Show selected player and reinitialize with current URL
         if (currentStreamUrl) {
-            initPlayerWithUrl(currentStreamUrl);
+            initPlayerWithUrl(currentStreamUrl, currentSourceOptions);
             tryAutoPlay(100);
         }
         
@@ -187,7 +212,9 @@ var VideoModal = (function() {
                 if (currentPlayer === 'videojs' && videoPlayer) {
                     videoPlayer.play();
                 } else if (currentPlayer === 'artplayer' && artPlayer) {
-                    artPlayer.play = true;
+                    if (typeof artPlayer.play === 'function') {
+                        artPlayer.play();
+                    }
                 } else if (currentPlayer === 'plyr' && plyrPlayer) {
                     plyrPlayer.play();
                 }
@@ -196,6 +223,10 @@ var VideoModal = (function() {
             }
         }, delay);
     }
+
+    function attachAutoplayRetries() {
+        tryAutoPlay(120);
+    }
     
     /**
      * Initialize player with URL based on current player selection
@@ -203,6 +234,7 @@ var VideoModal = (function() {
     function initPlayerWithUrl(streamUrl, options) {
         options = options || {};
         currentStreamUrl = streamUrl;
+        currentSourceOptions = Object.assign({}, options);
         
         if (currentPlayer === 'videojs') {
             initVideoJS(streamUrl, options);
@@ -236,6 +268,8 @@ var VideoModal = (function() {
             });
             
             videoPlayer.on('ended', handleVideoEnded);
+            videoPlayer.on('loadedmetadata', attachAutoplayRetries);
+            videoPlayer.on('canplay', attachAutoplayRetries);
         }
         
         var sourceType = detectSourceType(streamUrl, options.source_type);
@@ -265,23 +299,76 @@ var VideoModal = (function() {
             pip: true,
             screenshot: true,
             setting: true,
+            subtitleOffset: true,
             playbackRate: true,
             aspectRatio: true,
             fullscreen: true,
             fullscreenWeb: true,
+            moreVideoAttr: {
+                crossorigin: 'anonymous'
+            },
             theme: '#3b82f6'
         };
+        var savedSubtitleSize = getSavedSubtitleSize();
+        var savedSubtitleBg = getSavedSubtitleBg();
         if (options.subtitle_url) {
             artConfig.subtitle = {
                 url: options.subtitle_url,
                 type: 'vtt',
-                encoding: 'utf-8'
+                encoding: 'utf-8',
+                escape: false,
+                style: getSubtitleStyle(savedSubtitleSize, savedSubtitleBg)
             };
         }
 
         artPlayer = new Artplayer(artConfig);
         
         artPlayer.on('video:ended', handleVideoEnded);
+        artPlayer.on('ready', attachAutoplayRetries);
+        artPlayer.on('ready', function() {
+            if (!artPlayer || !artPlayer.setting || typeof artPlayer.setting.add !== 'function') return;
+            var sizes = [14, 16, 18, 20, 22, 24, 28];
+            artPlayer.setting.add({
+                html: '자막 크기',
+                width: 180,
+                tooltip: savedSubtitleSize + 'px',
+                selector: sizes.map(function(size) {
+                    return {
+                        html: size + 'px',
+                        value: size,
+                        default: size === savedSubtitleSize,
+                    };
+                }),
+                onSelect: function(item) {
+                    var size = parseInt(item.value, 10);
+                    if (!isNaN(size)) {
+                        localStorage.setItem(SUBTITLE_SIZE_KEY, String(size));
+                        if (artPlayer && artPlayer.subtitle && typeof artPlayer.subtitle.style === 'function') {
+                            artPlayer.subtitle.style(getSubtitleStyle(size, getSavedSubtitleBg()));
+                        }
+                    }
+                    return item.html;
+                },
+            });
+
+            artPlayer.setting.add({
+                html: '자막 배경',
+                width: 180,
+                tooltip: (savedSubtitleBg === 'clear') ? '글자만' : '검은 배경',
+                selector: [
+                    { html: '검은 배경', value: 'dark', default: savedSubtitleBg === 'dark' },
+                    { html: '글자만', value: 'clear', default: savedSubtitleBg === 'clear' },
+                ],
+                onSelect: function(item) {
+                    var mode = (item.value === 'clear') ? 'clear' : 'dark';
+                    localStorage.setItem(SUBTITLE_BG_KEY, mode);
+                    if (artPlayer && artPlayer.subtitle && typeof artPlayer.subtitle.style === 'function') {
+                        artPlayer.subtitle.style(getSubtitleStyle(getSavedSubtitleSize(), mode));
+                    }
+                    return item.html;
+                },
+            });
+        });
     }
     
     /**
@@ -295,6 +382,7 @@ var VideoModal = (function() {
         
         // Set source
         $('#plyr-player').attr('src', streamUrl);
+        $('#plyr-player').prop('autoplay', false);
         
         if (!plyrPlayer) {
             plyrPlayer = new Plyr('#plyr-player', {
@@ -304,6 +392,8 @@ var VideoModal = (function() {
             });
             
             plyrPlayer.on('ended', handleVideoEnded);
+            plyrPlayer.on('loadedmetadata', attachAutoplayRetries);
+            plyrPlayer.on('canplay', attachAutoplayRetries);
         } else {
             plyrPlayer.source = {
                 type: 'video',
