@@ -159,6 +159,7 @@ var VideoModal = (function() {
         // Show selected player and reinitialize with current URL
         if (currentStreamUrl) {
             initPlayerWithUrl(currentStreamUrl);
+            tryAutoPlay(100);
         }
         
         console.log('[VideoModal] Switched to:', newPlayer);
@@ -177,6 +178,23 @@ var VideoModal = (function() {
         try {
             if (plyrPlayer) plyrPlayer.pause();
         } catch(e) {}
+    }
+
+    function tryAutoPlay(delayMs) {
+        var delay = (typeof delayMs === 'number') ? delayMs : 120;
+        setTimeout(function() {
+            try {
+                if (currentPlayer === 'videojs' && videoPlayer) {
+                    videoPlayer.play();
+                } else if (currentPlayer === 'artplayer' && artPlayer) {
+                    artPlayer.play = true;
+                } else if (currentPlayer === 'plyr' && plyrPlayer) {
+                    plyrPlayer.play();
+                }
+            } catch (e) {
+                console.debug('[VideoModal] autoplay blocked:', e);
+            }
+        }, delay);
     }
     
     /**
@@ -228,7 +246,8 @@ var VideoModal = (function() {
     /**
      * Initialize Artplayer
      */
-    function initArtplayer(streamUrl) {
+    function initArtplayer(streamUrl, options) {
+        options = options || {};
         // Hide other containers
         $('#videojs-container').hide();
         $('#plyr-container').hide();
@@ -239,7 +258,7 @@ var VideoModal = (function() {
             artPlayer = null;
         }
         
-        artPlayer = new Artplayer({
+        var artConfig = {
             container: '#artplayer-container',
             url: streamUrl,
             autoplay: false,
@@ -251,7 +270,16 @@ var VideoModal = (function() {
             fullscreen: true,
             fullscreenWeb: true,
             theme: '#3b82f6'
-        });
+        };
+        if (options.subtitle_url) {
+            artConfig.subtitle = {
+                url: options.subtitle_url,
+                type: 'vtt',
+                encoding: 'utf-8'
+            };
+        }
+
+        artPlayer = new Artplayer(artConfig);
         
         artPlayer.on('video:ended', handleVideoEnded);
     }
@@ -312,12 +340,7 @@ var VideoModal = (function() {
             subtitle_url: item.subtitle_url || ''
         });
         
-        // Try to auto-play
-        setTimeout(function() {
-            if (currentPlayer === 'videojs' && videoPlayer) videoPlayer.play();
-            else if (currentPlayer === 'artplayer' && artPlayer) artPlayer.play = true;
-            else if (currentPlayer === 'plyr' && plyrPlayer) plyrPlayer.play();
-        }, 100);
+        tryAutoPlay(100);
         
         updatePlaylistUI();
     }
@@ -334,19 +357,18 @@ var VideoModal = (function() {
                 playlist = data.playlist || [];
                 currentPlaylistIndex = data.current_index || 0;
                 currentPlayingPath = filePath;
-                
-                var streamUrl = '/' + config.package_name + '/ajax/' + config.sub + '/stream_video?path=' + encodeURIComponent(filePath);
-                initPlayerWithUrl(streamUrl);
-                updatePlaylistUI();
+                if (playlist.length === 0) {
+                    playlist = [{ name: filePath.split('/').pop(), path: filePath }];
+                    currentPlaylistIndex = 0;
+                }
                 $('#videoModal').modal('show');
+                playVideoAtIndex(currentPlaylistIndex);
             },
             error: function() {
                 playlist = [{ name: filePath.split('/').pop(), path: filePath }];
                 currentPlaylistIndex = 0;
-                var streamUrl = '/' + config.package_name + '/ajax/' + config.sub + '/stream_video?path=' + encodeURIComponent(filePath);
-                initPlayerWithUrl(streamUrl);
-                updatePlaylistUI();
                 $('#videoModal').modal('show');
+                playVideoAtIndex(currentPlaylistIndex);
             }
         });
     }
@@ -371,6 +393,7 @@ var VideoModal = (function() {
         });
         updatePlaylistUI();
         $('#videoModal').modal('show');
+        tryAutoPlay(80);
     }
     
     /**
@@ -380,16 +403,8 @@ var VideoModal = (function() {
         playlist = playlistData || [];
         currentPlaylistIndex = startIndex || 0;
         if (playlist.length > 0) {
-            var currentItem = playlist[currentPlaylistIndex];
-            var streamUrl = currentItem.stream_url
-                ? currentItem.stream_url
-                : ('/' + config.package_name + '/ajax/' + config.sub + '/stream_video?path=' + encodeURIComponent(currentItem.path));
-            initPlayerWithUrl(streamUrl, {
-                source_type: detectSourceType(streamUrl, currentItem.source_type),
-                subtitle_url: currentItem.subtitle_url || ''
-            });
-            updatePlaylistUI();
             $('#videoModal').modal('show');
+            playVideoAtIndex(currentPlaylistIndex);
         }
     }
     

@@ -719,6 +719,7 @@ class LogicLinkkf(AnimeModuleBase):
                         or "mpegurl" in remote_ct.lower()
                         or body_head.startswith("#EXTM3U")
                     )
+                    is_vtt = (".vtt" in media_url.lower()) or ("text/vtt" in remote_ct.lower())
 
                     def build_proxy_url(target_url):
                         return (
@@ -766,6 +767,8 @@ class LogicLinkkf(AnimeModuleBase):
                         status=remote_res.status_code,
                         content_type=remote_ct or "application/octet-stream",
                     )
+                    if is_vtt and (not remote_ct or "octet-stream" in remote_ct.lower() or "text/plain" in remote_ct.lower()):
+                        resp.headers["Content-Type"] = "text/vtt; charset=utf-8"
                     # 스트리밍 탐색(seek) 관련 헤더 전달
                     if "Content-Length" in remote_res.headers:
                         resp.headers["Content-Length"] = remote_res.headers["Content-Length"]
