@@ -176,7 +176,8 @@
                 </button>
               </div>
             </div>
-            <div id="daemon_status_detail" class="small text-muted" style="font-family: monospace;">상태 조회 대기 중...</div>
+            <div id="daemon_status_summary" class="small text-muted mb-2" style="font-family: monospace;">상태 조회 대기 중...</div>
+            <div id="daemon_status_log" class="small text-muted p-2 rounded" style="font-family: monospace; white-space: pre-wrap; word-break: break-word; max-height: 120px; overflow-y: auto; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);">로그 대기 중...</div>
           </div>
 
           <hr style="border-color: rgba(255,255,255,0.1);">
@@ -735,6 +736,22 @@ function runSystemCheck() {
 }
 
 function runDaemonStatusCheck() {
+  function formatDaemonLog(logTail) {
+    if (!logTail) return '최근 로그 없음';
+    var lines = String(logTail).split('\n').map(function(line) { return line.trim(); }).filter(Boolean);
+    lines = lines.filter(function(line) {
+      if (line.indexOf('[ZendriverLib] DEBUG: target #') !== -1) return false;
+      if (line.indexOf('[ZendriverLib] DEBUG: target #1 has changed') !== -1) return false;
+      return true;
+    });
+    if (!lines.length) return '최근 로그 없음';
+    lines = lines.slice(-5).map(function(line) {
+      if (line.length > 180) return line.slice(0, 180) + '...';
+      return line;
+    });
+    return lines.join('\n');
+  }
+
   $.ajax({
     url: '/' + package_name + '/ajax/' + sub + '/daemon_status',
     type: 'POST',
@@ -762,14 +779,13 @@ function runDaemonStatusCheck() {
       if (ret.error) {
         detail += ', error=' + ret.error;
       }
-      if (ret.log_tail) {
-        detail += '\n' + ret.log_tail;
-      }
-      $('#daemon_status_detail').text(detail);
+      $('#daemon_status_summary').text(detail);
+      $('#daemon_status_log').text(formatDaemonLog(ret.log_tail));
     },
     error: function(xhr) {
       $('#daemon_status_badge').removeClass('badge-secondary badge-success badge-warning').addClass('badge-danger').text('오류');
-      $('#daemon_status_detail').text('status check failed: ' + (xhr.status || 'network'));
+      $('#daemon_status_summary').text('status check failed: ' + (xhr.status || 'network'));
+      $('#daemon_status_log').text('로그 조회 불가');
     }
   });
 }

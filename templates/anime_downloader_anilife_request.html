@@ -19,7 +19,7 @@ body {
 </style>
 
 <div id="yommi_wrapper" class="container-fluid mt-2 mt-md-4 mx-auto anilife-common-wrapper anilife-request-page content-cloak">
-    <div id="preloader" class="loader">
+    <div id="preloader" class="loader is-visible">
         <div class="loader-inner">
             <div class="loader-line-wrap"><div class="loader-line"></div></div>
             <div class="loader-line-wrap"><div class="loader-line"></div></div>
@@ -88,51 +88,33 @@ body {
     }
 
     const loader = document.getElementById("preloader");
+    let loadingTicket = 0;
+    let loadingStartedAt = 0;
 
-    const dismissLoadingScreen = async function () {
-        // console.log("Before the delay")
-        // await delay(2.5);
-        loader.style.display = "none";
-    };
-
-    const wait_seconds = function () {
-        // REFERENCE:  https://www.w3schools.com/jsref/met_win_settimeout.asp
-        let result = setTimeout(dismissLoadingScreen, 2500);
-        // console.log(result)
-    };
-    const init = function () {
-
+    function beginPageLoading() {
+        loadingTicket += 1;
+        loadingStartedAt = Date.now();
+        loader.classList.add('is-visible');
+        return loadingTicket;
     }
 
-    function delay(n) {
-        return new Promise(function (resolve) {
-            setTimeout(resolve, n * 1000);
-        });
+    function endPageLoading(ticket, minDuration = 220) {
+        const elapsed = Date.now() - loadingStartedAt;
+        const delay = Math.max(0, minDuration - elapsed);
+        setTimeout(() => {
+            if (ticket !== loadingTicket) return;
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    loader.classList.remove('is-visible');
+                });
+            });
+        }, delay);
     }
 
-    async function myAsyncFunction() {
-        //Do what you want here
-        // console.log("Before the delay")
-
-        await delay(2.5);
-
-        // console.log("After the delay")
-        //Do what you want here too
-
-    }
-
-    // myAsyncFunction();
-    // window.addEventListener("DOMContentLoaded", dismissLoadingScreen);
-
-    // window.addEventListener("DOMContentLoaded", wait_seconds);
+    const initialLoadTicket = beginPageLoading();
 
     function analyze(wr_id, bo_table) {
-        // 분석 시작 시 preloader 표시
-        const preloader = document.getElementById('preloader');
-        if (preloader) {
-            preloader.style.display = 'block';
-            preloader.style.opacity = '1';
-        }
+        const currentTicket = beginPageLoading();
         
         const code = document.getElementById("code").value
         $.ajax({
@@ -142,14 +124,6 @@ body {
             data: {code: code, wr_id: wr_id, bo_table: bo_table},
             dataType: "json",
             success: function (ret) {
-                // 분석 완료 시 preloader 숨기기
-                if (preloader) {
-                    preloader.style.opacity = '0';
-                    setTimeout(function() {
-                        preloader.style.display = 'none';
-                    }, 300);
-                }
-                
                 if (ret.ret === 'success' && ret.data != null) {
                     make_program(ret.data)
                     $("#loader").css("display", 'none')
@@ -157,14 +131,8 @@ body {
                     $.notify('<strong>분석 실패</strong><br>' + ret.log, {type: 'warning'});
                 }
             },
-            error: function() {
-                // 에러 시에도 preloader 숨기기
-                if (preloader) {
-                    preloader.style.opacity = '0';
-                    setTimeout(function() {
-                        preloader.style.display = 'none';
-                    }, 300);
-                }
+            complete: function() {
+                endPageLoading(currentTicket);
             }
         });
     }
@@ -346,15 +314,7 @@ body {
         // URL에 code가 없으면 preloader 숨기기 (있으면 analyze 함수에서 처리)
         const hasAutoAnalysis = params.code || "{{arg['anilife_current_code']}}";
         if (!hasAutoAnalysis) {
-            const preloader = document.getElementById('preloader');
-            setTimeout(function() {
-                if (preloader) {
-                    preloader.style.opacity = '0';
-                    setTimeout(function() {
-                        preloader.style.display = 'none';
-                    }, 300);
-                }
-            }, 100);
+            endPageLoading(initialLoadTicket);
         }
         
         $("#loader").css("display", 'none');
@@ -371,6 +331,7 @@ body {
     $("#analysis_btn").unbind("click").bind('click', function (e) {
         e.preventDefault();
         e.stopPropagation()
+        const currentTicket = beginPageLoading();
         $("#loader").css("display", 'block')
         const code = document.getElementById("code").value
         // console.log(code)
@@ -387,10 +348,12 @@ body {
                     // console.log(ret.data)
 
                     make_program(ret.data)
-                    dismissLoadingScreen()
                 } else {
                     $.notify('<strong>분석 실패</strong><br>' + ret.log, {type: 'warning'});
                 }
+            },
+            complete: function () {
+                endPageLoading(currentTicket);
             }
         });
     });
@@ -1069,6 +1032,9 @@ body {
         top: 0;
         z-index: 99999;
         opacity: 0.5;
+        visibility: hidden;
+        pointer-events: none;
+        transition: opacity 0.22s ease, visibility 0.22s ease;
     }
 
     .loader {
@@ -1389,6 +1355,13 @@ $(document).ready(function(){
         opacity: 1;
         margin: 0;
         z-index: 100000;
+        pointer-events: none;
+        visibility: hidden;
+        transition: opacity 0.22s ease, visibility 0.22s ease;
+    }
+
+    #preloader.loader.is-visible {
+        visibility: visible;
         pointer-events: all;
     }
 

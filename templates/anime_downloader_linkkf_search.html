@@ -4,7 +4,7 @@
 
 <!--<div id="preloader"></div>-->
 <div id="linkkf_search_wrapper" class="container-fluid mt-4 mx-auto content-cloak" style="max-width: 100%; padding-left: 5px; padding-right: 5px;">
-  <div id="preloader" class="loader">
+  <div id="preloader" class="loader is-visible">
     <div class="loader-inner">
       <div class="loader-line-wrap">
         <div class="loader-line"></div>
@@ -51,6 +51,7 @@
         완결
       </button>
       <button id="top_view" type="button" class="btn btn-elegant-top">Top</button>
+      <button id="adult_16_plus" type="button" class="btn btn-elegant-16plus">16+</button>
     </div>
     <div id="top_type_filters" class="btn-group mt-2 mb-2" role="group" aria-label="Top Type Filters" style="display:none;">
       <button id="top_type_day" type="button" class="btn btn-outline-warning">일간 톱</button>
@@ -101,20 +102,30 @@
   let current_cate = ''
   let current_query = ''
   let current_top_type = 'month'
+  let loadingTicket = 0
+  let loadingStartedAt = 0
 
   const loader = document.getElementById("preloader");
 
-  const dismissLoadingScreen = function () {
-      loader.style.display = "none";
-  };
+  function beginListLoading() {
+      loadingTicket += 1;
+      loadingStartedAt = Date.now();
+      loader.classList.add('is-visible');
+      return loadingTicket;
+  }
 
-  const wait3seconds = function () {
-      // REFERENCE:  https://www.w3schools.com/jsref/met_win_settimeout.asp
-      const result = setTimeout(dismissLoadingScreen, 2000);
-  };
-
-  window.addEventListener("load", wait3seconds);
-  // window.addEventListener("load", dismissLoadingScreen);
+  function endListLoading(ticket, minDuration = 220) {
+      const elapsed = Date.now() - loadingStartedAt;
+      const delay = Math.max(0, minDuration - elapsed);
+      setTimeout(() => {
+          if (ticket !== loadingTicket) return;
+          requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                  loader.classList.remove('is-visible');
+              });
+          });
+      }, delay);
+  }
 
 
   const observer = lozad('.lozad', {
@@ -155,6 +166,7 @@
       //console.log(`type: ${type}, page: ${page}`);
       let url = ''
       let data = {"page": page, "type": type}
+      const currentTicket = beginListLoading()
 
       switch (type) {
           case 'ing':
@@ -173,6 +185,10 @@
               url = '/' + package_name + '/ajax/' + sub + '/anime_list'
               current_cate = 'top_view'
               data.top_type = current_top_type
+              break
+          case 'adult':
+              url = '/' + package_name + '/ajax/' + sub + '/anime_list'
+              current_cate = 'adult'
               break
           default:
               break;
@@ -199,6 +215,10 @@
                   // // console.log(div_visible)
               }
               next_page = page + 1
+              endListLoading(currentTicket)
+          },
+          error: () => {
+              endListLoading(currentTicket)
           }
       });
   }
@@ -518,6 +538,7 @@
           // // console.log("search keyword nothing");
           return false;
       }
+      const currentTicket = beginListLoading();
 
       $.ajax({
           url: "/" + package_name + "/ajax/" + sub + "/search",
@@ -537,6 +558,9 @@
                   });
               }
           },
+          complete: function() {
+              endListLoading(currentTicket);
+          }
       });
   });
 
@@ -572,12 +596,16 @@
               updateTopTypeFilters();
               get_anime_list("top_view", 1);
               break;
+          case "adult_16_plus":
+              current_cate = "adult";
+              updateTopTypeFilters();
+              get_anime_list("adult", 1);
+              break;
           default:
               // // console.log("default")
-              spinner_loading.style.display = "block";
               current_cate = "ing";
               updateTopTypeFilters();
-              get_anime_list(1, "ing");
+              get_anime_list("ing", 1);
               break;
 
       }
@@ -722,7 +750,7 @@
 
   const loadNextAnimes = (cate, page, ch) => {
       // spinner.style.display = "block";
-      loader.style.display = "block";
+      const currentTicket = beginListLoading();
       let data = {type: cate, page: String(page)};
       let url = ''
       switch (cate) {
@@ -747,6 +775,10 @@
               current_cate = 'search'
               data.query = current_query
               break;
+          case 'adult':
+              url = '/' + package_name + '/ajax/' + sub + '/anime_list'
+              current_cate = 'adult'
+              break;
           default:
               break;
       }
@@ -765,7 +797,6 @@
               // {#imagesContainer.appendChild()#}
               // // console.log("return page:::> ", String(response.page));
               // {#page = response.page#}
-              loader.style.display = "block";
               if (current_cate === 'search') {
                   make_search_result_list(response.data, response.page);
 
@@ -781,11 +812,14 @@
                   behavior: 'smooth'
               });
 
-              loader.style.display = "none";
+              endListLoading(currentTicket);
               page++;
               next_page++;
           })
-          .catch((error) => console.error("Error:", error));
+          .catch((error) => {
+              console.error("Error:", error);
+              endListLoading(currentTicket);
+          });
   };
 
 
@@ -1188,6 +1222,16 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0.22s ease, visibility 0.22s ease;
+  }
+
+  #preloader.is-visible {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
   }
 
   .loader-inner, .loader-line-wrap { display: none; }
@@ -1228,7 +1272,7 @@
   ::-webkit-scrollbar-thumb { background: var(--accent-primary); border-radius: 4px; }
   ::-webkit-scrollbar-thumb:hover { background: var(--accent-secondary); }
   /* Elegant Button Styles */
-  .btn-elegant-ing, .btn-elegant-movie, .btn-elegant-top {
+  .btn-elegant-ing, .btn-elegant-movie, .btn-elegant-top, .btn-elegant-16plus {
       color: white;
       border: none;
       box-shadow: 0 4px 6px rgba(0,0,0,0.1);
@@ -1246,7 +1290,11 @@
       background: linear-gradient(135deg, #f09819 0%, #edde5d 100%);
       color: #333; /* Darker text for visibility on yellow */
   }
-  .btn-elegant-ing:hover, .btn-elegant-movie:hover, .btn-elegant-top:hover {
+  .btn-elegant-16plus {
+      background: linear-gradient(135deg, #ef4444 0%, #f97316 100%);
+      color: #fff;
+  }
+  .btn-elegant-ing:hover, .btn-elegant-movie:hover, .btn-elegant-top:hover, .btn-elegant-16plus:hover {
       transform: translateY(-2px);
       box-shadow: 0 6px 12px rgba(0,0,0,0.15);
       color: white;

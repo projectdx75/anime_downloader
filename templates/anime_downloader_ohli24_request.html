@@ -3,7 +3,7 @@
 <link rel="stylesheet" href="{{ url_for('.static', filename='css/' ~ arg['sub'] ~ '.css') }}"/>
 <link rel="stylesheet" href="{{ url_for('.static', filename='css/video_modal.css') }}"/>
 
-    <div id="preloader">
+    <div id="preloader" class="is-visible">
         <div class="demo">
             <!--        <div class="loader-inner">-->
             <div class="circle">
@@ -112,20 +112,32 @@
         }
 
         const loader = document.getElementById("preloader");
+        let loadingTicket = 0;
+        let loadingStartedAt = 0;
 
-        const dismissLoadingScreen = function () {
-            loader.style.display = "none";
-            $('.demo').css("display", "none")
-        };
+        function beginPageLoading() {
+            loadingTicket += 1;
+            loadingStartedAt = Date.now();
+            $('.demo').css("display", "block");
+            loader.classList.add('is-visible');
+            return loadingTicket;
+        }
 
-        const wait3seconds = function () {
-            // Force parent container to be fluid to allow full width
-            $("#main_container").removeClass("container").addClass("container-fluid");
-            // REFERENCE:  https://www.w3schools.com/jsref/met_win_settimeout.asp
-            const result = setTimeout(dismissLoadingScreen, 2000);
-        };
+        function endPageLoading(ticket, minDuration = 220) {
+            const elapsed = Date.now() - loadingStartedAt;
+            const delay = Math.max(0, minDuration - elapsed);
+            setTimeout(() => {
+                if (ticket !== loadingTicket) return;
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        loader.classList.remove('is-visible');
+                        $('.demo').css("display", "none");
+                    });
+                });
+            }, delay);
+        }
 
-        window.addEventListener("load", wait3seconds);
+        const initialLoadTicket = beginPageLoading();
 
 
         function findGetParameter(parameterName) {
@@ -140,10 +152,9 @@
         }
 
         function analyze(wr_id, bo_table) {
-            // e.preventDefault();
+            const currentTicket = beginPageLoading();
 
             const code = document.getElementById("code").value
-            // // console.log(code)
             $.ajax({
                 url: '/' + package_name + '/ajax/' + sub + '/analysis',
                 type: "POST",
@@ -164,6 +175,9 @@
                     } else {
                         $.notify('<strong>분석 실패</strong><br>' + ret.log, {type: 'warning'});
                     }
+                },
+                complete: function () {
+                    endPageLoading(currentTicket);
                 }
             });
         }
@@ -328,11 +342,14 @@
         })
 
         $(document).ready(function () {
+            $("#main_container").removeClass("container").addClass("container-fluid");
             // // console.log("{{ arg['code'] }}")
             // // console.log('wr_id::', params.wr_id)
             if (document.getElementById("code").value !== "") {
                 // document.getElementById("analysis_btn").click()
                 $('#analysis_btn').click();
+            } else {
+                endPageLoading(initialLoadTicket);
             }
 
 
@@ -351,6 +368,7 @@
         $("#analysis_btn").unbind("click").bind('click', function (e) {
             e.preventDefault();
             e.stopPropagation();
+            const currentTicket = beginPageLoading();
 
             accessibleCount = accessibleCount - 1; //count부터 뺀다
             // // console.log(accessibleCount)
@@ -374,6 +392,9 @@
                         } else {
                             $.notify('<strong>분석 실패</strong><br>' + ret.log, {type: 'warning'});
                         }
+                    },
+                    complete: function () {
+                        endPageLoading(currentTicket);
                     }
                 });
                 // // console.log(accessibleCount)
@@ -1178,6 +1199,14 @@
             top: 0;
             z-index: 99999;
             opacity: 0.5;
+            visibility: hidden;
+            pointer-events: none;
+            transition: opacity 0.22s ease, visibility 0.22s ease;
+        }
+
+        #preloader.is-visible {
+            visibility: visible;
+            pointer-events: auto;
         }
 
         .btn-outline-success {
