@@ -13,6 +13,7 @@ import importlib
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
 import threading
@@ -58,6 +59,7 @@ from .lib.util import Util
 from .setup import *
 from .mod_base import AnimeModuleBase
 from .model_base import AnimeQueueEntity
+from .zendriver_cleanup import find_port_pids, find_stale_browser_pids, terminate_pids
 
 try:
     from gommi_downloader_manager.mod_queue import ModuleQueue
@@ -274,6 +276,8 @@ class LogicOhli24(AnimeModuleBase):
                     logger.warning("[ZendriverDaemon] Daemon script not found")
                     return False
 
+                cls.cleanup_existing_zendriver_daemon()
+
                 browser_path = P.ModelSetting.get("ohli24_zendriver_browser_path")
                 cmd = [sys.executable, daemon_script]
                 if browser_path:
@@ -316,43 +320,20 @@ class LogicOhli24(AnimeModuleBase):
         # 2. 현재 프로세스 핸들 정리
         proc = cls.zendriver_daemon_process
         if proc is not None:
-            try:
-                if proc.poll() is None:
-                    proc.terminate()
-                    proc.wait(timeout=3)
-            except Exception:
-                try:
-                    if proc.poll() is None:
-                        proc.kill()
-                except Exception:
-                    pass
-            finally:
-                cls.zendriver_daemon_process = None
+            cls._terminate_daemon_process(proc)
+            cls.zendriver_daemon_process = None
 
         # 3. 포트를 점유 중인 이전 daemon 프로세스 정리
         try:
-            import subprocess
-            result = subprocess.run(
-                ["lsof", "-ti", f"tcp:{cls.zendriver_daemon_port}"],
-                capture_output=True,
-                text=True,
-                timeout=3,
-            )
-            pids = [pid.strip() for pid in result.stdout.splitlines() if pid.strip()]
-            for pid in pids:
-                try:
-                    os.kill(int(pid), 15)
-                except Exception:
-                    pass
-            if pids:
-                time.sleep(1.0)
-                for pid in pids:
-                    try:
-                        os.kill(int(pid), 9)
-                    except Exception:
-                        pass
+            terminate_pids(find_port_pids(cls.zendriver_daemon_port))
         except Exception as e:
             logger.debug(f"[ZendriverDaemon] cleanup_existing_zendriver_daemon skipped: {e}")
+
+        # 4. 남아있는 zendriver chrome/chromium 자식 프로세스 정리
+        try:
+            terminate_pids(find_stale_browser_pids())
+        except Exception as e:
+            logger.debug(f"[ZendriverDaemon] stale browser cleanup skipped: {e}")
 
     @classmethod
     def get_zendriver_daemon_status(cls, timeout: float = 2.0) -> Dict[str, Any]:
@@ -488,18 +469,42 @@ class LogicOhli24(AnimeModuleBase):
 
         proc = cls.zendriver_daemon_process
         if proc is not None:
+            cls._terminate_daemon_process(proc)
+            cls.zendriver_daemon_process = None
+
+    @classmethod
+    def _terminate_daemon_process(cls, proc: Any) -> None:
+        try:
+            if proc.poll() is not None:
+                return
+        except Exception:
+            return
+
+        try:
+            os.killpg(proc.pid, signal.SIGTERM)
+            proc.wait(timeout=5)
+            return
+        except Exception:
+            pass
+
+        try:
+            if proc.poll() is None:
+                os.killpg(proc.pid, signal.SIGKILL)
+                proc.wait(timeout=3)
+                return
+        except Exception:
+            pass
+
+        try:
+            if proc.poll() is None:
+                proc.terminate()
+                proc.wait(timeout=3)
+        except Exception:
             try:
                 if proc.poll() is None:
-                    proc.terminate()
-                    proc.wait(timeout=3)
+                    proc.kill()
             except Exception:
-                try:
-                    if proc.poll() is None:
-                        proc.kill()
-                except Exception:
-                    pass
-            finally:
-                cls.zendriver_daemon_process = None
+                pass
 
     @classmethod
     def restart_zendriver_daemon(cls, wait_timeout: float = 8.0) -> bool:

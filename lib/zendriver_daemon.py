@@ -148,7 +148,7 @@ class ZendriverHandler(BaseHTTPRequestHandler):
         
         elif self.path == "/shutdown":
             self._send_json(200, {"status": "shutting_down"})
-            Thread(target=lambda: (time.sleep(0.5), os._exit(0))).start()
+            Thread(target=lambda: (time.sleep(0.5), os.kill(os.getpid(), signal.SIGTERM))).start()
         
         else:
             self._send_json(404, {"error": "Not found"})
