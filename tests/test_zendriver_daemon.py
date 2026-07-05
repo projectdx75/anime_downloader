@@ -1,49 +1,69 @@
+import sys
 import unittest
-from unittest.mock import patch
+from pathlib import Path
+
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from lib import zendriver_daemon
 
 
-class FakePage:
-    def __init__(self, html):
-        self.html = html
+class _FakePage:
+    def __init__(self):
         self.closed = False
-        self.urls = []
 
     async def get(self, url):
-        self.urls.append(url)
-        return self
+        return None
 
     async def get_content(self):
-        return self.html
+        return "<html>" + ("x" * 12000) + "post-list</html>"
 
     async def close(self):
         self.closed = True
 
 
-class FakeBrowser:
-    def __init__(self, page):
-        self.page = page
-        self.urls = []
+class _FakeBrowser:
+    def __init__(self):
+        self.calls = []
+        self.page = _FakePage()
 
-    async def get(self, url):
-        self.urls.append(url)
+    async def get(self, url="about:blank", new_tab=False, new_window=False):
+        self.calls.append(
+            {
+                "url": url,
+                "new_tab": new_tab,
+                "new_window": new_window,
+            }
+        )
+        if not new_tab:
+            raise StopIteration
         return self.page
 
 
 class ZendriverDaemonTests(unittest.IsolatedAsyncioTestCase):
-    async def test_fetch_closes_page_after_success(self):
-        page = FakePage("<html>" + ("x" * 12000) + "</html>")
-        browser = FakeBrowser(page)
+    async def asyncSetUp(self):
+        self.original_browser = zendriver_daemon.browser
+        self.original_ensure_browser = zendriver_daemon.ensure_browser
 
-        with patch.object(zendriver_daemon, "ensure_browser") as ensure_browser:
-            zendriver_daemon.browser = browser
-            ensure_browser.return_value = browser
+    async def asyncTearDown(self):
+        zendriver_daemon.browser = self.original_browser
+        zendriver_daemon.ensure_browser = self.original_ensure_browser
 
-            result = await zendriver_daemon.fetch_with_browser("https://example.com", timeout=1)
+    async def test_fetch_uses_new_tab_when_reopening_after_closed_page(self):
+        fake_browser = _FakeBrowser()
+        zendriver_daemon.browser = fake_browser
+
+        async def fake_ensure_browser():
+            return fake_browser
+
+        zendriver_daemon.ensure_browser = fake_ensure_browser
+
+        result = await zendriver_daemon.fetch_with_browser("https://example.com", timeout=5)
 
         self.assertTrue(result["success"])
-        self.assertTrue(page.closed)
+        self.assertEqual(fake_browser.calls[0]["url"], "about:blank")
+        self.assertTrue(fake_browser.calls[0]["new_tab"])
+        self.assertTrue(fake_browser.page.closed)
 
 
 if __name__ == "__main__":

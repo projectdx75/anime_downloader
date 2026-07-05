@@ -323,7 +323,10 @@ async def fetch_with_browser(url: str, timeout: int = 30, headers: Optional[Dict
                 page = None
                 for attempt in range(3):
                     try:
-                        page = await asyncio.wait_for(browser.get("about:blank"), timeout=8)
+                        page = await asyncio.wait_for(
+                            browser.get("about:blank", new_tab=True),
+                            timeout=8,
+                        )
                         log_debug(f"[ZendriverDaemon] Fresh tab acquired (Attempt {attempt+1})")
                         break
                     except (StopIteration, RuntimeError, asyncio.TimeoutError, Exception) as tab_e:
