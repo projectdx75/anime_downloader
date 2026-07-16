@@ -484,10 +484,34 @@ async def run_async_loop() -> None:
 
 
 def run_server() -> None:
-    """HTTP 서버 실행"""
+    """HTTP 서버 실행 (포트 바인드 실패 시 백오프 재시도)
+
+    restart 직후 구 데몬/자식 프로세스가 포트를 놓아주기 전에 새 데몬이
+    바인드를 시도해 `Address already in use`로 죽는 경쟁을 방지한다.
+    바인드가 계속 실패하면 비정상 종료(exit 1)하여 부모가 인지하게 한다.
+    """
+    max_attempts = 40
+    backoff = 0.5
+    server: Optional[ThreadingHTTPServer] = None
+    last_error: Optional[Exception] = None
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            server = ThreadingHTTPServer(('127.0.0.1', DAEMON_PORT), ZendriverHandler)
+            server.daemon_threads = True
+            log_debug(f"[ZendriverDaemon] HTTP server bound on port {DAEMON_PORT} (attempt {attempt}/{max_attempts})")
+            break
+        except OSError as e:
+            last_error = e
+            server = None
+            log_debug(f"[ZendriverDaemon] Bind failed on port {DAEMON_PORT} (attempt {attempt}/{max_attempts}): {e}")
+            time.sleep(backoff)
+
+    if server is None:
+        log_debug(f"[ZendriverDaemon] HTTP server gave up after {max_attempts} attempts: {last_error}")
+        sys.exit(1)
+
     try:
-        server: ThreadingHTTPServer = ThreadingHTTPServer(('127.0.0.1', DAEMON_PORT), ZendriverHandler)
-        log_debug(f"[ZendriverDaemon] HTTP server starting on port {DAEMON_PORT}")
         server.serve_forever()
     except Exception as e:
         log_debug(f"[ZendriverDaemon] HTTP server error: {e}")

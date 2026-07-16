@@ -335,6 +335,9 @@ class LogicOhli24(AnimeModuleBase):
         except Exception as e:
             logger.debug(f"[ZendriverDaemon] stale browser cleanup skipped: {e}")
 
+        # 5. 포트가 완전히 해제될 때까지 대기 (새 데몬 바인드 경쟁 방지)
+        cls._wait_for_port_release(cls.zendriver_daemon_port, timeout=8.0)
+
     @classmethod
     def get_zendriver_daemon_status(cls, timeout: float = 2.0) -> Dict[str, Any]:
         """데몬 상태 조회"""
@@ -505,6 +508,29 @@ class LogicOhli24(AnimeModuleBase):
                     proc.kill()
             except Exception:
                 pass
+
+    @classmethod
+    def _wait_for_port_release(cls, port: int, timeout: float = 10.0) -> None:
+        """포트가 완전히 해제될 때까지 대기 (새 데몬 바인드 경쟁 방지).
+
+        cleanup이 SIGTERM/SIGKILL을 보낸 뒤에도 OS가 포트를 놓아주는 데
+        약간의 시간이 걸린다. 새 데몬이 `Address already in use`로 죽지 않도록
+        포트를 잡은 PID가 사라질 때까지 폴링한다.
+        """
+        deadline = time.time() + timeout
+        last_pids: List[int] = []
+        while time.time() < deadline:
+            try:
+                pids = find_port_pids(port)
+            except Exception:
+                pids = []
+            if not pids:
+                return
+            last_pids = pids
+            time.sleep(0.3)
+        logger.debug(
+            f"[ZendriverDaemon] Port {port} still held by {last_pids} after {timeout}s; proceeding anyway"
+        )
 
     @classmethod
     def restart_zendriver_daemon(cls, wait_timeout: float = 8.0) -> bool:
