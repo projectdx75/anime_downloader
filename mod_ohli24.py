@@ -2213,45 +2213,22 @@ class LogicOhli24(AnimeModuleBase):
         """카테고리별 애니메이션 목록 조회."""
         logger.debug(f"get_anime_info: cate={cate}, page={page}, sca={sca}")
         try:
-            # URL 끝 슬래시 제거 로직 추가
-            base_url = P.ModelSetting.get("ohli24_url").rstrip('/')
-            url = base_url + "/bbs/board.php?bo_table=" + cate + "&page=" + page
-            if sca:
-                url += "&sca=" + sca
+            base_url = LogicOhli24.get_base_url()
+            category_paths = {"ing": "방영중", "theater": "극장판"}
+            if cate in category_paths:
+                params = {"page": page}
+                if sca:
+                    params["weekday"] = sca
+                url = base_url + "/" + urllib.parse.quote(category_paths[cate]) + "?" + urllib.parse.urlencode(params)
+            else:
+                params = {"bo_table": cate, "page": page}
+                if sca:
+                    params["sca"] = sca
+                url = base_url + "/bbs/board.php?" + urllib.parse.urlencode(params)
             logger.info("url:::> %s", url)
             data = {}
             response_data = LogicOhli24.get_html_cached(url, timeout=10)
-            tree = html.fromstring(response_data)
-            tmp_items = tree.xpath('//div[@class="list-row"]')
-            data["anime_count"] = len(tmp_items)
-            data["anime_list"] = []
-
-            for item in tmp_items:
-                entity = {}
-                entity["link"] = LogicOhli24._extract_first(item, [".//a/@href"])
-                if not entity["link"]:
-                    logger.warning("[Ohli24] Skipping list item without link")
-                    continue
-                entity["code"] = entity["link"].split("/")[-1]
-                entity["title"] = LogicOhli24._extract_text(item, ".//div[contains(@class, 'post-title')]//text()")
-                if not entity["title"]:
-                    logger.warning(f"[Ohli24] Skipping list item without title: {entity['link']}")
-                    continue
-
-                image_link = LogicOhli24._extract_first(
-                    item,
-                    [
-                        ".//div[contains(@class, 'img-item')]//img/@src",
-                        ".//div[contains(@class, 'img-item')]//img/@data-src",
-                        ".//div[contains(@class, 'img-item')]//img/@data-ezsrc",
-                    ],
-                )
-                entity["image_link"] = image_link.replace("..", LogicOhli24.get_base_url()) if image_link else ""
-
-                data["ret"] = "success"
-                data["anime_list"].append(entity)
-
-            return data
+            return LogicOhli24._parse_anime_listing(response_data, url)
         except Exception as e:
             P.logger.error("Exception:%s", e)
             P.logger.error(traceback.format_exc())
@@ -2263,36 +2240,7 @@ class LogicOhli24(AnimeModuleBase):
             logger.info("url:::> %s", url)
             data = {}
             response_data = LogicOhli24.get_html_cached(url, timeout=10)
-            tree = html.fromstring(response_data)
-            tmp_items = tree.xpath('//div[@class="list-row"]')
-            data["anime_count"] = len(tmp_items)
-            data["anime_list"] = []
-
-            for item in tmp_items:
-                entity = {}
-                entity["link"] = LogicOhli24._extract_first(item, [".//a/@href"])
-                if not entity["link"]:
-                    logger.warning("[Ohli24] Skipping auto list item without link")
-                    continue
-                entity["code"] = entity["link"].split("/")[-1]
-                entity["title"] = LogicOhli24._extract_text(item, ".//div[contains(@class, 'post-title')]//text()")
-                if not entity["title"]:
-                    logger.warning(f"[Ohli24] Skipping auto list item without title: {entity['link']}")
-                    continue
-
-                image_link = LogicOhli24._extract_first(
-                    item,
-                    [
-                        ".//div[contains(@class, 'img-item')]//img/@src",
-                        ".//div[contains(@class, 'img-item')]//img/@data-src",
-                        ".//div[contains(@class, 'img-item')]//img/@data-ezsrc",
-                    ],
-                )
-                entity["image_link"] = image_link.replace("..", LogicOhli24.get_base_url()) if image_link else ""
-                data["ret"] = "success"
-                data["anime_list"].append(entity)
-
-            return data
+            return LogicOhli24._parse_anime_listing(response_data, url)
         except Exception as e:
             P.logger.error("Exception:%s", e)
             P.logger.error(traceback.format_exc())
@@ -2778,9 +2726,48 @@ class LogicOhli24(AnimeModuleBase):
         return response_data
 
     @staticmethod
+    def _listing_rows(tree):
+        # Legacy board rows and the new Vue cards (class="box relative").
+        return tree.xpath(
+            '//div[contains(concat(" ", normalize-space(@class), " "), " list-row ")]'
+            ' | //div[contains(concat(" ", normalize-space(@class), " "), " box ")]'
+            '[.//a[contains(@href, "/c/")] and .//span[contains(concat(" ", normalize-space(@class), " "), " ttl ")]]'
+        )
+
+    @staticmethod
+    def _listing_title(item):
+        return LogicOhli24._extract_text(
+            item,
+            './/*[contains(concat(" ", normalize-space(@class), " "), " post-title ")'
+            ' or contains(concat(" ", normalize-space(@class), " "), " ttl ")]//text()',
+        )
+
+    @staticmethod
+    def _parse_anime_listing(response_data, url):
+        items = []
+        for row in LogicOhli24._listing_rows(html.fromstring(response_data)):
+            link = LogicOhli24._extract_first(row, [".//a/@href"])
+            title = LogicOhli24._listing_title(row)
+            if not link or not title:
+                continue
+            link = urllib.parse.urljoin(url, link)
+            image = LogicOhli24._extract_first(row, [
+                ".//img/@data-src", ".//img/@data-ezsrc", ".//img/@src",
+            ])
+            items.append({
+                "link": link,
+                "code": urllib.parse.urlparse(link).path.rstrip("/").split("/")[-1],
+                "title": title,
+                "image_link": urllib.parse.urljoin(url, image) if image else "",
+            })
+        return {"ret": "success", "anime_count": len(items), "anime_list": items}
+
+    @staticmethod
     def _get_cache_page_type(url: str) -> str:
         parsed = parse.urlparse(url)
 
+        if urllib.parse.unquote(parsed.path).rstrip("/") in ("/방영중", "/완결", "/극장판"):
+            return "list"
         if "/bbs/search.php" in parsed.path:
             return "search"
         if "/bbs/board.php" in parsed.path:
@@ -2808,7 +2795,8 @@ class LogicOhli24(AnimeModuleBase):
             "attention required",
             "enable javascript",
             "cf-browser-verification",
-            "cloudflare",
+            "cf-chl-",
+            "challenge-platform",
             "blocked",
             "403 forbidden",
             "error 403",
@@ -2839,12 +2827,12 @@ class LogicOhli24(AnimeModuleBase):
         if page_type in ("list", "search"):
             try:
                 tree = html.fromstring(html_text)
-                rows = tree.xpath('//div[@class="list-row"]')
+                rows = cls._listing_rows(tree)
                 if rows:
                     valid_rows = 0
                     for row in rows:
                         hrefs = row.xpath(".//a/@href")
-                        title_text = "".join(row.xpath(".//div[contains(@class, 'post-title')]//text()")).strip()
+                        title_text = cls._listing_title(row)
                         if hrefs and title_text:
                             valid_rows += 1
                             break
