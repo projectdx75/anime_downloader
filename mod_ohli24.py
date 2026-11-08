@@ -1889,7 +1889,6 @@ class LogicOhli24(AnimeModuleBase):
 
     def get_series_info(self, code: str, wr_id: Optional[str], bo_table: Optional[str]) -> Dict[str, Any]:
         code_type = "c"
-        code = urllib.parse.quote(code)
 
         try:
             # 캐시 기능을 제거하여 분석 버튼 클릭 시 항상 최신 설정으로 다시 분석하도록 함
@@ -1905,6 +1904,9 @@ class LogicOhli24(AnimeModuleBase):
                     code_type = "e"
 
                 logger.info(f"code:::: {code}")
+
+            # Normalize both raw titles and already percent-encoded listing codes.
+            code = urllib.parse.quote(urllib.parse.unquote(code), safe="")
 
             base_url = P.ModelSetting.get("ohli24_url").rstrip("/")  # 뒤에 슬래시 제거
             
