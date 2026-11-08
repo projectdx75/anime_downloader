@@ -3002,7 +3002,8 @@ class LogicOhli24(AnimeModuleBase):
                 # options 내부가 아닌 상위 레벨로 headers/cookies 전달 (GDM 평탄화 대응)
                 "headers": entity.headers,
                 "subtitles": entity.srt_url or entity.vtt,
-                "cookies_file": entity.cookies_file
+                "cookies_file": entity.cookies_file,
+                "proxy": LogicOhli24.get_proxy(),
             }
 
             try:
@@ -3781,7 +3782,7 @@ class Ohli24QueueEntity(AnimeQueueEntity):
             
             if not video_id:
                 logger.error(f"Could not find video ID in iframe URL: {iframe_src}")
-                return video_url, vtt_url, cookies_file
+                return video_url, vtt_url, cookies_file, resolution
             
             # curl_cffi 세션 생성 (Chrome 120 TLS Fingerprint)
             scraper = requests.Session(impersonate="chrome120")
@@ -3801,7 +3802,23 @@ class Ohli24QueueEntity(AnimeQueueEntity):
                 "referer": encoded_referer,
             }
             logger.debug(f"Visiting iframe page for cookies: {iframe_src}")
-            scraper.get(iframe_src, headers=iframe_headers, timeout=30, proxies=proxies)
+            def access_denied(response, stage):
+                body = (response.text or "").lower()
+                blocked = (
+                    response.status_code in (401, 403, 429)
+                    or ("cloudflare" in body and "access denied" in body)
+                )
+                if blocked:
+                    logger.error(
+                        "[cdndania] Access denied at %s (HTTP %s, Ray ID: %s). "
+                        "Video extraction stopped; response is not video data.",
+                        stage, response.status_code, response.headers.get("cf-ray", "unknown"),
+                    )
+                return blocked
+
+            iframe_response = scraper.get(iframe_src, headers=iframe_headers, timeout=30, proxies=proxies)
+            if access_denied(iframe_response, "iframe"):
+                return video_url, vtt_url, cookies_file, resolution
             
             # getVideo API 호출
             api_url = f"{iframe_domain}/player/index.php?data={video_id}&do=getVideo"
@@ -3819,6 +3836,8 @@ class Ohli24QueueEntity(AnimeQueueEntity):
             
             logger.debug(f"Calling video API with session: {api_url}")
             response = scraper.post(api_url, headers=headers, data=post_data, timeout=30, proxies=proxies)
+            if access_denied(response, "video API"):
+                return video_url, vtt_url, cookies_file, resolution
             json_text = response.text
             
             if json_text:
