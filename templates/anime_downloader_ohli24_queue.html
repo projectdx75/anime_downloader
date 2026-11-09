@@ -312,7 +312,11 @@ $("body").on('click', '#reset_btn', function(e){
 $("body").on('click', '#delete_completed_btn', function(e){
     e.preventDefault();
     globalSendCommand('delete_completed', null, null, null, function(ret){
-        autoRefreshList();
+        if (ret && ret.ret === 'success') {
+            autoRefreshList();
+        } else {
+            $.notify($('<div>').text((ret && ret.log) || '완료 항목 삭제에 실패했습니다.').html(), {type: 'warning'});
+        }
     });
 });
 

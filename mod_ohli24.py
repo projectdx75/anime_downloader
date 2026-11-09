@@ -1055,15 +1055,7 @@ class LogicOhli24(AnimeModuleBase):
                             logger.error(f"Failed to clear Ohli24 DB: {e}")
                         return jsonify({'ret':'success', 'log':f'{cancelled_count}개 Ohli24 항목이 초기화되었습니다.'})
                     elif command == "delete_completed":
-                        # 완료 항목만 삭제
-                        try:
-                            from framework import F
-                            with F.app.app_context():
-                                F.db.session.query(ModelOhli24Item).filter(ModelOhli24Item.status == 'completed').delete()
-                                F.db.session.commit()
-                        except Exception as e:
-                            logger.error(f"Failed to delete completed: {e}")
-                        return jsonify({'ret':'success', 'log':'완료 항목이 삭제되었습니다.'})
+                        return jsonify(self._delete_completed_queue_items())
                 
                 if self.queue:
                     ret = self.queue.command(command, int(entity_id) if str(entity_id).isdigit() else 0)
@@ -1609,11 +1601,38 @@ class LogicOhli24(AnimeModuleBase):
         
         return None
 
+    def _delete_completed_queue_items(self):
+        try:
+            counts = {"memory": 0, "db": 0}
+            if ModuleQueue:
+                counts = ModuleQueue.delete_completed_downloads(
+                    caller_plugin=f"{P.package_name}_{self.name}"
+                )
+            if self.queue:
+                self.queue.command("delete_completed", 0)
+            from framework import F
+            with F.app.app_context():
+                try:
+                    removed = F.db.session.query(ModelOhli24Item).filter(
+                        ModelOhli24Item.status == "completed"
+                    ).delete(synchronize_session=False)
+                    F.db.session.commit()
+                except Exception:
+                    F.db.session.rollback()
+                    raise
+            logger.info("[Queue] Removed completed Ohli24 records: GDM=%s, local=%s", counts, removed)
+            return {"ret": "success", "log": "완료 항목이 삭제되었습니다.", "data": counts}
+        except Exception as e:
+            logger.error("Failed to delete completed Ohli24 queue items: %s", e)
+            return {"ret": "error", "log": f"완료 항목 삭제 실패: {e}"}
+
     def process_command(
         self, command: str, arg1: str, arg2: str, arg3: str, req: Any
     ) -> Any:
         """커맨드 처리."""
         try:
+            if command == "delete_completed":
+                return jsonify(self._delete_completed_queue_items())
             if command == "list":
                 # 1. 자체 큐 목록 가져오기
                 ret = self.queue.get_entity_list() if self.queue else []
