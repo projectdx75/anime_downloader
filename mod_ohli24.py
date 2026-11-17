@@ -1783,6 +1783,26 @@ class LogicOhli24(AnimeModuleBase):
             logger.error(traceback.format_exc())
 
     @staticmethod
+    def _normalize_schedule_code(code: str) -> str:
+        value = str(code or "").strip()
+        if value.startswith(("http://", "https://")):
+            value = urllib.parse.urlparse(value).path
+        if value.startswith("/c/"):
+            value = value[3:]
+        return urllib.parse.quote(urllib.parse.unquote(value.rstrip("/")), safe="")
+
+    @classmethod
+    def is_scheduled(cls, code: str) -> bool:
+        normalized = cls._normalize_schedule_code(code)
+        if not normalized:
+            return False
+        saved = P.ModelSetting.get("ohli24_auto_code_list") or ""
+        return any(
+            cls._normalize_schedule_code(item) == normalized
+            for item in saved.replace("\n", "|").split("|") if item.strip()
+        )
+
+    @staticmethod
     def add_whitelist(*args: str) -> Dict[str, Any]:
         """화이트리스트에 코드 추가."""
         ret: Dict[str, Any] = {}
@@ -1795,16 +1815,18 @@ class LogicOhli24(AnimeModuleBase):
             else:
                 code = str(args[0])
 
-            print(code)
+            code = LogicOhli24._normalize_schedule_code(code)
+            if not code:
+                return {"ret": False, "log": "작품 코드가 없습니다."}
 
-            whitelist_program = P.ModelSetting.get("ohli24_auto_code_list")
+            whitelist_program = P.ModelSetting.get("ohli24_auto_code_list") or ""
             # whitelist_programs = [
             #     str(x.strip().replace(" ", ""))
             #     for x in whitelist_program.replace("\n", "|").split("|")
             # ]
             whitelist_programs = [str(x.strip()) for x in whitelist_program.replace("\n", "|").split("|")]
 
-            if code not in whitelist_programs:
+            if not LogicOhli24.is_scheduled(code):
                 whitelist_programs.append(code)
                 whitelist_programs = filter(lambda x: x != "", whitelist_programs)  # remove blank code
                 whitelist_program = "|".join(whitelist_programs)
@@ -1815,12 +1837,14 @@ class LogicOhli24(AnimeModuleBase):
                 db.session.commit()
                 ret["ret"] = True
                 ret["code"] = code
+                ret["is_scheduled"] = True
                 if len(args) == 0:
                     return LogicOhli24.current_data
                 else:
                     return ret
             else:
                 ret["ret"] = False
+                ret["is_scheduled"] = True
                 ret["log"] = "이미 추가되어 있습니다."
         except Exception as e:
             logger.error(f"Exception: {str(e)}")
@@ -2223,6 +2247,7 @@ class LogicOhli24(AnimeModuleBase):
                     logger.error(f"Error checking file existence: {e}")
                     logger.error(traceback.format_exc())
             
+            data["is_scheduled"] = LogicOhli24.is_scheduled(code)
             self.current_data = data
             return data
 

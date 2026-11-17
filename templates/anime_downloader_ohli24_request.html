@@ -247,7 +247,8 @@
             str += `<button id="all_check_off_btn" class="btn btn-outline-secondary btn-sm ohli24-muted-action request-action-btn request-action-muted"><span>해제</span></button>`;
             
             // Scheduling (Heart)
-            str += `<button id="add_whitelist" class="btn btn-outline-danger btn-sm ohli24-danger-action request-action-btn request-action-danger" style="min-width: 120px;"><i class="bi bi-heart"></i><span>스케쥴링 추가</span></button>`;
+            const scheduled = data.is_scheduled === true;
+            str += `<button id="add_whitelist" class="btn ${scheduled ? 'btn-danger' : 'btn-outline-danger'} btn-sm ohli24-danger-action request-action-btn request-action-danger" style="min-width: 120px;" ${scheduled ? 'disabled' : ''}><i class="bi ${scheduled ? 'bi-heart-fill' : 'bi-heart'}"></i><span>${scheduled ? '스케쥴링 추가됨' : '스케쥴링 추가'}</span></button>`;
             
             str += `</div>`; // End Action Toolbar
             
@@ -408,7 +409,7 @@
 
         $("body").on('click', '#add_whitelist', function (e) {
             e.preventDefault();
-            const code = document.getElementById("code").value || params.code;
+            const code = (current_data && current_data.code) || document.getElementById("code").value || params.code;
             const $btn = $(this);
             $.ajax({
                 url: '/' + package_name + '/ajax/' + sub + '/add_whitelist',
@@ -418,13 +419,17 @@
                 contentType: "application/json;charset=UTF-8",
                 dataType: "json",
                 success: function (ret) {
+                    if (ret.is_scheduled === true || ret.ret === true) {
+                        if (current_data) current_data.is_scheduled = true;
+                        $btn.prop('disabled', true);
+                    }
                     if (ret.ret) {
                         $.notify('<strong>스케쥴링 목록에 추가하였습니다.</strong>', {type: 'success'});
-                        $btn.html('<i class="bi bi-heart-fill"></i> 추가됨').removeClass('btn-outline-danger').addClass('btn-danger');
+                        $btn.html('<i class="bi bi-heart-fill"></i><span>스케쥴링 추가됨</span>').removeClass('btn-outline-danger').addClass('btn-danger');
                     } else {
                          if (ret.log == "이미 추가되어 있습니다.") {
                             $.notify('<strong>이미 추가되어 있습니다.</strong>', {type: 'warning'});
-                            $btn.html('<i class="bi bi-heart-fill"></i> 추가됨').removeClass('btn-outline-danger').addClass('btn-danger');
+                            $btn.html('<i class="bi bi-heart-fill"></i><span>스케쥴링 추가됨</span>').removeClass('btn-outline-danger').addClass('btn-danger');
                         } else {
                             $.notify('<strong>추가 실패</strong><br>' + ret.log, {type: 'warning'});
                         }
