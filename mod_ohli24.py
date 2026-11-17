@@ -59,6 +59,7 @@ from .lib.util import Util
 from .setup import *
 from .mod_base import AnimeModuleBase
 from .model_base import AnimeQueueEntity
+from .ohli24_player import extract_player_url
 from .zendriver_cleanup import find_port_pids, find_stale_browser_pids, terminate_pids
 
 try:
@@ -3635,35 +3636,11 @@ class Ohli24QueueEntity(AnimeQueueEntity):
                 logger.warning("cdndania NOT found in HTML - page may be dynamically loaded")
                 # logger.debug(f"HTML snippet: {text[:1000]}")
             
-            soup = BeautifulSoup(text, "lxml")
-            
-            # mcpalyer 클래스 내의 iframe 찾기
-            player_div = soup.find("div", class_="mcpalyer")
-            # logger.debug(f"player_div (mcpalyer): {player_div is not None}")
-            
-            if not player_div:
-                player_div = soup.find("div", class_="embed-responsive")
-                # logger.debug(f"player_div (embed-responsive): {player_div is not None}")
-            
-            iframe = None
-            if player_div:
-                iframe = player_div.find("iframe")
-                # logger.debug(f"iframe in player_div: {iframe is not None}")
-            if not iframe:
-                iframe = soup.find("iframe", src=re.compile(r"cdndania\.com"))
-                # logger.debug(f"iframe with cdndania src: {iframe is not None}")
-            if not iframe:
-                # 모든 iframe 찾기
-                all_iframes = soup.find_all("iframe")
-                # logger.debug(f"Total iframes found: {len(all_iframes)}")
-                if all_iframes:
-                    iframe = all_iframes[0]
-            
-            if not iframe or not iframe.get("src"):
-                logger.error("No iframe found on episode page")
+            iframe_src = extract_player_url(text, url)
+            if not iframe_src:
+                logger.error("No player URL found in episode JSON or iframe")
                 return
-            
-            iframe_src = iframe.get("src")
+
             logger.info(f"Found cdndania iframe: {iframe_src}")
             self.iframe_src = iframe_src
             # CDN 보안 우회 다운로더 필요 여부 - 설정에 따름
